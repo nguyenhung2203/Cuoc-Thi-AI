@@ -103,14 +103,14 @@ fix(candidate-portal): handle empty mock interview history
 
 ### 5.1. Response chuẩn
 
-API nên thống nhất response:
+API phải thống nhất response theo `API_SPEC.md`:
 
 ```json
 {
   "success": true,
   "data": {},
-  "message": "OK",
-  "error": null
+  "meta": {},
+  "request_id": "req_123"
 }
 ```
 
@@ -119,12 +119,12 @@ Khi lỗi:
 ```json
 {
   "success": false,
-  "data": null,
-  "message": "Validation failed",
   "error": {
     "code": "VALIDATION_ERROR",
+    "message": "Dữ liệu không hợp lệ",
     "details": []
-  }
+  },
+  "request_id": "req_123"
 }
 ```
 
@@ -144,23 +144,23 @@ Khi lỗi:
 
 ### 5.3. API naming
 
-Dùng REST rõ ràng:
+Dùng REST rõ ràng, theo `API_SPEC.md`:
 
 ```text
-GET    /jobs
-POST   /jobs
-GET    /jobs/:id
-PUT    /jobs/:id
-DELETE /jobs/:id
+GET    /api/v1/companies/:company_id/jobs
+POST   /api/v1/companies/:company_id/jobs
+GET    /api/v1/companies/:company_id/jobs/:job_id
+PUT    /api/v1/companies/:company_id/jobs/:job_id
+DELETE /api/v1/companies/:company_id/jobs/:job_id
 
-GET    /candidates
-POST   /candidates
-GET    /candidates/:id
-PUT    /candidates/:id
+GET    /api/v1/companies/:company_id/candidates
+POST   /api/v1/companies/:company_id/candidates
+GET    /api/v1/companies/:company_id/candidates/:candidate_id
+PUT    /api/v1/companies/:company_id/candidates/:candidate_id
 
-POST   /interviews/:id/start
-POST   /interviews/:id/end
-GET    /interviews/:id/report
+POST   /api/v1/companies/:company_id/interviews/:interview_id/start
+POST   /api/v1/companies/:company_id/interviews/:interview_id/end
+GET    /api/v1/companies/:company_id/interviews/:interview_id/report
 ```
 
 ---
@@ -183,16 +183,23 @@ GET    /interviews/:id/report
 - company_members
 - jobs
 - candidates
-- candidate_jobs
+- job_candidates
 - interview_templates
-- interview_questions
+- question_bank
+- rubrics
+- rubric_criteria
 - interviews
+- interview_rooms
 - interview_participants
 - interview_transcripts
+- ai_suggestions
 - interview_scores
 - interview_reports
 - mock_interviews
+- mock_interview_messages
+- files
 - audit_logs
+- notifications
 
 ---
 
@@ -280,14 +287,16 @@ Realtime module phải đảm bảo:
 
 ### 9.1. Event format
 
+Event phải dùng envelope chuẩn theo `REALTIME_EVENTS.md`:
+
 ```json
 {
   "event": "transcript:update",
+  "request_id": "uuid-or-client-generated-id",
   "room_id": "uuid",
-  "sender_id": "uuid",
-  "sender_role": "candidate",
-  "payload": {},
-  "timestamp": "2026-06-23T10:00:00Z"
+  "interview_id": "uuid",
+  "sent_at": "2026-06-23T10:00:00Z",
+  "payload": {}
 }
 ```
 

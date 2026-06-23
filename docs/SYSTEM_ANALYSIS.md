@@ -2,6 +2,11 @@
 
 # Phân tích hệ thống: Nền tảng phỏng vấn cùng AI real-time
 
+> [!NOTE]
+> **Đây là tài liệu phân tích tổng hợp ban đầu, dùng để THAM KHẢO.**
+> Khi có mâu thuẫn với các file chuyên biệt (`API_SPEC.md`, `DATABASE_DESIGN.md`, `REALTIME_EVENTS.md`, `AI_PROMPT_AND_SCORING.md`), **ưu tiên file chuyên biệt**.
+> Các file chuyên biệt là Source of Truth chính thức.
+
 ## 1. Tổng quan hệ thống
 
 Hệ thống là một nền tảng phỏng vấn trực tuyến có tích hợp AI real-time trong phòng phỏng vấn. Trong một phòng phỏng vấn sẽ có 2 actor chính:
@@ -762,48 +767,48 @@ flowchart TD
 
 ## 14.1. Frontend
 
-| Thành phần  | Đã chọn                       |
-| ----------- | ----------------------------- |
-| Framework   | React hoặc Vue 3              |
-| UI          | TailwindCSS                   |
-| State       | Pinia / Zustand / Redux       |
-| Realtime    | WebSocket / WebRTC            |
-| Video call  | WebRTC                        |
-| Form        | VeeValidate / React Hook Form |
-| Chart       | ECharts / Recharts            |
-| PDF preview | PDF.js                        |
+| Thành phần  | Đã chọn       |
+| ----------- | ------------- |
+| Framework   | Vue 3         |
+| UI          | TailwindCSS   |
+| State       | Pinia         |
+| Realtime    | WebSocket     |
+| Video call  | WebRTC        |
+| Form        | VeeValidate   |
+| Chart       | ECharts       |
+| PDF preview | PDF.js        |
 
 ---
 
 ## 14.2. Backend
 
-| Thành phần   | Đã chọn                              |
-| ------------ | ------------------------------------ |
-| Language     | Golang (Core & Realtime), Python (AI)|
-| API          | REST hoặc GraphQL                    |
-| Realtime     | WebSocket                            |
-| Video        | WebRTC SFU nếu scale lớn             |
-| Database     | PostgreSQL                           |
-| Cache        | Redis                                |
-| Queue        | RabbitMQ / Kafka / Redis Queue       |
-| File Storage | S3-compatible storage                |
-| Search       | PostgreSQL Full-text / Elasticsearch |
-| Auth         | JWT + Refresh Token                  |
-| Deployment   | Docker + Kubernetes                  |
+| Thành phần   | Đã chọn                               |
+| ------------ | ------------------------------------- |
+| Language     | Golang (Core & Realtime), Python (AI) |
+| API          | REST                                  |
+| Realtime     | WebSocket                             |
+| Video        | WebRTC SFU nếu scale lớn              |
+| Database     | PostgreSQL                            |
+| Cache        | Redis                                 |
+| Queue        | Redis Queue                           |
+| File Storage | S3-compatible storage                 |
+| Search       | PostgreSQL Full-text                  |
+| Auth         | JWT + Refresh Token                   |
+| Deployment   | Docker                                |
 
 ---
 
 ## 14.3. AI
 
-| Thành phần        | Đề xuất                           |
-| ----------------- | --------------------------------- |
-| Speech-to-text    | Whisper / cloud STT               |
-| LLM               | GPT / Claude / Gemini / local LLM |
-| Embedding         | Text embedding model              |
-| Vector DB         | pgvector / Qdrant                 |
-| AI Streaming      | Server-Sent Events / WebSocket    |
-| Prompt Management | Versioned prompt templates        |
-| Evaluation        | Rubric-based scoring              |
+| Thành phần        | Đã chọn                      |
+| ----------------- | ---------------------------- |
+| Speech-to-text    | Whisper                      |
+| LLM               | Gemini                       |
+| Embedding         | Text embedding model         |
+| Vector DB         | pgvector                     |
+| AI Streaming      | WebSocket                    |
+| Prompt Management | Versioned prompt templates   |
+| Evaluation        | Rubric-based scoring         |
 
 ---
 

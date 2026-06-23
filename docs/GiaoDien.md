@@ -44,14 +44,24 @@ Gợi ý palette:
 
 ## Font và style
 
-* Dùng font sans-serif hiện đại, dễ đọc
+* Dùng font sans-serif hiện đại, dễ đọc (ví dụ: Inter, Outfit)
 * Heading rõ ràng, mạnh mẽ
 * Body text dễ đọc
 * Card bo góc mềm, shadow nhẹ
 * Button rõ trạng thái hover/focus
 * Input, select, textarea sạch và dễ thao tác
-* Icon line-style đơn giản
+* Icon line-style đơn giản (Lucide hoặc Heroicons)
 * Layout responsive cho desktop trước, sau đó mobile/tablet
+
+## Công nghệ frontend
+
+* Framework: Vue 3 (Composition API)
+* State management: Pinia
+* CSS framework: TailwindCSS
+* Form validation: VeeValidate
+* Chart: ECharts
+* Router: Vue Router
+* HTTP client: Axios hoặc fetch
 
 ## Các màn hình cần thiết kế
 

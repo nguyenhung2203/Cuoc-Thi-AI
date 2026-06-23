@@ -68,22 +68,22 @@ Nguyên tắc quan trọng:
 Hệ thống nên được chia thành các khối lớn:
 
 ```text
-Frontend Web App
+Frontend Web App (Vue 3 + Pinia + TailwindCSS)
     |
-Backend API
+Backend API (Golang + REST)
     |
-Realtime Gateway / WebSocket / WebRTC
+Realtime Gateway / WebSocket (Golang)
     |
-Interview Room Service
+Interview Room Service (Golang)
     |
-AI Orchestrator
-    |-- Speech-to-Text Service
-    |-- LLM Service
+AI Orchestrator (Python)
+    |-- Speech-to-Text Service (Whisper)
+    |-- LLM Service (Gemini)
     |-- Scoring Service
     |-- Report Generator
     |-- Prompt Template Manager
     |
-Database / Object Storage / Queue / Redis
+PostgreSQL / S3 / Redis
 ```
 
 ### 4.1. Frontend
