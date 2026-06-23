@@ -23,28 +23,23 @@ AI IDE của Hùng, Khôi, Lai phải dùng file này khi làm:
 
 ```mermaid
 flowchart LR
-    A[Frontend Interview Room] -->|WebSocket| B[Realtime Gateway]
-    A -->|WebRTC Media| C[Media/WebRTC Layer]
+    A[Frontend Interview Room] -->|WebSocket| B[Realtime Gateway - Golang]
+    A -->|LiveKit SDK WebRTC| SFU[LiveKit SFU Server]
+    SFU -->|Audio stream hook| E[AI Orchestrator - Python]
     B --> D[Interview Room Service]
-    B --> E[AI Orchestrator]
-    E --> F[STT Service]
-    E --> G[LLM Service]
+    D -->|REST internal| E
+    E --> F[Whisper STT]
+    E --> G[Gemini LLM]
     E --> H[Scoring Service]
     D --> I[(PostgreSQL)]
     D --> J[(Redis Presence)]
 ```
 
-MVP có thể dùng WebSocket cho:
-
-- Presence.
-- Chat.
-- Room state.
-- Transcript text.
-- AI suggestion.
-- AI scoring.
-- WebRTC signaling nếu tự triển khai peer connection.
-
-Nếu dùng provider video call bên ngoài, WebSocket vẫn giữ room state và AI events.
+> **Kiến trúc đã chốt:**
+> - **LiveKit SFU** quản lý toàn bộ media stream (audio/video WebRTC). Frontend dùng LiveKit SDK thay cho raw WebRTC.
+> - **WebSocket Realtime Gateway** xử lý room state, presence, chat, transcript text, AI suggestion/scoring events. WebSocket không truyền media.
+> - **AI Orchestrator** nhận audio từ LiveKit hook → STT → LLM → gửi suggestion/score về Gateway → push đến client qua WebSocket.
+> - Khi AI Orchestrator down: WebSocket và LiveKit vẫn hoạt động bình thường (xem fallback behavior tại mục `ai:error`).
 
 ---
 
@@ -82,15 +77,10 @@ Authorization: Bearer <room_access_token>
 
 Room access token được lấy từ:
 
-```http
-POST /api/v1/companies/:company_id/interviews/:interview_id/room/token
-```
+- **Recruiter**: `POST /api/v1/companies/:company_id/interviews/:interview_id/room/token` → trả về LiveKit JWT.
+- **Candidate**: `GET /api/v1/interviews/join/:invite_token` → trả về `room_access_token` (LiveKit JWT, TTL 4 giờ).
 
-hoặc candidate invite:
-
-```http
-GET /api/v1/interviews/join/:invite_token
-```
+Token này vừa dùng để xác thực WebSocket connection, vừa là LiveKit Access Token để kết nối SFU.
 
 ---
 
@@ -702,6 +692,8 @@ Visibility:
 
 ## 5.10. ai:thinking
 
+Server gửi ngay khi bắt đầu xử lý một AI task — trước khi có kết quả.
+
 ```json
 {
   "event": "ai:thinking",
@@ -709,14 +701,46 @@ Visibility:
   "interview_id": "uuid",
   "payload": {
     "task": "suggest_follow_up",
-    "message": "AI đang phân tích câu trả lời..."
+    "request_id": "req_012",
+    "message": "AI đang phân tích câu trả lời...",
+    "expected_duration_ms": 3000
   }
 }
 ```
 
-Visibility:
+| Field | Mô tả |
+|---|---|
+| `task` | Loại task: `suggest_follow_up` / `score_answer` / `generate_summary` |
+| `request_id` | Khớp với `request_id` của event client đã gửi — để frontend biết thinking này cho request nào |
+| `expected_duration_ms` | Ước tính thời gian xử lý bình thường (do server cung cấp) — frontend dùng để tính ngưỡng hiển thị |
 
-- Recruiter only, trừ mock interview.
+**Frontend state machine khi nhận `ai:thinking`:**
+
+```
+ai:thinking nhận được
+  └─► Hiển thị skeleton loading trên AI panel
+        │
+        ├─ [trong expected_duration_ms + buffer] → chờ ai:suggestion / ai:score_update
+        │
+        ├─ [vượt soft timeout = expected_duration_ms × 2, tối đa 8s]
+        │     └─► Đổi skeleton → spinner + text "AI đang xử lý, chờ thêm chút..."
+        │         (KHÔNG báo lỗi — chỉ thay đổi visual)
+        │
+        └─ [vượt hard timeout = 15s không có response]
+              └─► Tự phát sinh trạng thái "timed_out" ở frontend
+                  Backend sẽ gửi ai:error nếu thực sự lỗi
+                  Nếu không có ai:error → frontend hiện "Kết quả AI bị trễ, thử lại?"
+```
+
+**Ngưỡng timeout chuẩn theo task:**
+
+| Task | Expected | Soft timeout | Hard timeout |
+|---|---|---|---|
+| `suggest_follow_up` | 3s | 6s | 15s |
+| `score_answer` | 5s | 10s | 20s |
+| `generate_summary` | 8s | 15s | 30s |
+
+Visibility: Recruiter only, trừ mock interview.
 
 ---
 
@@ -812,7 +836,72 @@ Visibility:
 
 ---
 
-## 5.15. error
+## 5.15. ai:error
+
+Server gửi khi AI Orchestrator xác nhận lỗi thực sự — **không phải khi chỉ chậm**.
+
+> **Phân biệt "chậm" vs "lỗi":**
+> - AI chậm (throttle, nghẽn 5–10s) → server **không gửi `ai:error`** — frontend tự xử lý bằng soft/hard timeout của `ai:thinking` (xem mục 5.10).
+> - AI lỗi thực sự (service down, LLM trả lỗi, vượt hard timeout phía server) → server mới gửi `ai:error`.
+
+```json
+{
+  "event": "ai:error",
+  "room_id": "uuid",
+  "interview_id": "uuid",
+  "payload": {
+    "error_type": "ai_service_unavailable",
+    "request_id": "req_012",
+    "affected_features": ["suggestion", "scoring", "transcript"],
+    "severity": "degraded",
+    "message": "AI tạm thời không phản hồi. Buổi phỏng vấn vẫn tiếp tục bình thường.",
+    "recoverable": true,
+    "retry_after_seconds": 30
+  }
+}
+```
+
+**`error_type` — Phân loại lỗi:**
+
+| `error_type` | Ý nghĩa | `severity` | Frontend hiển thị |
+|---|---|---|---|
+| `ai_throttled` | AI bị throttle nhẹ, đang retry | `degraded` | Spinner nhẹ, text "AI đang bận, thử lại..." |
+| `ai_timeout` | Vượt hard timeout phía server | `degraded` | Toast nhỏ góc màn hình, panel ở trạng thái chờ |
+| `ai_service_unavailable` | AI service down hoàn toàn | `critical` | **Ẩn toàn bộ AI panel**, hiện banner "AI không khả dụng" |
+| `ai_rate_limited` | Vượt quota / rate limit | `degraded` | Toast "AI đạt giới hạn, tiếp tục sau Xs" |
+| `ai_invalid_input` | Input không hợp lệ (transcript rỗng...) | `info` | Không hiện gì với recruiter — log nội bộ |
+
+**`severity` — Mức độ ảnh hưởng UX:**
+
+| `severity` | Hành vi tổng thể |
+|---|---|
+| `info` | Không hiện gì với recruiter |
+| `degraded` | Toast nhỏ, panel giữ skeleton — **không ẩn panel** |
+| `critical` | Ẩn toàn bộ AI panel, hiện banner trạng thái |
+
+**Fallback behavior theo severity:**
+
+| Thành phần | `degraded` | `critical` |
+|---|---|---|
+| Video/Audio (LiveKit) | Không bị ảnh hưởng | Không bị ảnh hưởng |
+| Chat (WebSocket) | Không bị ảnh hưởng | Không bị ảnh hưởng |
+| AI suggestion panel | Giữ skeleton, hiện retry countdown | Ẩn hoàn toàn, hiện "AI không khả dụng" |
+| AI scoring panel | Giữ giá trị cũ, không update | Ẩn hoàn toàn |
+| Transcript realtime | Tiếp tục nếu STT vẫn sống | Dừng — xử lý batch sau |
+| Recruiter note | Không bị ảnh hưởng | Không bị ảnh hưởng |
+| Kết thúc phỏng vấn | Vẫn cho phép end | Vẫn cho phép end |
+
+**Quy tắc bắt buộc:**
+- Frontend **không được crash hoặc hiện lỗi toàn màn hình** khi nhận `ai:error`.
+- Với `degraded`: giữ nguyên giao diện, chỉ thêm indicator nhỏ — recruiter không bị gián đoạn luồng phỏng vấn.
+- Với `recoverable: true`: frontend tự retry sau `retry_after_seconds` giây bằng cách gửi lại request ban đầu.
+- Transcript và scoring bị thiếu do `critical` error sẽ được backend queue xử lý batch sau khi phỏng vấn kết thúc.
+
+Visibility: Recruiter only — candidate không nhận event này.
+
+---
+
+## 5.16. error
 
 ```json
 {
@@ -821,9 +910,9 @@ Visibility:
   "room_id": "uuid",
   "interview_id": "uuid",
   "payload": {
-    "code": "AI_SERVICE_ERROR",
-    "message": "AI tạm thời không phản hồi. Buổi phỏng vấn vẫn tiếp tục.",
-    "recoverable": true
+    "code": "ROOM_NOT_FOUND",
+    "message": "Phòng phỏng vấn không tồn tại.",
+    "recoverable": false
   }
 }
 ```
@@ -840,9 +929,11 @@ Visibility:
 | chat:message room | Có | Có | Chat chung |
 | note:create result | Có | Không | Note nội bộ |
 | transcript:update | Có | Tùy cấu hình | Có thể bật/tắt cho candidate |
+| ai:thinking | Có | Không (mock: Có) | Hiển thị skeleton loading |
 | ai:suggestion | Có | Không | Trong phỏng vấn thật |
 | ai:score_update | Có | Không | Nội bộ recruiter |
 | ai:warning | Có | Không | Nội bộ recruiter |
+| ai:error | Có | Không | Recruiter thấy trạng thái AI |
 | report:ready | Có | Không | Nội bộ recruiter |
 
 ---

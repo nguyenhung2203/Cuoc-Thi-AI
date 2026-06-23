@@ -247,13 +247,18 @@ Indexes:
 
 ## 7. Bảng candidates
 
-Lưu hồ sơ ứng viên theo company.
+Lưu hồ sơ ứng viên theo company — đây là **CRM record** thuộc về công ty, không phải tài khoản người dùng.
+
+> **Phân biệt rõ hai khái niệm:**
+> - `candidates` = hồ sơ CRM do recruiter quản lý, thuộc `company_id`. Một người có thể có nhiều bản ghi candidate ở nhiều công ty khác nhau.
+> - `users` = tài khoản đăng nhập hệ thống. Candidate chỉ cần user account khi họ tự đăng nhập để dùng mock interview.
+> - `user_id` trong bảng `candidates` là nullable — chỉ điền khi candidate tự tạo account và recruiter liên kết. Không bắt buộc cho luồng tuyển dụng thật.
 
 | Field | Type | Required | Mô tả |
 |---|---|---:|---|
 | id | uuid | Có | Primary key |
-| company_id | uuid | Có | FK companies.id |
-| user_id | uuid | Không | FK users.id nếu candidate có account |
+| company_id | uuid | Có | FK companies.id — bắt buộc, mọi candidate thuộc về một company cụ thể |
+| user_id | uuid | Không | FK users.id — chỉ điền khi candidate tự tạo account và được liên kết |
 | full_name | varchar(255) | Có | Họ tên |
 | email | varchar(255) | Có | Email |
 | phone | varchar(50) | Không | SĐT |
@@ -586,10 +591,13 @@ Constraints:
 
 Phiên luyện phỏng vấn của candidate.
 
+> **Lưu ý:** Bảng này dùng `user_id` (FK users.id), **không** dùng `candidate_id` (FK candidates.id).
+> Mock interview là tính năng cá nhân — chỉ user đã đăng nhập mới làm được. Không liên quan đến hồ sơ CRM của công ty nào.
+
 | Field | Type | Required | Mô tả |
 |---|---|---:|---|
 | id | uuid | Có | Primary key |
-| candidate_user_id | uuid | Có | FK users.id |
+| user_id | uuid | Có | FK users.id — user đã đăng nhập thực hiện mock interview |
 | target_role | varchar(255) | Có | Vị trí luyện |
 | target_level | varchar(100) | Không | intern/junior/middle/senior |
 | cv_file_id | uuid | Không | CV dùng để luyện |
@@ -632,7 +640,7 @@ Metadata file.
 | storage_key | text | Có | Key trên object storage |
 | mime_type | varchar(255) | Có | MIME |
 | size_bytes | bigint | Có | Dung lượng |
-| file_type | varchar(100) | Có | cv/recording/avatar/attachment |
+| file_type | varchar(100) | Có | cv/audio_recording/avatar/attachment — không lưu video recording |
 | checksum | varchar(255) | Không | Hash file |
 | created_at | timestamptz | Có | Ngày tạo |
 
