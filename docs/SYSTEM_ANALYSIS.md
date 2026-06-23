@@ -762,9 +762,9 @@ flowchart TD
 
 ## 14.1. Frontend
 
-| Thành phần  | Đề xuất                       |
+| Thành phần  | Đã chọn                       |
 | ----------- | ----------------------------- |
-| Framework   | Vue 3 / React / Next.js       |
+| Framework   | React hoặc Vue 3              |
 | UI          | TailwindCSS                   |
 | State       | Pinia / Zustand / Redux       |
 | Realtime    | WebSocket / WebRTC            |
@@ -777,9 +777,9 @@ flowchart TD
 
 ## 14.2. Backend
 
-| Thành phần   | Đề xuất                              |
+| Thành phần   | Đã chọn                              |
 | ------------ | ------------------------------------ |
-| Language     | Go / Node.js / Python                |
+| Language     | Golang (Core & Realtime), Python (AI)|
 | API          | REST hoặc GraphQL                    |
 | Realtime     | WebSocket                            |
 | Video        | WebRTC SFU nếu scale lớn             |
