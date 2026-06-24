@@ -769,6 +769,15 @@ Request:
 GET /interviews/join/:invite_token
 ```
 
+> **One-Time Token (OTT) — Cơ chế xác thực link mời:**
+> - `invite_token` trong URL là token dùng một lần, được hash trong DB (`invite_token_hash`).
+> - Token có thời hạn (`invite_expires_at`). Sau khi hết hạn trả về `403 INVITE_EXPIRED`.
+> - Khi gọi endpoint này thành công, server trả về `room_access_token` — một JWT phạm vi hẹp:
+>   - Chỉ có quyền vào đúng `room_id` đó.
+>   - TTL: 4 giờ kể từ lúc phát sinh.
+>   - Không dùng được cho bất kỳ API nào khác.
+> - `invite_token` gốc **không bị invalidate** sau lần đầu dùng (để candidate có thể reload trang). Tuy nhiên một `invite_token` chỉ được cấp cho một `candidate_id` — nếu dùng sai người trả về `403 INVITE_UNAUTHORIZED`.
+
 Response:
 
 ```json
@@ -781,13 +790,22 @@ Response:
     "job_title": "Frontend Developer",
     "scheduled_at": "2026-06-25T03:00:00Z",
     "requires_consent_ai": true,
-    "requires_consent_recording": true,
-    "room_access_token": "short-lived-token"
+    "requires_consent_recording": false,
+    "room_access_token": "jwt-scoped-to-room",
+    "room_access_token_expires_at": "2026-06-25T08:00:00Z"
   }
 }
 ```
 
-Permission: valid invite token.
+Lỗi:
+
+| HTTP | Error code | Khi nào |
+|---|---|---|
+| 404 | `INVITE_NOT_FOUND` | Token không tồn tại |
+| 403 | `INVITE_EXPIRED` | Token hết hạn |
+| 403 | `INTERVIEW_CANCELLED` | Buổi phỏng vấn đã hủy |
+
+Permission: valid invite token (không cần Bearer auth — đây là entry point cho candidate chưa đăng nhập).
 
 ---
 
@@ -825,6 +843,9 @@ Response:
 POST /companies/:company_id/interviews/:interview_id/room/token
 ```
 
+> Dùng cho **recruiter** xin token vào phòng. Candidate dùng endpoint `GET /interviews/join/:invite_token` (mục 6.7).
+> Token trả về là LiveKit Access Token — dùng để khởi tạo kết nối LiveKit SDK ở frontend.
+
 Request:
 
 ```json
@@ -839,7 +860,8 @@ Response:
 {
   "success": true,
   "data": {
-    "room_access_token": "short-lived-token",
+    "room_access_token": "livekit-jwt-token",
+    "livekit_url": "wss://livekit.example.com",
     "expires_at": "2026-06-25T04:00:00Z"
   }
 }
@@ -921,6 +943,12 @@ Rule:
 ---
 
 ## 9. AI API
+
+> **Lưu ý kiến trúc:** Các endpoint trong mục 9 là **REST API của Backend Golang** — frontend gọi vào đây.
+> Golang Backend sau đó gọi tiếp đến **Python AI Orchestrator** qua **internal REST API** (không expose ra ngoài).
+> Frontend không bao giờ gọi trực tiếp Python AI service.
+>
+> Với các task nặng bất đồng bộ (generate report, xử lý audio batch), Golang đẩy job vào **Redis Queue** thay vì gọi AI synchronously. Response trả về ngay với `status: "processing"` và client dùng WebSocket event `report:ready` để biết khi nào xong.
 
 ## 9.1. Generate questions
 

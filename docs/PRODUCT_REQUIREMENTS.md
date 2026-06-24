@@ -142,6 +142,22 @@ AI không được:
 
 ---
 
+## 3.1.1. Success Metrics — Tiêu chí đo lường thành công
+
+| Metric | Mục tiêu | Đo bằng |
+|---|---|---|
+| Giảm thời gian sàng lọc ứng viên | Giảm ≥ 30% thời gian so với quy trình thủ công | Thời gian từ tạo job → quyết định |
+| Tỷ lệ hoàn thành phỏng vấn | ≥ 90% buổi phỏng vấn scheduled được hoàn thành | `completed / scheduled` |
+| Độ trễ transcript realtime | < 1.5 giây audio-to-text | P95 latency STT |
+| AI scoring vs đánh giá recruiter | Tương đồng ≥ 75% (cùng kết luận pass/consider/reject) | So sánh sau khi recruiter xác nhận |
+| System uptime phòng phỏng vấn | ≥ 99.5% trong giờ hành chính | Monitoring uptime |
+| Mock interview completion rate | ≥ 70% phiên luyện được hoàn thành đến cuối | `completed / started` |
+| AI report generation time | < 60 giây sau khi phỏng vấn kết thúc | P95 thời gian tạo report |
+
+> Các con số trên là mục tiêu ban đầu — có thể điều chỉnh sau khi có dữ liệu thực tế từ pilot.
+
+---
+
 ## 3.2. Ngoài MVP, chưa làm ngay
 
 Các phần sau không bắt buộc ở MVP:
@@ -149,7 +165,7 @@ Các phần sau không bắt buộc ở MVP:
 - ATS integration.
 - Calendar integration sâu với Google/Microsoft.
 - AI avatar 3D.
-- Video recording dài hạn.
+- Video recording — hệ thống không lưu video, chỉ lưu audio transcript.
 - Coding test realtime.
 - Multi-round hiring pipeline nâng cao.
 - Billing/subscription nâng cao.
@@ -158,6 +174,23 @@ Các phần sau không bắt buộc ở MVP:
 - Mobile app native.
 
 AI IDE không được tự ý triển khai các phần này nếu task không yêu cầu.
+
+---
+
+## 3.3. Non-Scope — Hệ thống KHÔNG làm
+
+Các tính năng này **không thuộc bất kỳ sprint nào** trừ khi có quyết định thay đổi scope rõ ràng:
+
+| Tính năng | Lý do loại |
+|---|---|
+| Đánh giá qua nét mặt / cảm xúc qua camera | Chống bias — vi phạm nguyên tắc AI không đánh giá theo ngoại hình |
+| Lưu trữ video recording | Không thuộc scope, tránh chi phí storage và rủi ro pháp lý PII |
+| Coding test IDE tích hợp | Feature phức tạp — thuộc phase 2+ |
+| Personality test / Psychometric test | Không trong scope AI Interview |
+| AI tự động gửi email từ chối / chấp nhận | AI không được tự hành động thay recruiter |
+| Tích hợp LinkedIn / ATS | Phase 2+ |
+| Đánh giá giọng điệu, tốc độ nói | Tránh bias về chất giọng vùng miền |
+| Public job board (candidate tự ứng tuyển) | Scope khác — đây là platform B2B cho recruiter |
 
 ---
 

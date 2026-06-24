@@ -1,0 +1,1 @@
+-- Migration DOWN: 000011_create_audit_logs

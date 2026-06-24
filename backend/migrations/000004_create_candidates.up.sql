@@ -1,0 +1,1 @@
+-- Migration UP: 000004_create_candidates

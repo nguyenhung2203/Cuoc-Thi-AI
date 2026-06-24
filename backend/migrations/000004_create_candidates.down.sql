@@ -1,0 +1,1 @@
+-- Migration DOWN: 000004_create_candidates

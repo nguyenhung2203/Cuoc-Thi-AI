@@ -1,0 +1,1 @@
+// Route/Guard configuration placeholder

@@ -1,0 +1,1 @@
+-- Migration UP: 000007_create_transcripts
