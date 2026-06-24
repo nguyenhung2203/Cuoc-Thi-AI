@@ -1,0 +1,6 @@
+port: 7880
+bind_addresses:
+  - ""
+keyval_store: redis
+keys:
+  devkey: devsecret

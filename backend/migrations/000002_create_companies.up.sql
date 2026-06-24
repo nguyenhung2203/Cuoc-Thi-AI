@@ -1,0 +1,1 @@
+-- Migration UP: 000002_create_companies

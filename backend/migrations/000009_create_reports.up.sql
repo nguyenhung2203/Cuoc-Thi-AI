@@ -1,0 +1,1 @@
+-- Migration UP: 000009_create_reports

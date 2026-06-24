@@ -1,0 +1,1 @@
+-- Migration DOWN: 000003_create_jobs
