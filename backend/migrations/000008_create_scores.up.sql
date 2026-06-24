@@ -1,0 +1,1 @@
+-- Migration UP: 000008_create_scores

@@ -1,0 +1,1 @@
+-- Migration UP: 000001_create_users

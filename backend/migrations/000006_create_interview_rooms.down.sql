@@ -1,0 +1,1 @@
+-- Migration DOWN: 000006_create_interview_rooms
