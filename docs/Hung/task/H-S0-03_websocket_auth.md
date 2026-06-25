@@ -5,7 +5,7 @@
 | **Task ID** | H-S0-03 |
 | **Sprint** | 0 — Setup Realtime Foundation |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -83,12 +83,12 @@ func ValidateRoomToken(token string) (*TokenClaims, error) {
 
 ## Definition of Done
 
-- [ ] Token hợp lệ → connect thành công, trích xuất user info
-- [ ] Token sai → bị reject với HTTP 401
-- [ ] Token hết hạn → bị reject
-- [ ] Không có token → bị reject
-- [ ] User info (user_id, role, room_id) được gắn vào connection
-- [ ] Log authentication success/failure
+- [x] Token hợp lệ → connect thành công, trích xuất user info
+- [x] Token sai → bị reject với HTTP 401
+- [x] Token hết hạn → bị reject
+- [x] Không có token → bị reject
+- [x] User info (user_id, role, room_id) được gắn vào connection
+- [x] Log authentication success/failure
 
 ---
 
@@ -115,9 +115,9 @@ backend/
 
 ## Checklist test
 
-- [ ] Connect với token hợp lệ → thành công
-- [ ] Connect không có token → bị reject 401
-- [ ] Connect với token hết hạn → bị reject 401
-- [ ] Connect với token giả → bị reject 401
-- [ ] Connection có user_id và role đúng sau auth
-- [ ] Log ghi nhận auth success/failure
+- [x] Connect với token hợp lệ → thành công
+- [x] Connect không có token → bị reject 401
+- [x] Connect với token hết hạn → bị reject 401
+- [x] Connect với token giả → bị reject 401
+- [x] Connection có user_id và role đúng sau auth
+- [x] Log ghi nhận auth success/failure

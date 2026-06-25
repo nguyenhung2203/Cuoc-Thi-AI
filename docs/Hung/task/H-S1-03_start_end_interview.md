@@ -5,7 +5,7 @@
 | **Task ID** | H-S1-03 |
 | **Sprint** | 1 — Interview Room MVP |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -84,13 +84,13 @@ Implement start/end interview qua WebSocket:
 
 ## Definition of Done
 
-- [ ] Recruiter start interview → status = active, broadcast `interview:started`
-- [ ] Candidate KHÔNG start được → error event
-- [ ] Recruiter end interview → status = completed, broadcast `interview:completed`
-- [ ] End interview trigger report generation (nếu `generate_report = true`)
-- [ ] `interview:end` idempotent
-- [ ] Room close sau grace period
-- [ ] DB cập nhật đúng `started_at`, `ended_at`
+- [x] Recruiter start interview → status = active, broadcast `interview:started`
+- [x] Candidate KHÔNG start được → error event
+- [x] Recruiter end interview → status = completed, broadcast `interview:completed`
+- [x] End interview trigger report generation (nếu `generate_report = true`)
+- [x] `interview:end` idempotent
+- [x] Room close sau grace period
+- [x] DB cập nhật đúng `started_at`, `ended_at`
 
 ---
 
@@ -103,9 +103,9 @@ Implement start/end interview qua WebSocket:
 
 ## Checklist test
 
-- [ ] Recruiter start → tất cả nhận `interview:started`
-- [ ] Candidate start → nhận error
-- [ ] Recruiter end → tất cả nhận `interview:completed`
-- [ ] End 2 lần → chỉ xử lý 1 lần
-- [ ] Start khi đã active → error
-- [ ] DB `started_at` / `ended_at` đúng
+- [x] Recruiter start → tất cả nhận `interview:started`
+- [x] Candidate start → nhận error
+- [x] Recruiter end → tất cả nhận `interview:completed`
+- [x] End 2 lần → chỉ xử lý 1 lần
+- [x] Start khi đã active → error
+- [x] DB `started_at` / `ended_at` đúng

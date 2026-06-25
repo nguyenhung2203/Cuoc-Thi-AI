@@ -5,7 +5,7 @@
 | **Task ID** | H-S1-01 |
 | **Sprint** | 1 — Interview Room MVP |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -93,14 +93,14 @@ Implement join/leave room flow hoàn chỉnh:
 
 ## Definition of Done
 
-- [ ] Recruiter join room thành công
-- [ ] Candidate join room thành công
-- [ ] User không có quyền bị chặn
-- [ ] Participant list trả về đúng khi join
-- [ ] Broadcast `room:user_joined` cho participant khác
-- [ ] Leave room cập nhật DB và broadcast
-- [ ] Disconnect cũng trigger leave logic
-- [ ] Không cho user lạ vào room
+- [x] Recruiter join room thành công
+- [x] Candidate join room thành công
+- [x] User không có quyền bị chặn
+- [x] Participant list trả về đúng khi join
+- [x] Broadcast `room:user_joined` cho participant khác
+- [x] Leave room cập nhật DB và broadcast
+- [x] Disconnect cũng trigger leave logic
+- [x] Không cho user lạ vào room
 
 ---
 
@@ -113,9 +113,9 @@ Implement join/leave room flow hoàn chỉnh:
 
 ## Checklist test
 
-- [ ] Recruiter join → nhận `room:joined` với participant list
-- [ ] Candidate join → recruiter nhận `room:user_joined`
-- [ ] Token sai room → bị reject
-- [ ] Leave → tất cả nhận `room:user_left`
-- [ ] Disconnect (close tab) → tự trigger leave
-- [ ] Join lại sau leave → thành công
+- [x] Recruiter join → nhận `room:joined` với participant list
+- [x] Candidate join → recruiter nhận `room:user_joined`
+- [x] Token sai room → bị reject
+- [x] Leave → tất cả nhận `room:user_left`
+- [x] Disconnect (close tab) → tự trigger leave
+- [x] Join lại sau leave → thành công
