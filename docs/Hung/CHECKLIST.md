@@ -87,14 +87,28 @@
   - `message_router.go` — khởi tạo `AudioHookService` tại router
   - `interview_handler.go` — tích hợp `StartHook` vào `interview:start` và `StopHook` vào `interview:end`/`cancel`
   - `audio_hook_integration_test.go` [NEW] — verify webhook integration và logic broadcast transcript qua bài test (chạy bằng `go test`)
-- [ ] **H-S2-04** — Media status event → [task/H-S2-04_media_status.md](./task/H-S2-04_media_status.md)
+- [x] **H-S2-04** — Media status event → [task/H-S2-04_media_status.md](./task/H-S2-04_media_status.md)
+  - `participant.go` — thêm `MediaRateLimiter` để xử lý rate limit
+  - `room_handler.go` — khởi tạo rate limiter trong sự kiện join room
+  - `room.go` — thêm method `UpdateMediaStatus` thread-safe
+  - `message_router.go` — đăng ký sự kiện `media:status`
+  - `media_handler.go` [NEW] — xử lý cập nhật trạng thái media, rate limiting và broadcast cho cả phòng
+  - `media_status_test.go` [NEW] — verify broadcast `media:status_changed`, client join muộn nhận status cũ, spam block
 
 ---
 
 ## Sprint 3: Transcript Realtime
 
-- [ ] **H-S3-01** — Transcript event pipeline → [task/H-S3-01_transcript_pipeline.md](./task/H-S3-01_transcript_pipeline.md)
-- [ ] **H-S3-02** — Partial/Final transcript handling → [task/H-S3-02_partial_final_transcript.md](./task/H-S3-02_partial_final_transcript.md)
+- [x] **H-S3-01** — Transcript event pipeline → [task/H-S3-01_transcript_pipeline.md](./task/H-S3-01_transcript_pipeline.md)
+  - `transcript_pipeline.go` [NEW] — xây dựng `TranscriptPipeline` async buffer queue (cap 1000) giúp decouple HTTP worker và WebSocket broadcast
+  - `server.go` — tích hợp `TranscriptPipeline` vào endpoint `POST /internal/rooms/:room_id/transcript`
+  - `transcript_pipeline_test.go` [NEW] — kiểm thử tích hợp xác nhận recruiter luôn nhận transcript, candidate nhận/không nhận theo cấu hình room
+
+- [x] **H-S3-02** — Partial/Final transcript handling → [task/H-S3-02_partial_final_transcript.md](./task/H-S3-02_partial_final_transcript.md)
+  - `message_router.go` — đăng ký WebSocket handler cho `transcript:partial` và `transcript:final`
+  - `transcript_handler.go` [NEW] — xử lý tạo deterministic `TranscriptID` (phục vụ dedup partial→final), ghi log cảnh báo confidence < 0.5 và đẩy vào pipeline
+  - `partial_final_transcript_test.go` [NEW] — kiểm thử tự động xác minh partial cập nhật thay thế nhau, final chốt text không duplicate và cảnh báo confidence thấp
+
 - [ ] **H-S3-03** — Speaker mapping → [task/H-S3-03_speaker_mapping.md](./task/H-S3-03_speaker_mapping.md)
 - [ ] **H-S3-04** — Save transcript final → [task/H-S3-04_save_transcript.md](./task/H-S3-04_save_transcript.md)
 

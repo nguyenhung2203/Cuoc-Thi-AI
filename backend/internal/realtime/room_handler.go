@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"backend/internal/realtime/events"
 )
 
@@ -68,6 +70,7 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		JoinedAt:        time.Now().UTC(),
 		LastSeenAt:      time.Now().UTC(),
 		Connection:      conn,
+		MediaRateLimiter: rate.NewLimiter(rate.Every(2*time.Second), 10),
 	}
 
 	// 4. Add to room

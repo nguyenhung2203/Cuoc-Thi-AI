@@ -158,3 +158,12 @@ func (r *Room) send(p *Participant, raw []byte) {
 		log.Printf("[room] send buffer full for participant=%s", p.ConnectionID)
 	}
 }
+
+// UpdateMediaStatus updates the media status of a participant safely.
+func (r *Room) UpdateMediaStatus(connID string, status events.MediaStatusInfo) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if p, ok := r.Participants[connID]; ok {
+		p.MediaStatus = status
+	}
+}

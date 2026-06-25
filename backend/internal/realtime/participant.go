@@ -3,6 +3,8 @@ package realtime
 import (
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"backend/internal/realtime/events"
 )
 
@@ -18,6 +20,7 @@ type Participant struct {
 	JoinedAt        time.Time
 	LastSeenAt      time.Time
 	Connection      *ClientConnection // nil when the participant is offline/reconnecting
+	MediaRateLimiter *rate.Limiter
 }
 
 // ToInfo converts a Participant to the wire-format ParticipantInfo used in events.

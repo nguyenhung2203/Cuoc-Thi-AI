@@ -12,11 +12,12 @@ type HandlerFunc func(conn *ClientConnection, env *events.Envelope)
 
 // MessageRouter maps incoming event names to their handler functions.
 type MessageRouter struct {
-	handlers        map[string]HandlerFunc
-	connManager     *ConnectionManager
-	roomManager     *RoomManager
-	presenceManager *PresenceManager
-	audioHook       *livekit.AudioHookService
+	handlers           map[string]HandlerFunc
+	connManager        *ConnectionManager
+	roomManager        *RoomManager
+	presenceManager    *PresenceManager
+	audioHook          *livekit.AudioHookService
+	transcriptPipeline *TranscriptPipeline
 }
 
 // NewMessageRouter constructs a router and registers all known event handlers.
@@ -30,6 +31,11 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 	}
 	r.registerHandlers()
 	return r
+}
+
+// SetTranscriptPipeline attaches the async transcript pipeline to the router.
+func (r *MessageRouter) SetTranscriptPipeline(tp *TranscriptPipeline) {
+	r.transcriptPipeline = tp
 }
 
 // registerHandlers wires every client→server event to its handler.
@@ -48,7 +54,7 @@ func (r *MessageRouter) registerHandlers() {
 	r.register(events.EventInterviewCancel, r.handleInterviewCancel)
 
 	// Media
-	r.register(events.EventMediaStatus, r.stubHandler("media:status"))
+	r.register(events.EventMediaStatus, r.handleMediaStatus)
 
 	// Chat & notes
 	r.register(events.EventChatSend, r.handleChatSend)
@@ -56,8 +62,8 @@ func (r *MessageRouter) registerHandlers() {
 	r.register(events.EventQuestionMarkAsked, r.stubHandler("question:mark_asked"))
 
 	// Transcript (from STT pipeline)
-	r.register(events.EventTranscriptPartial, r.stubHandler("transcript:partial"))
-	r.register(events.EventTranscriptFinal, r.stubHandler("transcript:final"))
+	r.register(events.EventTranscriptPartial, r.handleTranscriptPartial)
+	r.register(events.EventTranscriptFinal, r.handleTranscriptFinal)
 
 	// AI requests
 	r.register(events.EventAIRequestSuggestion, r.stubHandler("ai:request_suggestion"))

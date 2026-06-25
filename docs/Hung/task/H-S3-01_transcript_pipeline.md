@@ -5,7 +5,7 @@
 | **Task ID** | H-S3-01 |
 | **Sprint** | 3 — Transcript Realtime |
 | **Độ khó** | Rất khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Đã hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -62,12 +62,12 @@ POST /internal/rooms/:room_id/transcript
 
 ## Definition of Done
 
-- [ ] Nhận transcript từ AI Orchestrator thành công
-- [ ] Broadcast `transcript:update` vào đúng room
-- [ ] Recruiter luôn nhận transcript
-- [ ] Candidate nhận/không nhận tùy config
-- [ ] Pipeline không block khi AI chậm
-- [ ] Có buffer/queue nếu transcript đến quá nhanh
+- [x] Nhận transcript từ AI Orchestrator thành công
+- [x] Broadcast `transcript:update` vào đúng room
+- [x] Recruiter luôn nhận transcript
+- [x] Candidate nhận/không nhận tùy config
+- [x] Pipeline không block khi AI chậm
+- [x] Có buffer/queue nếu transcript đến quá nhanh
 
 ---
 
@@ -80,7 +80,7 @@ POST /internal/rooms/:room_id/transcript
 
 ## Checklist test
 
-- [ ] AI gửi transcript → room nhận `transcript:update`
-- [ ] Transcript gửi đúng room (không lẫn room khác)
-- [ ] Candidate config off → không nhận transcript
-- [ ] AI chậm → room vẫn hoạt động
+- [x] AI gửi transcript → room nhận `transcript:update`
+- [x] Transcript gửi đúng room (không lẫn room khác)
+- [x] Candidate config off → không nhận transcript
+- [x] AI chậm → room vẫn hoạt động

@@ -16,10 +16,11 @@ import (
 // Server is the WebSocket realtime gateway.
 // It wires together the HTTP upgrader, connection manager, room manager, and message router.
 type Server struct {
-	connManager *ConnectionManager
-	roomManager *RoomManager
-	router      *MessageRouter
-	httpServer  *http.Server
+	connManager        *ConnectionManager
+	roomManager        *RoomManager
+	router             *MessageRouter
+	httpServer         *http.Server
+	transcriptPipeline *TranscriptPipeline
 }
 
 // NewServer creates a Server with all dependencies wired up.
@@ -28,11 +29,15 @@ func NewServer(addr string) *Server {
 	rm := NewRoomManager()
 	router := NewMessageRouter(cm, rm)
 
+	tp := NewTranscriptPipeline(rm, 1000)
+	router.SetTranscriptPipeline(tp)
+
 	mux := http.NewServeMux()
 	s := &Server{
-		connManager: cm,
-		roomManager: rm,
-		router:      router,
+		connManager:        cm,
+		roomManager:        rm,
+		router:             router,
+		transcriptPipeline: tp,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
@@ -128,18 +133,12 @@ func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, ro
 		return
 	}
 
-	// Prepare envelope to broadcast
-	env, err := events.NewEnvelope(events.EventTranscriptUpdate, "", roomID, room.InterviewID, payload)
-	if err != nil {
-		log.Printf("[server] failed to create transcript envelope: %v", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+	// Decouple HTTP request from WebSocket broadcast via async buffer queue
+	if !s.transcriptPipeline.Push(roomID, payload) {
+		log.Printf("[server] transcript buffer full for room=%s", roomID)
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
-	rawJSON, _ := env.ToJSON()
-
-	// Broadcast with visibility rule applied
-	log.Printf("[server] broadcasting transcript update to room=%s, speaker=%s", roomID, payload.SpeakerName)
-	room.BroadcastWithVisibility(events.EventTranscriptUpdate, "", rawJSON)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
