@@ -1,8 +1,0 @@
-@import "./variables.css";
-/* Custom styles can be added here */
-body {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  background-color: var(--bg-dark);
-  color: var(--text-primary);
-}
