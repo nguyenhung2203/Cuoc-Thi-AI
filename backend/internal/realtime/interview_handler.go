@@ -63,6 +63,9 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 	if payload.ConsentAI {
 		log.Printf("[ai-orchestrator] starting AI pipeline for room=%s (interview=%s, consent_recording=%t)",
 			room.ID, room.InterviewID, payload.ConsentRecording)
+		
+		// Bắt đầu capture audio stream để gửi cho AI STT
+		r.audioHook.StartHook(room.ID, room.InterviewID)
 	}
 
 	// 8. Broadcast interview:started to all participants
@@ -144,6 +147,9 @@ func (r *MessageRouter) handleInterviewEnd(conn *ClientConnection, env *events.E
 
 	// 9. Close room and all connections after grace period
 	go func() {
+		// Ngắt hook lấy audio stream
+		r.audioHook.StopHook(room.ID)
+
 		// Use configurable end interview grace period (default 30s)
 		grace := gracePeriodEndInterview
 		time.Sleep(grace)
@@ -290,6 +296,9 @@ func (r *MessageRouter) handleInterviewCancel(conn *ClientConnection, env *event
 
 	// 6. Close room and connections after a brief delay
 	go func() {
+		// Ngắt hook lấy audio stream
+		r.audioHook.StopHook(room.ID)
+
 		time.Sleep(2 * time.Second)
 		conns := r.connManager.ByRoom(room.ID)
 		log.Printf("[room] interview:cancel closing %d connections in room=%s", len(conns), room.ID)

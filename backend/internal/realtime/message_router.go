@@ -3,6 +3,7 @@ package realtime
 import (
 	"log"
 
+	"backend/internal/livekit"
 	"backend/internal/realtime/events"
 )
 
@@ -15,6 +16,7 @@ type MessageRouter struct {
 	connManager     *ConnectionManager
 	roomManager     *RoomManager
 	presenceManager *PresenceManager
+	audioHook       *livekit.AudioHookService
 }
 
 // NewMessageRouter constructs a router and registers all known event handlers.
@@ -24,6 +26,7 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 		connManager:     cm,
 		roomManager:     rm,
 		presenceManager: NewPresenceManager(rm),
+		audioHook:       livekit.NewAudioHookService(),
 	}
 	r.registerHandlers()
 	return r

@@ -95,11 +95,54 @@ func (s *Server) Shutdown() error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// handleInternal is a stub for internal callbacks from the AI Orchestrator.
-// Full implementation in Sprint 3/4 (transcript pipeline, AI bridge).
+// handleInternal routes internal callbacks from the AI Orchestrator.
 func (s *Server) handleInternal(w http.ResponseWriter, r *http.Request) {
-	// TODO: route to transcript_handler or ai_handler based on path
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Example Route: /internal/rooms/{room_id}/transcript
+	pathParts := strings.Split(r.URL.Path, "/")
+	// Expected parts: ["", "internal", "rooms", "{room_id}", "transcript"]
+	if len(pathParts) >= 5 && pathParts[4] == "transcript" {
+		s.handleTranscriptPush(w, r, pathParts[3])
+		return
+	}
+
 	http.NotFound(w, r)
+}
+
+// handleTranscriptPush processes the transcript webhook from the AI Orchestrator.
+func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.TranscriptUpdatePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Printf("[server] failed to parse transcript payload: %v", err)
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	// Prepare envelope to broadcast
+	env, err := events.NewEnvelope(events.EventTranscriptUpdate, "", roomID, room.InterviewID, payload)
+	if err != nil {
+		log.Printf("[server] failed to create transcript envelope: %v", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	rawJSON, _ := env.ToJSON()
+
+	// Broadcast with visibility rule applied
+	log.Printf("[server] broadcasting transcript update to room=%s, speaker=%s", roomID, payload.SpeakerName)
+	room.BroadcastWithVisibility(events.EventTranscriptUpdate, "", rawJSON)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleGetChatHistory processes GET /api/v1/rooms/{room_id}/chat to load chat history.

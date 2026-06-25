@@ -81,7 +81,12 @@
   - `auth.go` — add extractAndValidateRecruiterToken helper to validate recruiter token prior to room generation
   - `server.go` — register POST recruiter token endpoint and GET candidate invite join endpoint, generating and returning LiveKit tokens
   - `livekit_integration_test.go` [NEW] — verify token generation, recruiter endpoint token creation, and candidate join invite verification/exchange
-- [ ] **H-S2-03** — Audio stream hook cho AI → [task/H-S2-03_audio_stream_ai.md](./task/H-S2-03_audio_stream_ai.md)
+- [x] **H-S2-03** — Audio stream hook cho AI → [task/H-S2-03_audio_stream_ai.md](./task/H-S2-03_audio_stream_ai.md)
+  - `audio_hook.go` — thiết lập `AudioHookService` mô phỏng capture audio gửi cho Python AI Orchestrator
+  - `server.go` — thêm `handleInternal` nhận webhook transcript từ AI và broadcast qua websocket
+  - `message_router.go` — khởi tạo `AudioHookService` tại router
+  - `interview_handler.go` — tích hợp `StartHook` vào `interview:start` và `StopHook` vào `interview:end`/`cancel`
+  - `audio_hook_integration_test.go` [NEW] — verify webhook integration và logic broadcast transcript qua bài test (chạy bằng `go test`)
 - [ ] **H-S2-04** — Media status event → [task/H-S2-04_media_status.md](./task/H-S2-04_media_status.md)
 
 ---
