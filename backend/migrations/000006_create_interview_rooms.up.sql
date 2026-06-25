@@ -24,4 +24,4 @@ CREATE TABLE interview_participants (
     media_status JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);\n
+);

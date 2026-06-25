@@ -29,4 +29,4 @@ CREATE TABLE ai_request_logs (
     status VARCHAR(50) NOT NULL,
     error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);\n
+);

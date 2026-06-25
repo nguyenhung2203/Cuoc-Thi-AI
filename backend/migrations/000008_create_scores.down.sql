@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS interview_scores CASCADE;\n
+DROP TABLE IF EXISTS interview_scores CASCADE;

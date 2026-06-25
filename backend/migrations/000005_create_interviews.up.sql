@@ -79,4 +79,4 @@ CREATE TABLE interviews (
 );
 CREATE INDEX interviews_company_status_idx ON interviews (company_id, status);
 CREATE INDEX interviews_job_candidate_idx ON interviews (job_id, candidate_id);
-CREATE INDEX interviews_scheduled_at_idx ON interviews (scheduled_at);\n
+CREATE INDEX interviews_scheduled_at_idx ON interviews (scheduled_at);

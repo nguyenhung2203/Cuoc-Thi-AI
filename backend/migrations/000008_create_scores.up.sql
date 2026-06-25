@@ -15,4 +15,4 @@ CREATE TABLE interview_scores (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX interview_scores_unique_idx ON interview_scores (interview_id, criterion_name);\n
+CREATE UNIQUE INDEX interview_scores_unique_idx ON interview_scores (interview_id, criterion_name);

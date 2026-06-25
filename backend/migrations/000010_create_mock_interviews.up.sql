@@ -21,4 +21,4 @@ CREATE TABLE mock_interview_messages (
     question_type VARCHAR(100),
     score_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);\n
+);

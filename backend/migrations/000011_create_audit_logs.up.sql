@@ -25,4 +25,4 @@ CREATE TABLE notifications (
     data_json JSONB,
     read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);\n
+);

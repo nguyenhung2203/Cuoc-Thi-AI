@@ -35,4 +35,4 @@ CREATE TABLE ai_suggestions (
     dismissed_by UUID REFERENCES users(id),
     dismissed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);\n
+);
