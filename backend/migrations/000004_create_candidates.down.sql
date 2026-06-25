@@ -1,1 +1,3 @@
--- Migration DOWN: 000004_create_candidates
+DROP TABLE IF EXISTS job_candidates;
+DROP TABLE IF EXISTS candidates;
+DROP TABLE IF EXISTS files;

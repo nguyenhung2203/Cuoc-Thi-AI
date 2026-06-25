@@ -695,6 +695,53 @@ Thông báo cơ bản.
 
 ---
 
+## 24.1 Bảng ai_prompt_templates
+
+Quản lý các mẫu prompt cho AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| name | varchar(255) | Có | Tên template |
+| version | varchar(50) | Có | Phiên bản |
+| content | text | Có | Nội dung prompt |
+| variables_schema | jsonb | Không | Định nghĩa biến truyền vào |
+| model | varchar(100) | Có | Model sử dụng (vd: gemini-pro) |
+| params | jsonb | Không | Cấu hình model |
+| is_active | boolean | Có | Đang được dùng |
+| created_by | uuid | Không | Người tạo |
+| created_at | timestamptz | Có | Ngày tạo |
+| updated_at | timestamptz | Có | Ngày cập nhật |
+
+Indexes:
+- unique index `(name, version)`.
+
+---
+
+## 24.2 Bảng ai_request_logs
+
+Lịch sử gọi AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| template_id | uuid | Không | FK ai_prompt_templates.id |
+| template_version | varchar(50) | Không | Phiên bản prompt lúc gọi |
+| interview_id | uuid | Không | FK interviews.id |
+| job_id | uuid | Không | FK jobs.id |
+| candidate_id | uuid | Không | FK candidates.id |
+| input_json | jsonb | Không | Payload request |
+| output_json | jsonb | Không | Payload response |
+| latency_ms | int | Không | Thời gian phản hồi |
+| tokens_in | int | Không | Số token đầu vào |
+| tokens_out | int | Không | Số token đầu ra |
+| cost | numeric | Không | Chi phí ước tính |
+| status | varchar(50) | Có | success/failed |
+| error | text | Không | Lỗi nếu có |
+| created_at | timestamptz | Có | Ngày tạo |
+
+---
+
 ## 25. Quan hệ quan trọng
 
 | Quan hệ | Mô tả |
@@ -735,6 +782,8 @@ Thông báo cơ bản.
 20. mock_interview_messages
 21. audit_logs
 22. notifications
+23. ai_prompt_templates
+24. ai_request_logs
 
 ---
 
