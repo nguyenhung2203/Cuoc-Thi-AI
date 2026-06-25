@@ -1,1 +1,0 @@
-// Composable useTranscript placeholder
