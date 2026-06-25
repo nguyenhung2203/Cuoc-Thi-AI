@@ -1,1 +1,2 @@
--- Migration DOWN: 000007_create_transcripts
+DROP TABLE IF EXISTS ai_suggestions CASCADE;
+DROP TABLE IF EXISTS interview_transcripts CASCADE;\n

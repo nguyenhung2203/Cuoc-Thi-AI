@@ -1,1 +1,1 @@
--- Migration DOWN: 000009_create_reports
+DROP TABLE IF EXISTS interview_reports CASCADE;\n

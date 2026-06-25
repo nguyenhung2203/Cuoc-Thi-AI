@@ -1,1 +1,5 @@
--- Migration DOWN: 000005_create_interviews
+DROP TABLE IF EXISTS interviews CASCADE;
+DROP TABLE IF EXISTS rubric_criteria CASCADE;
+DROP TABLE IF EXISTS rubrics CASCADE;
+DROP TABLE IF EXISTS question_bank CASCADE;
+DROP TABLE IF EXISTS interview_templates CASCADE;\n

@@ -1,1 +1,2 @@
--- Migration DOWN: 000011_create_audit_logs
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;\n

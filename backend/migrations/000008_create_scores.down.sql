@@ -1,1 +1,1 @@
--- Migration DOWN: 000008_create_scores
+DROP TABLE IF EXISTS interview_scores CASCADE;\n
