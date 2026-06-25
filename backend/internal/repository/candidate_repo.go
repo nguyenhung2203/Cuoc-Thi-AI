@@ -255,15 +255,15 @@ func (r *CandidateRepository) CreateJobCandidate(ctx context.Context, jc *models
 func (r *CandidateRepository) UpdateJobCandidateStatus(ctx context.Context, companyID, jobID, candidateID, status string) error {
 	const q = `
 		UPDATE job_candidates SET pipeline_status = $1, updated_at = NOW()
-		WHERE job_id = $2::uuid AND candidate_id = $3::uuid`
+		WHERE job_id = $2::uuid AND candidate_id = $3::uuid AND company_id = $4::uuid`
 
-	res, err := r.db.ExecContext(ctx, q, status, jobID, candidateID)
+	res, err := r.db.ExecContext(ctx, q, status, jobID, candidateID, companyID)
 	if err != nil {
 		return fmt.Errorf("update job candidate status: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return fmt.Errorf("update job candidate status: row not found")
+		return fmt.Errorf("update job candidate status: row not found or access denied")
 	}
 	return nil
 }
