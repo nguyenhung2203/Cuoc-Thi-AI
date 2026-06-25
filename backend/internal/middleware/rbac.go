@@ -64,3 +64,28 @@ func RequireCompanyRole(roles ...string) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// RequirePermission is an action-based RBAC helper.
+// It maps actions (like "job:create", "job:update") to allowed company roles.
+// Must be used AFTER CompanyScopeMiddleware.
+func RequirePermission(action string) func(http.Handler) http.Handler {
+	// Mapping actions to allowed roles
+	// owner, admin, member, viewer
+	var allowedRoles []string
+
+	switch action {
+	case "job:create", "job:update", "job:delete":
+		allowedRoles = []string{"owner", "admin", "member"} // typically viewers can't create/update
+	case "candidate:create", "candidate:update", "candidate:delete":
+		allowedRoles = []string{"owner", "admin", "member"}
+	case "interview:create", "interview:update", "interview:delete":
+		allowedRoles = []string{"owner", "admin", "member"}
+	case "job:read", "candidate:read", "interview:read":
+		allowedRoles = []string{"owner", "admin", "member", "viewer"}
+	default:
+		// Default strict
+		allowedRoles = []string{"owner", "admin"}
+	}
+
+	return RequireCompanyRole(allowedRoles...)
+}

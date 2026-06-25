@@ -42,6 +42,8 @@ func main() {
 	jobRepo := repository.NewJobRepository(db)
 	candidateRepo := repository.NewCandidateRepository(db)
 	fileRepo := repository.NewFileRepository(db)
+	interviewRepo := repository.NewInterviewRepository(db)
+	transcriptRepo := repository.NewTranscriptRepository(db)
 
 	// 4. Services
 	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret)
@@ -49,6 +51,8 @@ func main() {
 	jobSvc := service.NewJobService(jobRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo)
 	fileSvc := service.NewFileService(fileRepo)
+	interviewSvc := service.NewInterviewService(interviewRepo)
+	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
@@ -56,6 +60,8 @@ func main() {
 	jobHandler := handler.NewJobHandler(jobSvc)
 	candidateHandler := handler.NewCandidateHandler(candidateSvc)
 	fileHandler := handler.NewFileHandler(fileSvc)
+	interviewHandler := handler.NewInterviewHandler(interviewSvc)
+	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
 
 	// 6. Router
 	r := chi.NewRouter()
@@ -84,6 +90,11 @@ func main() {
 			authHandler.Routes(r)
 		})
 
+		// Public interview routes
+		r.Route("/interviews", func(r chi.Router) {
+			interviewHandler.Routes(r)
+		})
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
@@ -102,6 +113,14 @@ func main() {
 
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
+				
+				r.Route("/interviews", func(r chi.Router) {
+					interviewHandler.ProtectedRoutes(r)
+					
+					r.Route("/{interview_id}/transcripts", func(r chi.Router) {
+						transcriptHandler.Routes(r)
+					})
+				})
 			})
 		})
 	})
