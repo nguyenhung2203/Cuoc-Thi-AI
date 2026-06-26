@@ -24,6 +24,9 @@ type Config struct {
 	JWTAccessTTL  string
 	JWTRefreshTTL string
 
+	// AI Service
+	AIServiceURL string
+
 	// Object storage (S3-compatible)
 	StorageBucket    string
 	StorageRegion    string
@@ -50,6 +53,8 @@ func Load() (*Config, error) {
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		JWTAccessTTL:  getEnv("JWT_ACCESS_TTL", "15m"),
 		JWTRefreshTTL: getEnv("JWT_REFRESH_TTL", "168h"), // 7 days
+
+		AIServiceURL: getEnv("AI_SERVICE_URL", "http://localhost:8000"),
 
 		StorageBucket:    getEnv("STORAGE_BUCKET", ""),
 		StorageRegion:    getEnv("STORAGE_REGION", ""),

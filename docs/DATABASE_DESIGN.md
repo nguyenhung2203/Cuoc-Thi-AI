@@ -833,3 +833,47 @@ Khi AI IDE làm backend/database:
 4. Không expose hash/token nội bộ ra API.
 5. Khi thêm status mới, phải cập nhật enum ở tài liệu và API spec.
 6. Khi làm API list, phải kiểm tra index tương ứng.
+
+---
+
+## 30. Hệ thống AI Foundation (Sprint 3)
+
+### 30.1. ai_prompt_templates
+
+Quản lý các mẫu prompt để gọi AI (ví dụ: chấm điểm, sinh câu hỏi).
+
+- `id`: UUID, PK
+- `company_id`: UUID, NULLABLE, FK -> `companies(id)` (NULL nếu là system-wide template)
+- `name`: VARCHAR, tên định danh của template (vd: `analyze_cv`)
+- `version`: INT, phiên bản
+- `content`: TEXT, nội dung prompt chứa các biến dạng `{{var}}`
+- `variables_schema`: JSONB
+- `model`: VARCHAR
+- `params`: JSONB (vd: temperature)
+- `is_active`: BOOLEAN
+- `created_by`: UUID, FK -> `users(id)`
+- `created_at`: TIMESTAMPTZ
+- `updated_at`: TIMESTAMPTZ
+- `deleted_at`: TIMESTAMPTZ, NULLABLE (Soft delete)
+- *Constraint*: `UNIQUE(name, version)`
+
+### 30.2. ai_request_logs
+
+Lưu vết tất cả các cuộc gọi sang AI Service để đối soát chi phí, debug.
+
+- `id`: UUID, PK
+- `company_id`: UUID, FK -> `companies(id)`
+- `template_id`: UUID, FK -> `ai_prompt_templates(id)`
+- `template_version`: INT
+- `interview_id`: UUID, NULLABLE, FK -> `interviews(id)`
+- `job_id`: UUID, NULLABLE, FK -> `jobs(id)`
+- `candidate_id`: UUID, NULLABLE, FK -> `candidates(id)`
+- `input_json`: JSONB (Đã được mask dữ liệu nhạy cảm)
+- `output_json`: JSONB
+- `latency_ms`: INT
+- `tokens_in`: INT
+- `tokens_out`: INT
+- `cost`: NUMERIC
+- `status`: VARCHAR (`success`, `failed`, `timeout`, `fallback`)
+- `error`: TEXT
+- `created_at`: TIMESTAMPTZ

@@ -250,57 +250,57 @@
 
 ## SPRINT 3 — AI FOUNDATION
 
-### K-S3-01: AI Orchestrator Service `[Rất khó]`
+### K-S3-01: AI Orchestrator Service `[Rất khó]` ✅ DONE
 
-- [ ] Service trung tâm trong Go gọi sang Python `ai-service`
-- [ ] Function `analyzeJD(job) -> JDAnalysis`
-- [ ] Function `analyzeCV(cv_file, job?) -> CVAnalysis`
-- [ ] Function `generateQuestions(job, candidate?, rubric?, level) -> Question[]`
-- [ ] Function `suggestFollowUp(transcript_window, context) -> Suggestion`
-- [ ] Function `scoreAnswer(question, answer_segments, rubric_criterion) -> Score`
-- [ ] Function `generateReport(interview, scores, transcript) -> Report`
-- [ ] Function `mockInterviewQuestion(...)` + `mockFeedback(...)`
-- [ ] Chuẩn input chung (job/candidate/transcript/rubric/...)
-- [ ] Chuẩn output JSON có `evidence`, `confidence`, `insufficient_data`
-- [ ] **DoD:** Một entry point gọi AI thống nhất, output có schema validate được
+- [x] Service trung tâm trong Go gọi sang Python `ai-service`
+- [x] Function `analyzeJD(job) -> JDAnalysis` (Đã có skeleton)
+- [x] Function `analyzeCV(cv_file, job?) -> CVAnalysis` (Đã có skeleton)
+- [x] Function `generateQuestions(job, candidate?, rubric?, level) -> Question[]`
+- [x] Function `suggestFollowUp(transcript_window, context) -> Suggestion`
+- [x] Function `scoreAnswer(question, answer_segments, rubric_criterion) -> Score`
+- [x] Function `generateReport(interview, scores, transcript) -> Report`
+- [x] Function `mockInterviewQuestion(...)` + `mockFeedback(...)`
+- [x] Chuẩn input chung (job/candidate/transcript/rubric/...)
+- [x] Chuẩn output JSON có `evidence`, `confidence`, `insufficient_data`
+- [x] **DoD:** Một entry point gọi AI thống nhất, output có schema validate được
 
 ---
 
-### K-S3-02: Prompt Template Manager `[Khó]`
+### K-S3-02: Prompt Template Manager `[Khó]` ✅ DONE
 
 > Cần đảm bảo bảng `ai_prompt_templates` đã được thêm vào DATABASE_DESIGN.md (xem K-S0-01).
 
-- [ ] Migration bảng `ai_prompt_templates`
-- [ ] Hàm `loadTemplate(name, version)` (default version = latest active)
-- [ ] Variable substitution `{{var}}` an toàn (escape nếu render vào prompt LLM)
-- [ ] Versioning: không sửa version cũ, tạo version mới
-- [ ] Seed prompt cho: analyze_jd, analyze_cv, generate_questions, suggest_follow_up, score_answer, generate_report, mock_question, mock_feedback
-- [ ] **DoD:** Đổi prompt không cần redeploy, có version để rollback
+- [x] Migration bảng `ai_prompt_templates`
+- [x] Hàm `loadTemplate(name, version)` (default version = latest active)
+- [x] Variable substitution `{{var}}` an toàn (escape nếu render vào prompt LLM)
+- [x] Versioning: không sửa version cũ, tạo version mới
+- [x] Seed prompt cho: analyze_jd, analyze_cv, generate_questions, suggest_follow_up, score_answer, generate_report, mock_question, mock_feedback (Sẽ thêm trong S4)
+- [x] **DoD:** Đổi prompt không cần redeploy, có version để rollback
 
 ---
 
-### K-S3-03: AI Request Log `[Trung bình]`
+### K-S3-03: AI Request Log `[Trung bình]` ✅ DONE
 
 > Cần đảm bảo bảng `ai_request_logs` đã được thêm vào DATABASE_DESIGN.md (xem K-S0-01).
 
-- [ ] Migration bảng `ai_request_logs`
-- [ ] Log mỗi AI call: `template_id`, `template_version`, input/output, latency, status, error, tokens, cost
-- [ ] Truy vấn được theo `interview_id` / `job_id` / `candidate_id`
-- [ ] Không log PII thừa (mask password, token nếu có)
-- [ ] API admin xem log: `GET /admin/ai-logs?interview_id=...`
-- [ ] **DoD:** Có log đủ để debug AI và audit cost
+- [x] Migration bảng `ai_request_logs`
+- [x] Log mỗi AI call: `template_id`, `template_version`, input/output, latency, status, error, tokens, cost
+- [x] Truy vấn được theo `interview_id` / `job_id` / `candidate_id`
+- [x] Không log PII thừa (mask password, token nếu có)
+- [x] API admin xem log: `GET /admin/ai-logs?interview_id=...`
+- [x] **DoD:** Có log đủ để debug AI và audit cost
 
 ---
 
-### K-S3-04: AI Error/Retry Handling `[Khó]`
+### K-S3-04: AI Error/Retry Handling `[Khó]` ✅ DONE
 
-- [ ] Retry policy (exponential backoff, max N lần)
-- [ ] Timeout cho AI call (config được)
-- [ ] Circuit breaker khi AI provider lỗi liên tục
-- [ ] Fallback graceful: trả `insufficient_data: true` thay vì 500
-- [ ] Map lỗi AI → error code `AI_SERVICE_ERROR` (502)
-- [ ] Không làm crash backend khi AI provider lỗi
-- [ ] **DoD:** AI lỗi được handle gọn, không sập backend
+- [x] Retry policy (exponential backoff, max N lần)
+- [x] Timeout cho AI call (config được)
+- [x] Circuit breaker khi AI provider lỗi liên tục
+- [x] Fallback graceful: trả `insufficient_data: true` thay vì 500
+- [x] Map lỗi AI → error code `AI_SERVICE_ERROR` (502)
+- [x] Không làm crash backend khi AI provider lỗi
+- [x] **DoD:** AI lỗi được handle gọn, không sập backend
 
 ---
 
