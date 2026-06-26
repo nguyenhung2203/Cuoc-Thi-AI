@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
+	"backend/internal/ai"
 	"backend/internal/dto/request"
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
@@ -16,12 +19,28 @@ import (
 
 // JobService implements business logic for Job CRUD and analysis.
 type JobService struct {
-	jobRepo *repository.JobRepository
+	jobRepo      *repository.JobRepository
+	jdAnalyzer   *ai.JDAnalyzer
+	qGenerator   *ai.QuestionGenerator
+	rubricRepo   repository.RubricRepository
+	questionRepo repository.QuestionRepository
 }
 
-// NewJobService constructs a JobService with its required repository.
-func NewJobService(jobRepo *repository.JobRepository) *JobService {
-	return &JobService{jobRepo: jobRepo}
+// NewJobService constructs a JobService with its required repositories and AI clients.
+func NewJobService(
+	jobRepo *repository.JobRepository,
+	jdAnalyzer *ai.JDAnalyzer,
+	qGenerator *ai.QuestionGenerator,
+	rubricRepo repository.RubricRepository,
+	questionRepo repository.QuestionRepository,
+) *JobService {
+	return &JobService{
+		jobRepo:      jobRepo,
+		jdAnalyzer:   jdAnalyzer,
+		qGenerator:   qGenerator,
+		rubricRepo:   rubricRepo,
+		questionRepo: questionRepo,
+	}
 }
 
 // List returns a paginated list of jobs scoped to companyID.
@@ -156,7 +175,6 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 }
 
 // GetStats returns the candidate and interview counts for a job.
-// Counts are fetched sequentially; the first error short-circuits.
 func (s *JobService) GetStats(ctx context.Context, jobID string) (candidateCount, interviewCount int, err error) {
 	candidateCount, err = s.jobRepo.CountCandidates(ctx, jobID)
 	if err != nil {
@@ -167,4 +185,80 @@ func (s *JobService) GetStats(ctx context.Context, jobID string) (candidateCount
 		return 0, 0, errors.NewInternal("failed to count interviews")
 	}
 	return candidateCount, interviewCount, nil
+}
+
+// Analyze triggers AI analysis for a job.
+func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error {
+	job, err := s.GetByID(ctx, companyID, jobID)
+	if err != nil {
+		return err
+	}
+
+	result, err := s.jdAnalyzer.AnalyzeJD(ctx, job.Description, job.Title, job.Level.String, job.Department.String, companyID)
+	if err != nil {
+		return errors.NewInternal(fmt.Sprintf("failed to analyze JD with AI: %v", err))
+	}
+
+	// Update Job
+	resultBytes, _ := json.Marshal(result)
+	patch := map[string]any{
+		"ai_summary":       result.Summary,
+		"ai_analysis_json": models.JSONB(resultBytes),
+	}
+	if _, err := s.jobRepo.Update(ctx, companyID, jobID, patch); err != nil {
+		return errors.NewInternal("failed to save AI analysis to job")
+	}
+
+	// Create Rubric
+	if len(result.SuggestedRubric) > 0 {
+		rubric := &models.Rubric{
+			ID:          uuid.NewString(),
+			CompanyID:   companyID,
+			JobID:       sql.NullString{String: jobID, Valid: true},
+			Name:        fmt.Sprintf("Rubric for %s", job.Title),
+			TotalWeight: 100,
+			CreatedBy:   job.CreatedBy,
+		}
+		var criteria []models.RubricCriteria
+		for i, c := range result.SuggestedRubric {
+			criteria = append(criteria, models.RubricCriteria{
+				ID:          uuid.NewString(),
+				RubricID:    rubric.ID,
+				Name:        c.Name,
+				Description: sql.NullString{String: c.Description, Valid: true},
+				Weight:      float64(c.Weight),
+				MinScore:    1,
+				MaxScore:    5,
+				OrderIndex:  i,
+			})
+		}
+		if err := s.rubricRepo.CreateRubricWithCriteria(ctx, rubric, criteria); err != nil {
+			return errors.NewInternal(fmt.Sprintf("failed to create rubric: %v", err))
+		}
+	}
+
+	// Save generated questions to question bank
+	if len(result.SuggestedQuestions) > 0 {
+		var questions []models.QuestionBank
+		for _, sq := range result.SuggestedQuestions {
+			tagsBytes, _ := json.Marshal([]string{sq.TargetSkill})
+			signalsBytes, _ := json.Marshal(sq.ExpectedSignals)
+			questions = append(questions, models.QuestionBank{
+				CompanyID:       sql.NullString{String: companyID, Valid: true},
+				JobID:           sql.NullString{String: jobID, Valid: true},
+				CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
+				QuestionText:    sq.QuestionText,
+				QuestionType:    sq.QuestionType,
+				SkillTags:       models.JSONB(tagsBytes),
+				Level:           sql.NullString{String: sq.Difficulty, Valid: true},
+				ExpectedSignals: models.JSONB(signalsBytes),
+				IsAIGenerated:   true,
+			})
+		}
+		if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
+			return errors.NewInternal(fmt.Sprintf("failed to save generated questions: %v", err))
+		}
+	}
+
+	return nil
 }

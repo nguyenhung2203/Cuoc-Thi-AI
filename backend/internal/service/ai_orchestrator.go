@@ -65,7 +65,7 @@ func NewAIOrchestratorService(promptSvc *PromptService, logSvc *AILogService, ai
 }
 
 // CallAI orchestrates rendering the prompt, calling the Python service with retry + circuit breaker, and logging.
-func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, companyID string, variables map[string]string) (*StandardAIResponse, error) {
+func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, companyID string, variables map[string]string) ([]byte, error) {
 	startTime := time.Now()
 	
 	// 1. Load Prompt Template
@@ -163,10 +163,7 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 			}
 		}
 		
-		// Fallback graceful response
-		return &StandardAIResponse{
-			InsufficientData: true,
-		}, nil
+		return nil, err
 	}
 
 	// 5. Parse Response
@@ -175,26 +172,17 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 		logEntry.Status = "failed"
 		logEntry.Error = sql.NullString{String: parseErr.Error(), Valid: true}
 		s.logSvc.LogAsync(logEntry)
-		return &StandardAIResponse{InsufficientData: true}, nil
+		return nil, fmt.Errorf("parse error: %w", parseErr)
 	}
 
 	logEntry.Status = "success"
 	logEntry.OutputJSON = models.JSONB(responseBody)
-	// TODO: extract tokens_in, tokens_out from response if provided by Python
 	s.logSvc.LogAsync(logEntry)
 
-	return &aiResp, nil
+	if aiResp.InsufficientData {
+		return nil, fmt.Errorf("insufficient data")
+	}
+
+	return aiResp.Data, nil
 }
 
-// Stub methods for Sprint 3
-func (s *AIOrchestratorService) AnalyzeJD(ctx context.Context, jobID, companyID string) (*StandardAIResponse, error) {
-	// 1. Fetch JD info from Job Repo
-	// 2. Prepare variables map
-	vars := map[string]string{"job_description": "Mock JD"}
-	return s.CallAI(ctx, "analyze_jd", companyID, vars)
-}
-
-func (s *AIOrchestratorService) AnalyzeCV(ctx context.Context, cvText, companyID string) (*StandardAIResponse, error) {
-	vars := map[string]string{"cv_text": cvText}
-	return s.CallAI(ctx, "analyze_cv", companyID, vars)
-}

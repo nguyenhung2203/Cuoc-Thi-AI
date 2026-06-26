@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
+	"backend/internal/ai"
 	"backend/internal/config"
 	"backend/internal/handler"
 	"backend/internal/middleware"
@@ -50,21 +51,28 @@ func main() {
 	transcriptRepo := repository.NewTranscriptRepository(db)
 
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
+	rubricRepo := repository.NewRubricRepository(db.DB)
+	questionRepo := repository.NewQuestionRepository(db.DB)
 
-	// 4. Services
-	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
-	companySvc := service.NewCompanyService(companyRepo)
-	jobSvc := service.NewJobService(jobRepo)
-	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo)
-	fileSvc := service.NewFileService(fileRepo)
-	interviewSvc := service.NewInterviewService(interviewRepo)
-	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
-
+	// AI Setup
 	aiPromptRepo := repository.NewAIPromptRepository(db)
 	aiLogRepo := repository.NewAILogRepository(db)
 	promptSvc := service.NewPromptService(aiPromptRepo)
 	aiLogSvc := service.NewAILogService(aiLogRepo)
-	_ = service.NewAIOrchestratorService(promptSvc, aiLogSvc, cfg.AIServiceURL)
+	aiOrchestrator := service.NewAIOrchestratorService(promptSvc, aiLogSvc, cfg.AIServiceURL)
+
+	jdAnalyzer := ai.NewJDAnalyzer(aiOrchestrator)
+	cvAnalyzer := ai.NewCVAnalyzer(aiOrchestrator)
+	qGenerator := ai.NewQuestionGenerator(aiOrchestrator)
+
+	// 4. Services
+	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
+	companySvc := service.NewCompanyService(companyRepo)
+	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
+	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo, cvAnalyzer)
+	fileSvc := service.NewFileService(fileRepo)
+	interviewSvc := service.NewInterviewService(interviewRepo)
+	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
