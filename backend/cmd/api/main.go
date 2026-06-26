@@ -54,6 +54,12 @@ func main() {
 	interviewSvc := service.NewInterviewService(interviewRepo)
 	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 
+	aiPromptRepo := repository.NewAIPromptRepository(db)
+	aiLogRepo := repository.NewAILogRepository(db)
+	promptSvc := service.NewPromptService(aiPromptRepo)
+	aiLogSvc := service.NewAILogService(aiLogRepo)
+	_ = service.NewAIOrchestratorService(promptSvc, aiLogSvc, cfg.AIServiceURL)
+
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
 	companyHandler := handler.NewCompanyHandler(companySvc)
@@ -62,6 +68,9 @@ func main() {
 	fileHandler := handler.NewFileHandler(fileSvc)
 	interviewHandler := handler.NewInterviewHandler(interviewSvc)
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
+	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
+
+	// In a real app, aiOrchestrator would be injected into handlers that need it (e.g. JobHandler for AnalyzeJD)
 
 	// 6. Router
 	r := chi.NewRouter()
@@ -98,6 +107,12 @@ func main() {
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+
+			// Admin routes
+			r.Route("/admin", func(r chi.Router) {
+				// Require admin role middleware would normally go here
+				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
+			})
 
 			// File routes — user accesses own files directly (not company-scoped)
 			fileHandler.Routes(r)
