@@ -165,7 +165,9 @@
   - `audit_logger.go` [NEW] — Async logger sử dụng buffered channel để không chặn luồng chính.
   - `server.go` & `handler.go` — Lấy `IPAddress` từ request HTTP, lưu log `disconnect`.
   - `room_handler.go`, `interview_handler.go`, `ai_handler.go` — Gắn log các event tương ứng.
-- [ ] **H-S5-04** — Load test nhiều room → [task/H-S5-04_load_test.md](./task/H-S5-04_load_test.md)
+- [x] **H-S5-04** — Load test nhiều room → [task/H-S5-04_load_test.md](./task/H-S5-04_load_test.md)
+  - `cmd/loadtest/main.go` [NEW] — Kịch bản custom bằng Go để giả lập tải 10/50/100 rooms.
+  - `load_test_report.md` [NEW] — Đã đo latency (p50, p95, p99), bộ nhớ và số lượng goroutine. Đạt tiêu chuẩn.
 
 ---
 
@@ -178,8 +180,8 @@
 | Sprint 2: Chat + WebRTC | 4 | 4 | ✅ Hoàn thành |
 | Sprint 3: Transcript | 4 | 4 | ✅ Hoàn thành |
 | Sprint 4: AI Bridge | 4 | 4 | ✅ Hoàn thành |
-| Sprint 5: Hardening | 4 | 3 | 🔄 Đang thực hiện |
-| **Tổng** | **24** | **23** | |
+| Sprint 5: Hardening | 4 | 4 | ✅ Hoàn thành |
+| **Tổng** | **24** | **24** | |
 
 ---
 
