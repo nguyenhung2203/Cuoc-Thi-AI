@@ -91,8 +91,8 @@ func (s *CandidateService) Create(
 		Phone:        sql.NullString{String: req.Phone, Valid: req.Phone != ""},
 		Source:       sql.NullString{String: req.Source, Valid: req.Source != ""},
 		Status:       models.CandidateStatus("new"),
-		ParsedCVJSON: json.RawMessage("null"),
-		Tags:         json.RawMessage("[]"),
+		ParsedCVJSON: models.JSONB("null"),
+		Tags:         models.JSONB("[]"),
 		CreatedBy:    sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -110,7 +110,7 @@ func (s *CandidateService) Create(
 			JobID:          req.JobID,
 			CandidateID:    created.ID,
 			PipelineStatus: "new",
-			AIMatchJSON:    json.RawMessage("null"),
+			AIMatchJSON:    models.JSONB("null"),
 			CreatedBy:      sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
 			CreatedAt:      now,
 			UpdatedAt:      now,
@@ -155,7 +155,7 @@ func (s *CandidateService) Update(
 		if err != nil {
 			return nil, errors.NewInternal("failed to marshal tags")
 		}
-		patch["tags"] = json.RawMessage(tagsJSON)
+		patch["tags"] = models.JSONB(tagsJSON)
 	}
 
 	if len(patch) == 0 {
@@ -213,7 +213,7 @@ func (s *CandidateService) AssignToJob(
 		JobID:          jobID,
 		CandidateID:    candidateID,
 		PipelineStatus: req.PipelineStatus,
-		AIMatchJSON:    json.RawMessage("null"),
+		AIMatchJSON:    models.JSONB("null"),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -251,7 +251,7 @@ func (s *CandidateService) ListByJob(
 
 func (s *CandidateService) UpdateCVParseResult(ctx context.Context, companyID, candidateID, parsedJSON, summary string) error {
 	patch := map[string]any{
-		"parsed_cv_json": json.RawMessage(parsedJSON),
+		"parsed_cv_json": models.JSONB(parsedJSON),
 		"ai_cv_summary":  sql.NullString{String: summary, Valid: true},
 	}
 	_, err := s.candidateRepo.Update(ctx, companyID, candidateID, patch)

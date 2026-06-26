@@ -144,7 +144,7 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 		CompanyID:       companyID,
 		TemplateID:      sql.NullString{String: tmpl.ID, Valid: true},
 		TemplateVersion: sql.NullInt32{Int32: int32(tmpl.Version), Valid: true},
-		InputJSON:       json.RawMessage(payloadBytes),
+		InputJSON:       models.JSONB(payloadBytes),
 		LatencyMs:       sql.NullInt32{Int32: int32(latency), Valid: true},
 		CreatedAt:       time.Now(),
 	}
@@ -179,7 +179,7 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 	}
 
 	logEntry.Status = "success"
-	logEntry.OutputJSON = json.RawMessage(responseBody)
+	logEntry.OutputJSON = models.JSONB(responseBody)
 	// TODO: extract tokens_in, tokens_out from response if provided by Python
 	s.logSvc.LogAsync(logEntry)
 

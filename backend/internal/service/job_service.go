@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -72,7 +71,7 @@ func (s *JobService) Create(
 		Requirements:   sql.NullString{String: req.Requirements, Valid: req.Requirements != ""},
 		Benefits:       sql.NullString{String: req.Benefits, Valid: req.Benefits != ""},
 		Status:         models.JobStatus(req.Status),
-		AIAnalysisJSON: json.RawMessage("null"),
+		AIAnalysisJSON: models.JSONB("null"),
 		CreatedBy:      createdByUserID,
 		CreatedAt:      now,
 		UpdatedAt:      now,

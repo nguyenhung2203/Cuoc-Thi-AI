@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 
@@ -31,7 +30,7 @@ type Job struct {
 	Benefits         sql.NullString  `db:"benefits"          json:"benefits,omitempty"`
 	Status           JobStatus       `db:"status"            json:"status"`
 	AISummary        sql.NullString  `db:"ai_summary"        json:"ai_summary,omitempty"`
-	AIAnalysisJSON   json.RawMessage `db:"ai_analysis_json"  json:"ai_analysis_json,omitempty"`
+	AIAnalysisJSON   JSONB           `db:"ai_analysis_json"  json:"ai_analysis_json,omitempty"`
 	CreatedBy        string          `db:"created_by"        json:"created_by"`
 	CreatedAt        time.Time       `db:"created_at"        json:"created_at"`
 	UpdatedAt        time.Time       `db:"updated_at"        json:"updated_at"`
