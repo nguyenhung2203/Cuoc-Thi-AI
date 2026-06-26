@@ -5,7 +5,7 @@
 | **Task ID** | H-S3-02 |
 | **Sprint** | 3 — Transcript Realtime |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Đã hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -43,10 +43,10 @@ Xử lý transcript partial (đang nói) và final (đã hoàn thành):
 
 ## Definition of Done
 
-- [ ] Partial transcript hiển thị realtime
-- [ ] Final transcript thay thế partial tương ứng
-- [ ] Không duplicate final text
-- [ ] Confidence thấp → có indicator trên UI
+- [x] Partial transcript hiển thị realtime
+- [x] Final transcript thay thế partial tương ứng
+- [x] Không duplicate final text
+- [x] Confidence thấp → có indicator trên UI
 
 ---
 
@@ -58,7 +58,7 @@ Xử lý transcript partial (đang nói) và final (đã hoàn thành):
 
 ## Checklist test
 
-- [ ] Nhận partial → hiển thị "đang nói..."
-- [ ] Nhận final → thay thế partial, hiển thị cố định
-- [ ] 2 partial liên tiếp → text cập nhật, không nhân đôi
-- [ ] confidence < 0.5 → hiển thị cảnh báo
+- [x] Nhận partial → hiển thị "đang nói..."
+- [x] Nhận final → thay thế partial, hiển thị cố định
+- [x] 2 partial liên tiếp → text cập nhật, không nhân đôi
+- [x] confidence < 0.5 → hiển thị cảnh báo

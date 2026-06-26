@@ -5,7 +5,7 @@
 | **Task ID** | H-S2-03 |
 | **Sprint** | 2 — Chat + LiveKit WebRTC |
 | **Độ khó** | Rất khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -47,10 +47,10 @@ LiveKit SFU → Audio stream hook (Go service) → AI Orchestrator (Python)
 
 ## Definition of Done
 
-- [ ] Audio từ phòng được capture qua LiveKit
-- [ ] Audio forward đến AI Orchestrator thành công
-- [ ] AI trả transcript → broadcast qua WebSocket
-- [ ] Nếu AI/STT lỗi → audio vẫn hoạt động bình thường
+- [x] Audio từ phòng được capture qua LiveKit
+- [x] Audio forward đến AI Orchestrator thành công
+- [x] AI trả transcript → broadcast qua WebSocket
+- [x] Nếu AI/STT lỗi → audio vẫn hoạt động bình thường
 
 ---
 
@@ -63,7 +63,7 @@ LiveKit SFU → Audio stream hook (Go service) → AI Orchestrator (Python)
 
 ## Checklist test
 
-- [ ] Nói trong phòng → audio được capture
-- [ ] Audio gửi đến AI → nhận transcript text
-- [ ] Transcript broadcast đúng room
-- [ ] STT lỗi → room vẫn hoạt động
+- [x] Nói trong phòng → audio được capture
+- [x] Audio gửi đến AI → nhận transcript text
+- [x] Transcript broadcast đúng room
+- [x] STT lỗi → room vẫn hoạt động

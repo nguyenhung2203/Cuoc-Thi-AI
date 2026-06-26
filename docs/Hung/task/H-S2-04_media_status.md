@@ -5,7 +5,7 @@
 | **Task ID** | H-S2-04 |
 | **Sprint** | 2 — Chat + LiveKit WebRTC |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Đã hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -57,11 +57,11 @@
 
 ## Definition of Done
 
-- [ ] Bật/tắt mic → broadcast đúng
-- [ ] Bật/tắt camera → broadcast đúng
-- [ ] Client mới join → nhận media status hiện tại
-- [ ] DB `media_status` cập nhật đúng
-- [ ] Rate limit: max 30 lần/phút/participant
+- [x] Bật/tắt mic → broadcast đúng
+- [x] Bật/tắt camera → broadcast đúng
+- [x] Client mới join → nhận media status hiện tại
+- [x] DB `media_status` cập nhật đúng
+- [x] Rate limit: max 30 lần/phút/participant
 
 ---
 
@@ -73,6 +73,6 @@
 
 ## Checklist test
 
-- [ ] Tắt mic → peer nhận `media:status_changed` mic_enabled=false
-- [ ] Join room → nhận media status của người đã có
-- [ ] Spam toggle → bị rate limit
+- [x] Tắt mic → peer nhận `media:status_changed` mic_enabled=false
+- [x] Join room → nhận media status của người đã có
+- [x] Spam toggle → bị rate limit
