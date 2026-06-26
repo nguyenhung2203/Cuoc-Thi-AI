@@ -50,10 +50,13 @@ type MediaStatusInfo struct {
 
 // RoomJoinedPayload is the ACK sent back only to the participant who just joined.
 type RoomJoinedPayload struct {
-	ParticipantID   string            `json:"participant_id"`
-	RoomStatus      RoomStatus        `json:"room_status"`
-	InterviewStatus string            `json:"interview_status"`
-	Participants    []ParticipantInfo `json:"participants"`
+	ParticipantID     string            `json:"participant_id"`
+	RoomStatus        RoomStatus        `json:"room_status"`
+	InterviewStatus   string            `json:"interview_status"`
+	Participants      []ParticipantInfo `json:"participants"`
+	MediaStatus       *MediaStatusInfo  `json:"media_status,omitempty"`
+	MissedEventsCount int               `json:"missed_events_count,omitempty"`
+	SyncFromTimestamp time.Time         `json:"sync_from_timestamp,omitempty"`
 }
 
 // RoomUserJoinedPayload is broadcast to everyone else when a new participant joins.

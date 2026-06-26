@@ -158,6 +158,7 @@ func (pm *PresenceManager) checkRoom(roomID string) {
 		}
 	}
 	changed := false
+	var droppedOffline []string
 
 	room.mu.Lock()
 	for _, p := range room.Participants {
@@ -169,20 +170,31 @@ func (pm *PresenceManager) checkRoom(roomID string) {
 		case since >= heartbeatOfflineThreshold:
 			p.ConnectionState = events.ConnectionOffline
 			changed = true
+			droppedOffline = append(droppedOffline, p.ConnectionID)
 			log.Printf("[presence] participant=%s → offline (no heartbeat %.0fs)", p.ConnectionID, since.Seconds())
-			// Simulate database update for offline status
 			log.Printf("[db] UPDATE interview_participants SET connection_state = 'offline' WHERE id = '%s'", p.ConnectionID)
-			// Simulate Redis delete presence
 			log.Printf("[redis] DEL presence:%s:%s", roomID, p.ConnectionID)
 		case since >= heartbeatReconnectingThreshold && p.ConnectionState == events.ConnectionOnline:
 			p.ConnectionState = events.ConnectionReconnecting
 			changed = true
 			log.Printf("[presence] participant=%s → reconnecting (no heartbeat %.0fs)", p.ConnectionID, since.Seconds())
-			// Simulate database update for reconnecting status
 			log.Printf("[db] UPDATE interview_participants SET connection_state = 'reconnecting' WHERE id = '%s'", p.ConnectionID)
 		}
 	}
 	room.mu.Unlock()
+
+	for _, cID := range droppedOffline {
+		room.RemoveParticipant(cID)
+		leftPayload := events.RoomUserLeftPayload{
+			ParticipantID: cID,
+			Reason:        "reconnect_timeout",
+			LeftAt:        now,
+		}
+		if leftEnv, err := events.NewEnvelope(events.EventRoomUserLeft, "", room.ID, room.InterviewID, leftPayload); err == nil {
+			rawLeft, _ := leftEnv.ToJSON()
+			room.BroadcastAll(rawLeft)
+		}
+	}
 
 	if changed {
 		pm.broadcastPresence(room)

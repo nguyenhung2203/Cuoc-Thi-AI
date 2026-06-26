@@ -21,6 +21,7 @@ type Server struct {
 	router             *MessageRouter
 	httpServer         *http.Server
 	transcriptPipeline *TranscriptPipeline
+	transcriptSaver    *TranscriptBatchSaver
 }
 
 // NewServer creates a Server with all dependencies wired up.
@@ -38,6 +39,7 @@ func NewServer(addr string) *Server {
 		roomManager:        rm,
 		router:             router,
 		transcriptPipeline: tp,
+		transcriptSaver:    router.GetTranscriptSaver(),
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
@@ -72,6 +74,16 @@ func (s *Server) GetHandler() http.Handler {
 	return s.httpServer.Handler
 }
 
+// GetRoomManager returns the RoomManager for testing purposes.
+func (s *Server) GetRoomManager() *RoomManager {
+	return s.roomManager
+}
+
+// ForceCheckRoom forces the presence watcher inspection for testing purposes.
+func (s *Server) ForceCheckRoom(roomID string) {
+	s.router.presenceManager.checkRoom(roomID)
+}
+
 // Start begins listening for connections. Blocks until the context is cancelled.
 func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
@@ -93,6 +105,9 @@ func (s *Server) Start(ctx context.Context) error {
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
 	log.Println("[realtime] shutting down...")
+	if s.transcriptSaver != nil {
+		s.transcriptSaver.Close()
+	}
 	s.connManager.CloseAll()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -114,8 +129,101 @@ func (s *Server) handleInternal(w http.ResponseWriter, r *http.Request) {
 		s.handleTranscriptPush(w, r, pathParts[3])
 		return
 	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "suggestion" {
+		s.handleAISuggestionPush(w, r, pathParts[3])
+		return
+	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "score_update" {
+		s.handleAIScoreUpdatePush(w, r, pathParts[3])
+		return
+	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "error" {
+		s.handleAIErrorPush(w, r, pathParts[3])
+		return
+	}
 
 	http.NotFound(w, r)
+}
+
+// handleAIErrorPush processes the AI error webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAIErrorPush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AIErrorPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAIError, payload.RequestID, room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAIError, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+// handleAISuggestionPush processes the AI suggestion webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAISuggestionPush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AISuggestionPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAISuggestion, "", room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAISuggestion, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+// handleAIScoreUpdatePush processes the AI scoring update webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAIScoreUpdatePush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AIScoreUpdatePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAIScoreUpdate, "", room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAIScoreUpdate, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleTranscriptPush processes the transcript webhook from the AI Orchestrator.
@@ -133,11 +241,35 @@ func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, ro
 		return
 	}
 
+	resolvedPID, resolvedType, resolvedName := room.ResolveSpeaker(payload.ParticipantID, payload.TrackID, "", payload.SpeakerType, payload.SpeakerName)
+	payload.ParticipantID = resolvedPID
+	payload.SpeakerType = resolvedType
+	payload.SpeakerName = resolvedName
+
 	// Decouple HTTP request from WebSocket broadcast via async buffer queue
 	if !s.transcriptPipeline.Push(roomID, payload) {
 		log.Printf("[server] transcript buffer full for room=%s", roomID)
 		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
+	}
+
+	if payload.IsFinal && s.transcriptSaver != nil {
+		record := TranscriptRecord{
+			ID:            payload.TranscriptID,
+			InterviewID:   room.InterviewID,
+			ParticipantID: resolvedPID,
+			SpeakerType:   string(resolvedType),
+			SpeakerName:   resolvedName,
+			Content:       payload.Content,
+			Language:      "vi",
+			StartTimeMs:   payload.StartTimeMs,
+			EndTimeMs:     payload.EndTimeMs,
+			Confidence:    payload.Confidence,
+			Source:        "audio",
+			IsFinal:       true,
+			CreatedAt:     payload.CreatedAt,
+		}
+		s.transcriptSaver.Push(record)
 	}
 
 	w.WriteHeader(http.StatusOK)

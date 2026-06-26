@@ -11,9 +11,11 @@ import (
 // RoomManager maintains a registry of all active rooms.
 // It is safe for concurrent use.
 type RoomManager struct {
-	rooms             map[string]*Room // roomID → Room
-	simulatedStatuses map[string]events.RoomStatus // roomID → RoomStatus (simulates DB/Redis)
+	rooms             map[string]*Room                       // roomID → Room
+	simulatedStatuses map[string]events.RoomStatus           // roomID → RoomStatus (simulates DB/Redis)
 	simulatedChat     map[string][]events.ChatMessagePayload // roomID → chat history
+	emptyTimers       map[string]*time.Timer                 // roomID → grace timer
+	timerMu           sync.Mutex
 	mu                sync.RWMutex
 }
 
@@ -23,6 +25,7 @@ func NewRoomManager() *RoomManager {
 		rooms:             make(map[string]*Room),
 		simulatedStatuses: make(map[string]events.RoomStatus),
 		simulatedChat:     make(map[string][]events.ChatMessagePayload),
+		emptyTimers:       make(map[string]*time.Timer),
 	}
 }
 
@@ -62,10 +65,73 @@ func (rm *RoomManager) Get(roomID string) *Room {
 
 // Delete removes a room from the registry and logs it.
 func (rm *RoomManager) Delete(roomID string) {
+	rm.CancelEmptyRoomTimer(roomID)
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	delete(rm.rooms, roomID)
 	log.Printf("[room-mgr] deleted room=%s", roomID)
+}
+
+// StartEmptyRoomTimer starts a grace-period timer for an empty room.
+// When gracePeriodRoom expires, the room is cleaned up from memory and DB.
+func (rm *RoomManager) StartEmptyRoomTimer(roomID string, pm *PresenceManager) {
+	rm.timerMu.Lock()
+	defer rm.timerMu.Unlock()
+	if rm.emptyTimers == nil {
+		rm.emptyTimers = make(map[string]*time.Timer)
+	}
+	if _, exists := rm.emptyTimers[roomID]; exists {
+		return // timer already running
+	}
+	log.Printf("[room-mgr] all participants disconnected in room=%s, starting room grace timer (%v)", roomID, gracePeriodRoom)
+
+	rm.emptyTimers[roomID] = time.AfterFunc(gracePeriodRoom, func() {
+		rm.CleanupExpiredRoom(roomID, pm)
+	})
+}
+
+// CancelEmptyRoomTimer cancels any pending empty room grace timer.
+func (rm *RoomManager) CancelEmptyRoomTimer(roomID string) {
+	rm.timerMu.Lock()
+	defer rm.timerMu.Unlock()
+	if rm.emptyTimers == nil {
+		return
+	}
+	if t, exists := rm.emptyTimers[roomID]; exists {
+		t.Stop()
+		delete(rm.emptyTimers, roomID)
+		log.Printf("[room-mgr] cancelled room grace timer for room=%s", roomID)
+	}
+}
+
+// CleanupExpiredRoom performs cleanup after grace period expires.
+func (rm *RoomManager) CleanupExpiredRoom(roomID string, pm *PresenceManager) {
+	rm.timerMu.Lock()
+	delete(rm.emptyTimers, roomID)
+	rm.timerMu.Unlock()
+
+	room := rm.Get(roomID)
+	if room == nil {
+		return
+	}
+	nowStr := time.Now().UTC().Format(time.RFC3339)
+	log.Printf("[room-mgr] empty room grace period expired for room=%s, triggering cleanup", roomID)
+
+	// Cập nhật DB room status
+	log.Printf("[db] UPDATE interview_rooms SET status = 'closed', updated_at = '%s' WHERE id = '%s'", nowStr, roomID)
+
+	// Cập nhật participant left_at
+	log.Printf("[db] UPDATE interview_participants SET left_at = '%s', connection_state = 'offline' WHERE interview_id = '%s' AND left_at IS NULL", nowStr, room.InterviewID)
+
+	// Release Redis keys
+	log.Printf("[redis] DEL room_status:%s", roomID)
+	log.Printf("[redis] DEL presence:%s:*", roomID)
+
+	// Remove room khỏi memory
+	rm.Delete(roomID)
+	if pm != nil {
+		pm.StopWatcher(roomID)
+	}
 }
 
 // Count returns the number of active rooms.

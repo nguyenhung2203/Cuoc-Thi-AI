@@ -36,6 +36,21 @@ func (c *ClientConnection) WriteMessage(data []byte) error {
 	return c.Conn.WriteMessage(websocket.TextMessage, data)
 }
 
+// TrySend safely attempts to enqueue a message on Send channel without blocking or panicking.
+func (c *ClientConnection) TrySend(data []byte) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return false
+	}
+	select {
+	case c.Send <- data:
+		return true
+	default:
+		return false
+	}
+}
+
 // Close marks the connection as closed and closes the underlying WebSocket.
 // Safe to call multiple times and safe when Conn is nil (e.g. in unit tests).
 func (c *ClientConnection) Close() {
