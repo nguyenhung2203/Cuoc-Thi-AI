@@ -78,6 +78,10 @@ func (r *MessageRouter) sendAIError(room *Room, reqID string, errType events.AIE
 		rawErr, _ := errEnv.ToJSON()
 		room.BroadcastWithVisibility(events.EventAIError, "", rawErr)
 	}
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("ai_error", "system", "ai", "interview_room", room.ID, "", "127.0.0.1", map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "error_type": errType})
+	}
 }
 
 // handleAIRequestSuggestion processes "ai:request_suggestion" events from recruiters.
@@ -183,6 +187,10 @@ func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, fo
 	if err == nil {
 		rawSugg, _ := suggEnv.ToJSON()
 		targetRoom.BroadcastWithVisibility(events.EventAISuggestion, "", rawSugg)
+	}
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("ai_suggestion", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "suggestion_id": suggestionID})
 	}
 }
 
@@ -310,5 +318,9 @@ func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope s
 	if err == nil {
 		rawScore, _ := scoreEnv.ToJSON()
 		targetRoom.BroadcastWithVisibility(events.EventAIScoreUpdate, "", rawScore)
+	}
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("ai_score_update", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "score_id": scoreID})
 	}
 }

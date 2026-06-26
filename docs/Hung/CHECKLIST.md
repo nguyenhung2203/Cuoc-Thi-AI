@@ -159,7 +159,12 @@
   - `room_manager.go` — Quản lý `emptyTimers` map, triển khai goroutine hẹn giờ dọn dẹp phòng `StartEmptyRoomTimer`, huỷ hẹn giờ `CancelEmptyRoomTimer` và thực thi dọn bộ nhớ/DB/Redis `CleanupExpiredRoom`
   - `handler.go` & `room_handler.go` — Khởi động room grace timer khi người tham gia cuối cùng ngắt kết nối/leave; huỷ hẹn giờ ngay lập tức khi có người tham gia mới/reconnect joined room
   - `grace_period_test.go` [NEW] — Bộ kiểm thử tự động chứng minh phòng duy trì trạng thái khi disconnect tạm thời, dọn sạch khi hết hạn, huỷ dọn dẹp khi reconnect và kiểm tra tải 100 phòng không rò rỉ bộ nhớ/goroutines
-- [ ] **H-S5-03** — Room event audit log → [task/H-S5-03_room_audit.md](./task/H-S5-03_room_audit.md)
+- [x] **H-S5-03** — Room event audit log → [task/H-S5-03_room_audit.md](./task/H-S5-03_room_audit.md)
+  - `models/audit_log.go` — Cập nhật schema đầy đủ các field.
+  - `repository/audit_repo.go` — Thêm hàm `Insert` mô phỏng DB.
+  - `audit_logger.go` [NEW] — Async logger sử dụng buffered channel để không chặn luồng chính.
+  - `server.go` & `handler.go` — Lấy `IPAddress` từ request HTTP, lưu log `disconnect`.
+  - `room_handler.go`, `interview_handler.go`, `ai_handler.go` — Gắn log các event tương ứng.
 - [ ] **H-S5-04** — Load test nhiều room → [task/H-S5-04_load_test.md](./task/H-S5-04_load_test.md)
 
 ---
@@ -173,8 +178,8 @@
 | Sprint 2: Chat + WebRTC | 4 | 4 | ✅ Hoàn thành |
 | Sprint 3: Transcript | 4 | 4 | ✅ Hoàn thành |
 | Sprint 4: AI Bridge | 4 | 4 | ✅ Hoàn thành |
-| Sprint 5: Hardening | 4 | 2 | 🔄 Đang thực hiện |
-| **Tổng** | **24** | **22** | |
+| Sprint 5: Hardening | 4 | 3 | 🔄 Đang thực hiện |
+| **Tổng** | **24** | **23** | |
 
 ---
 

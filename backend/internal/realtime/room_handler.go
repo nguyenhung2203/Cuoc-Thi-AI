@@ -88,6 +88,10 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 
 		missedEvents = room.GetMissedEvents(oldLastSeen, p.ParticipantType)
 		log.Printf("[room] participant=%s reconnected to room=%s (recovered %d missed events)", conn.ID, conn.RoomID, len(missedEvents))
+		
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("reconnect", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+		}
 	} else {
 		p = &Participant{
 			ConnectionID:    conn.ID,
@@ -102,6 +106,10 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		}
 		room.AddParticipant(p)
 		log.Printf("[room] participant=%s joined room=%s as %s", conn.ID, conn.RoomID, p.ParticipantType)
+		
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("room_join", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+		}
 	}
 
 	log.Printf("[db] INSERT INTO interview_participants (id, interview_id, user_id, participant_type, display_name, joined_at, connection_state) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', 'online')",
@@ -175,6 +183,10 @@ func (r *MessageRouter) handleRoomLeave(conn *ClientConnection, env *events.Enve
 	// 1. Remove participant from the room
 	room.RemoveParticipant(conn.ID)
 	log.Printf("[room] participant=%s left room=%s", conn.ID, conn.RoomID)
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("room_leave", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+	}
 
 	// Simulate database update: left_at in interview_participants table
 	log.Printf("[db] UPDATE interview_participants SET left_at = '%s', connection_state = 'left' WHERE id = '%s'",
