@@ -2,6 +2,8 @@ package realtime
 
 import (
 	"log"
+	"sync"
+	"time"
 
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
@@ -18,16 +20,25 @@ type MessageRouter struct {
 	presenceManager    *PresenceManager
 	audioHook          *livekit.AudioHookService
 	transcriptPipeline *TranscriptPipeline
+	transcriptSaver    *TranscriptBatchSaver
+	aiRateLimiter      *AIRateLimiter
+	scoreRateLimiter   *AIRateLimiter
+	aiRetryMu          sync.Mutex
+	aiRetries          map[string]int
 }
 
 // NewMessageRouter constructs a router and registers all known event handlers.
 func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 	r := &MessageRouter{
-		handlers:        make(map[string]HandlerFunc),
-		connManager:     cm,
-		roomManager:     rm,
-		presenceManager: NewPresenceManager(rm),
-		audioHook:       livekit.NewAudioHookService(),
+		handlers:         make(map[string]HandlerFunc),
+		connManager:      cm,
+		roomManager:      rm,
+		presenceManager:  NewPresenceManager(rm),
+		audioHook:        livekit.NewAudioHookService(),
+		transcriptSaver:  NewTranscriptBatchSaver(100, 5*time.Second),
+		aiRateLimiter:    NewAIRateLimiter(10, 10*time.Minute),
+		scoreRateLimiter: NewAIRateLimiter(10, 10*time.Minute),
+		aiRetries:        make(map[string]int),
 	}
 	r.registerHandlers()
 	return r
@@ -36,6 +47,11 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 // SetTranscriptPipeline attaches the async transcript pipeline to the router.
 func (r *MessageRouter) SetTranscriptPipeline(tp *TranscriptPipeline) {
 	r.transcriptPipeline = tp
+}
+
+// GetTranscriptSaver returns the batch saver instance.
+func (r *MessageRouter) GetTranscriptSaver() *TranscriptBatchSaver {
+	return r.transcriptSaver
 }
 
 // registerHandlers wires every client→server event to its handler.
@@ -66,8 +82,8 @@ func (r *MessageRouter) registerHandlers() {
 	r.register(events.EventTranscriptFinal, r.handleTranscriptFinal)
 
 	// AI requests
-	r.register(events.EventAIRequestSuggestion, r.stubHandler("ai:request_suggestion"))
-	r.register(events.EventAIRequestScoreUpdate, r.stubHandler("ai:request_score_update"))
+	r.register(events.EventAIRequestSuggestion, r.handleAIRequestSuggestion)
+	r.register(events.EventAIRequestScoreUpdate, r.handleAIRequestScoreUpdate)
 }
 
 // register adds a handler for the given event name.

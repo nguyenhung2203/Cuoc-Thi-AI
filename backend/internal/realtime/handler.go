@@ -143,44 +143,30 @@ func (s *Server) onDisconnect(conn *ClientConnection) {
 	if conn.RoomID != "" {
 		room := s.roomManager.Get(conn.RoomID)
 		if room != nil {
-			room.RemoveParticipant(conn.ID)
+			p := room.GetParticipant(conn.ID)
+			if p != nil {
+				room.mu.Lock()
+				p.ConnectionState = events.ConnectionReconnecting
+				p.LastSeenAt = time.Now().UTC()
+				p.Connection = nil
+				room.mu.Unlock()
 
-			// Simulate database update on disconnect
-			log.Printf("[db] UPDATE interview_participants SET left_at = '%s', connection_state = 'offline' WHERE id = '%s'",
-				time.Now().UTC().Format(time.RFC3339), conn.ID)
+				log.Printf("[db] UPDATE interview_participants SET connection_state = 'reconnecting', last_seen_at = '%s' WHERE id = '%s'",
+					p.LastSeenAt.Format(time.RFC3339), conn.ID)
+				log.Printf("[redis] SET presence:%s:%s value=reconnecting EX 120", conn.RoomID, conn.ID)
 
-			// Simulate Redis presence delete
-			log.Printf("[redis] DEL presence:%s:%s", conn.RoomID, conn.ID)
-
-			// Broadcast room:user_left to others in the room
-			leftPayload := events.RoomUserLeftPayload{
-				ParticipantID: conn.ID,
-				Reason:        "connection_lost",
-				LeftAt:        time.Now().UTC(),
-			}
-			leftEnv, err := events.NewEnvelope(events.EventRoomUserLeft, "", room.ID, room.InterviewID, leftPayload)
-			if err == nil {
-				rawLeft, _ := leftEnv.ToJSON()
-				room.BroadcastAll(rawLeft)
-			}
-
-			// Broadcast presence update
-			presencePayload := events.RoomPresenceUpdatePayload{
-				Participants: room.ParticipantList(),
-			}
-			presenceEnv, err := events.NewEnvelope(events.EventRoomPresenceUpdate, "", room.ID, room.InterviewID, presencePayload)
-			if err == nil {
-				rawPresence, _ := presenceEnv.ToJSON()
-				room.BroadcastAll(rawPresence)
+				presencePayload := events.RoomPresenceUpdatePayload{
+					Participants: room.ParticipantList(),
+				}
+				presenceEnv, err := events.NewEnvelope(events.EventRoomPresenceUpdate, "", room.ID, room.InterviewID, presencePayload)
+				if err == nil {
+					rawPresence, _ := presenceEnv.ToJSON()
+					room.BroadcastAll(rawPresence)
+				}
 			}
 
-			// Clean up room if empty
-			room.mu.RLock()
-			count := len(room.Participants)
-			room.mu.RUnlock()
-			if count == 0 {
-				s.roomManager.Delete(room.ID)
-				s.router.presenceManager.StopWatcher(room.ID)
+			if !room.HasOnlineParticipants() {
+				s.roomManager.StartEmptyRoomTimer(room.ID, s.router.presenceManager)
 			}
 		}
 	}
@@ -194,9 +180,7 @@ func (s *Server) sendError(conn *ClientConnection, requestID, code, message stri
 		return
 	}
 	raw, _ := env.ToJSON()
-	select {
-	case conn.Send <- raw:
-	default:
-		log.Printf("[ws] send buffer full for connID=%s, dropping error event", conn.ID)
+	if !conn.TrySend(raw) {
+		log.Printf("[ws] send buffer full/closed for connID=%s, dropping error event", conn.ID)
 	}
 }

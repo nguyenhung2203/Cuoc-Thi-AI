@@ -44,8 +44,9 @@ var eventVisibility = map[string]VisibilityRule{
 	EventAIWarning:     VisibleRecruitersOnly,
 	EventAIError:       VisibleRecruitersOnly,
 
-	// ── Report — recruiter only ───────────────────────────────────────────
+	// ── Report & Notes — recruiter only ───────────────────────────────────
 	EventReportReady: VisibleRecruitersOnly,
+	EventNoteCreate:  VisibleRecruitersOnly,
 
 	// ── Generic error — only the sender ──────────────────────────────────
 	EventError: VisibleSenderOnly,

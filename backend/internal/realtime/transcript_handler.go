@@ -33,6 +33,7 @@ func (r *MessageRouter) processTranscriptWebSocketEvent(conn *ClientConnection, 
 	}
 
 	var speakerType events.SpeakerType
+	var speakerName, participantID, trackID, identity string
 	var content string
 	var startTimeMs, endTimeMs int64
 	var confidence float64
@@ -44,6 +45,10 @@ func (r *MessageRouter) processTranscriptWebSocketEvent(conn *ClientConnection, 
 			return
 		}
 		speakerType = payload.SpeakerType
+		speakerName = payload.SpeakerName
+		participantID = payload.ParticipantID
+		trackID = payload.TrackID
+		identity = payload.Identity
 		content = payload.Content
 		startTimeMs = payload.StartTimeMs
 		endTimeMs = payload.EndTimeMs
@@ -55,6 +60,10 @@ func (r *MessageRouter) processTranscriptWebSocketEvent(conn *ClientConnection, 
 			return
 		}
 		speakerType = payload.SpeakerType
+		speakerName = payload.SpeakerName
+		participantID = payload.ParticipantID
+		trackID = payload.TrackID
+		identity = payload.Identity
 		content = payload.Content
 		startTimeMs = payload.StartTimeMs
 		endTimeMs = payload.EndTimeMs
@@ -64,35 +73,56 @@ func (r *MessageRouter) processTranscriptWebSocketEvent(conn *ClientConnection, 
 	if speakerType == "" {
 		speakerType = events.SpeakerType(conn.Role)
 	}
+	if speakerName == "" {
+		speakerName = conn.DisplayName
+	}
+
+	resolvedPID, resolvedType, resolvedName := room.ResolveSpeaker(participantID, trackID, identity, speakerType, speakerName)
 
 	// Deterministic TranscriptID for deduping partial → final match based on room, speaker, and start time.
 	var transcriptID string
 	if startTimeMs > 0 {
-		transcriptID = fmt.Sprintf("%s-%s-%d", conn.RoomID, speakerType, startTimeMs)
+		transcriptID = fmt.Sprintf("%s-%s-%d", conn.RoomID, resolvedType, startTimeMs)
 	} else {
 		transcriptID = uuid.New().String()
 	}
 
 	if confidence < 0.5 {
-		log.Printf("[transcript] low confidence (%f) detected for room=%s speaker=%s", confidence, conn.RoomID, conn.DisplayName)
+		log.Printf("[transcript] low confidence (%f) detected for room=%s speaker=%s", confidence, conn.RoomID, resolvedName)
 	}
 
 	now := time.Now().UTC()
 	updatePayload := events.TranscriptUpdatePayload{
-		TranscriptID: transcriptID,
-		SpeakerType:  speakerType,
-		SpeakerName:  conn.DisplayName,
-		Content:      content,
-		StartTimeMs:  startTimeMs,
-		EndTimeMs:    endTimeMs,
-		Confidence:   confidence,
-		IsFinal:      isFinal,
-		CreatedAt:    now,
+		TranscriptID:  transcriptID,
+		ParticipantID: resolvedPID,
+		TrackID:       trackID,
+		SpeakerType:   resolvedType,
+		SpeakerName:   resolvedName,
+		Content:       content,
+		StartTimeMs:   startTimeMs,
+		EndTimeMs:     endTimeMs,
+		Confidence:    confidence,
+		IsFinal:       isFinal,
+		CreatedAt:     now,
 	}
 
-	if isFinal {
-		log.Printf("[db] INSERT INTO interview_transcripts (id, interview_id, speaker_type, speaker_name, content, is_final, confidence, created_at) VALUES ('%s', '%s', '%s', '%s', '%s', true, %f, '%s')",
-			transcriptID, room.InterviewID, speakerType, conn.DisplayName, content, confidence, now.Format(time.RFC3339))
+	if isFinal && r.transcriptSaver != nil {
+		record := TranscriptRecord{
+			ID:            transcriptID,
+			InterviewID:   room.InterviewID,
+			ParticipantID: resolvedPID,
+			SpeakerType:   string(resolvedType),
+			SpeakerName:   resolvedName,
+			Content:       content,
+			Language:      "vi",
+			StartTimeMs:   startTimeMs,
+			EndTimeMs:     endTimeMs,
+			Confidence:    confidence,
+			Source:        "audio",
+			IsFinal:       true,
+			CreatedAt:     now,
+		}
+		r.transcriptSaver.Push(record)
 	}
 
 	// Push to async transcript pipeline

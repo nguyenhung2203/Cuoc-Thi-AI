@@ -18,18 +18,30 @@ const (
 	// sendBufferSize is the channel buffer per connection.
 	sendBufferSize = 256
 
+)
+
+var (
 	// gracePeriodShort is how long the server waits before marking a disconnected
 	// participant as "reconnecting" (and NOT broadcasting room:user_left).
 	gracePeriodShort = 2 * time.Minute
 
 	// gracePeriodRoom is how long an empty room is kept alive after all participants leave.
 	gracePeriodRoom = 5 * time.Minute
-)
 
-var (
 	// gracePeriodEndInterview is the cool-down after interview:end before the room closes.
 	gracePeriodEndInterview = 30 * time.Second
+
+	// heartbeatOfflineThreshold: no heartbeat for this long → "offline".
+	heartbeatOfflineThreshold = gracePeriodShort
 )
+
+// SetGracePeriodsForTest overrides grace period durations for fast automated testing.
+func SetGracePeriodsForTest(short, room, endInterview time.Duration) {
+	gracePeriodShort = short
+	gracePeriodRoom = room
+	gracePeriodEndInterview = endInterview
+	heartbeatOfflineThreshold = short
+}
 
 const (
 	// roomWaitingExpiry is how long a room stays in "waiting" before it auto-expires.
@@ -37,9 +49,6 @@ const (
 
 	// heartbeatReconnectingThreshold: no heartbeat for this long → "reconnecting".
 	heartbeatReconnectingThreshold = 60 * time.Second
-
-	// heartbeatOfflineThreshold: no heartbeat for this long → "offline".
-	heartbeatOfflineThreshold = gracePeriodShort
 
 	// rateLimit_aiSuggestionPerInterval is the max AI suggestion requests per window.
 	rateLimitAISuggestionPerInterval = 10
