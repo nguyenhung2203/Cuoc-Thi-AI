@@ -1,16 +1,18 @@
-<template>
-  <div class="appbutton">
-    <!-- AppButton Component -->
-    <slot></slot>
-  </div>
-</template>
-
-<script>
-export default {
-  name: 'AppButton'
-}
+<script setup>
+defineProps({
+  variant: {
+    type: String,
+    default: 'primary'
+  },
+  className: {
+    type: String,
+    default: ''
+  }
+})
 </script>
 
-<style scoped>
-/* Styles for AppButton */
-</style>
+<template>
+  <button :class="['btn', `btn-${variant}`, className]" v-bind="$attrs">
+    <slot></slot>
+  </button>
+</template>

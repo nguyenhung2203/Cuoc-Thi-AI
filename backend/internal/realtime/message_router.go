@@ -7,6 +7,7 @@ import (
 
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
+	"backend/internal/repository"
 )
 
 // HandlerFunc is the signature for event handlers.
@@ -23,6 +24,7 @@ type MessageRouter struct {
 	transcriptSaver    *TranscriptBatchSaver
 	aiRateLimiter      *AIRateLimiter
 	scoreRateLimiter   *AIRateLimiter
+	auditLogger        *AuditLogger
 	aiRetryMu          sync.Mutex
 	aiRetries          map[string]int
 }
@@ -38,6 +40,7 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 		transcriptSaver:  NewTranscriptBatchSaver(100, 5*time.Second),
 		aiRateLimiter:    NewAIRateLimiter(10, 10*time.Minute),
 		scoreRateLimiter: NewAIRateLimiter(10, 10*time.Minute),
+		auditLogger:      NewAuditLogger(repository.NewAuditRepository()),
 		aiRetries:        make(map[string]int),
 	}
 	r.registerHandlers()
