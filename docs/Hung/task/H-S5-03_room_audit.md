@@ -5,7 +5,7 @@
 | **Task ID** | H-S5-03 |
 | **Sprint** | 5 — Hardening |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Đã hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -61,11 +61,11 @@ Ghi audit log cho các sự kiện quan trọng trong room:
 
 ## Definition of Done
 
-- [ ] Ghi log đúng cho tất cả event quan trọng
-- [ ] Audit log không block realtime events
-- [ ] Log format đúng schema `audit_logs`
-- [ ] Có actor_id, resource_id, timestamp
-- [ ] Async write (goroutine hoặc channel buffer)
+- [x] Ghi log đúng cho tất cả event quan trọng
+- [x] Audit log không block realtime events
+- [x] Log format đúng schema `audit_logs`
+- [x] Có actor_id, resource_id, timestamp
+- [x] Async write (goroutine hoặc channel buffer)
 
 ---
 
@@ -78,8 +78,8 @@ Ghi audit log cho các sự kiện quan trọng trong room:
 
 ## Checklist test
 
-- [ ] Join room → audit log có record
-- [ ] Start interview → audit log có record
-- [ ] End interview → audit log có record
-- [ ] Audit log không làm chậm room events
-- [ ] Query audit log by interview_id → kết quả đúng
+- [x] Join room → audit log có record
+- [x] Start interview → audit log có record
+- [x] End interview → audit log có record
+- [x] Audit log không làm chậm room events
+- [x] Query audit log by interview_id → kết quả đúng

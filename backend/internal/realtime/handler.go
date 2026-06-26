@@ -56,6 +56,7 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		claims.RoomID,
 		claims.InterviewID,
 	)
+	conn.IPAddress = r.RemoteAddr
 	conn.Conn = wsConn
 
 	s.connManager.Add(conn)
@@ -137,6 +138,20 @@ func (s *Server) writePump(conn *ClientConnection) {
 // onDisconnect handles cleanup when a connection drops.
 func (s *Server) onDisconnect(conn *ClientConnection) {
 	log.Printf("[ws] disconnected connID=%s userID=%s", conn.ID, conn.UserID)
+	
+	if s.router != nil && s.router.auditLogger != nil {
+		s.router.auditLogger.LogEvent(
+			"disconnect",
+			conn.UserID,
+			conn.Role,
+			"interview_room",
+			conn.RoomID,
+			"",
+			conn.IPAddress,
+			map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID},
+		)
+	}
+
 	s.connManager.Remove(conn.ID)
 	conn.Close()
 

@@ -15,6 +15,7 @@ type ClientConnection struct {
 	DisplayName string
 	RoomID      string
 	InterviewID string
+	IPAddress   string
 
 	Conn        *websocket.Conn
 	Send        chan []byte // outbound message queue

@@ -102,6 +102,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
 	log.Println("[realtime] shutting down...")

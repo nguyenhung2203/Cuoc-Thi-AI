@@ -5,7 +5,7 @@
 | **Task ID** | H-S5-04 |
 | **Sprint** | 5 — Hardening |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Đã hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -63,12 +63,12 @@ Kiểm tra hiệu năng hệ thống realtime với nhiều room đồng thời:
 
 ## Definition of Done
 
-- [ ] Load test script hoạt động
-- [ ] 10 rooms đồng thời → pass
-- [ ] 50 rooms đồng thời → pass hoặc biết bottleneck
-- [ ] Không goroutine leak
-- [ ] Không memory leak sau 1 giờ
-- [ ] Report kết quả load test
+- [x] Load test script hoạt động
+- [x] 10 rooms đồng thời → pass
+- [x] 50 rooms đồng thời → pass hoặc biết bottleneck
+- [x] Không goroutine leak
+- [x] Không memory leak sau 1 giờ
+- [x] Report kết quả load test
 
 ---
 
@@ -81,12 +81,12 @@ Kiểm tra hiệu năng hệ thống realtime với nhiều room đồng thời:
 
 ## Checklist test
 
-- [ ] 10 rooms — latency < 100ms
-- [ ] 50 rooms — hệ thống vẫn responsive
-- [ ] Chat burst — không mất tin
-- [ ] Transcript continuous — không delay quá 2s
-- [ ] goroutine count ổn định sau 30 phút
-- [ ] Memory ổn định sau 30 phút
+- [x] 10 rooms — latency < 100ms
+- [x] 50 rooms — hệ thống vẫn responsive
+- [x] Chat burst — không mất tin
+- [x] Transcript continuous — không delay quá 2s
+- [x] goroutine count ổn định sau 30 phút
+- [x] Memory ổn định sau 30 phút
 
 ---
 
