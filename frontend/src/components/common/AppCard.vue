@@ -1,16 +1,14 @@
+<script setup>
+defineProps({
+  className: {
+    type: String,
+    default: ''
+  }
+})
+</script>
+
 <template>
-  <div class="appcard">
-    <!-- AppCard Component -->
+  <div :class="['card', className]" v-bind="$attrs">
     <slot></slot>
   </div>
 </template>
-
-<script>
-export default {
-  name: 'AppCard'
-}
-</script>
-
-<style scoped>
-/* Styles for AppCard */
-</style>
