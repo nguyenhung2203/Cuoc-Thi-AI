@@ -227,3 +227,115 @@ func (r *JobRepository) CountInterviews(ctx context.Context, jobID string) (int,
 	}
 	return count, nil
 }
+
+// SaveAIAnalysisWithTx saves the AI analysis results (Job update, Rubric, Questions) in a single transaction.
+func (r *JobRepository) SaveAIAnalysisWithTx(
+	ctx context.Context,
+	companyID, jobID string,
+	aiSummary string,
+	aiAnalysisJSON []byte,
+	rubric *models.Rubric,
+	criteria []models.RubricCriteria,
+	questions []models.QuestionBank,
+) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Lock Job row and check if already analyzed
+	var currentJSON []byte
+	checkQ := `
+		SELECT ai_analysis_json FROM jobs
+		WHERE id = $1::uuid AND company_id = $2::uuid AND deleted_at IS NULL
+		FOR UPDATE
+	`
+	err = tx.QueryRowContext(ctx, checkQ, jobID, companyID).Scan(&currentJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("job not found or deleted")
+		}
+		return fmt.Errorf("check job: %w", err)
+	}
+
+	if currentJSON != nil && string(currentJSON) != "null" && string(currentJSON) != "\"null\"" {
+		return fmt.Errorf("CONFLICT: job has already been analyzed")
+	}
+
+	// 2. Update Job
+	updateQ := `
+		UPDATE jobs
+		SET ai_summary = $1, ai_analysis_json = $2, updated_at = NOW()
+		WHERE id = $3::uuid AND company_id = $4::uuid AND deleted_at IS NULL
+	`
+	_, err = tx.ExecContext(ctx, updateQ, sql.NullString{String: aiSummary, Valid: true}, aiAnalysisJSON, jobID, companyID)
+	if err != nil {
+		return fmt.Errorf("update job: %w", err)
+	}
+
+	// 3. Insert Rubric & Criteria
+	if rubric != nil {
+		rubricQuery := `
+			INSERT INTO rubrics (id, company_id, job_id, name, description, total_weight, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`
+		_, err = tx.ExecContext(ctx, rubricQuery,
+			rubric.ID, rubric.CompanyID, rubric.JobID, rubric.Name, rubric.Description, rubric.TotalWeight, rubric.CreatedBy,
+		)
+		if err != nil {
+			return fmt.Errorf("insert rubric: %w", err)
+		}
+
+		if len(criteria) > 0 {
+			criteriaQuery := `
+				INSERT INTO rubric_criteria (
+					id, rubric_id, name, description, weight, min_score, max_score, scoring_guide, order_index
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`
+			stmt, err := tx.PrepareContext(ctx, criteriaQuery)
+			if err != nil {
+				return fmt.Errorf("prepare criteria statement: %w", err)
+			}
+
+			for _, c := range criteria {
+				_, err := stmt.ExecContext(ctx,
+					c.ID, rubric.ID, c.Name, c.Description, c.Weight, c.MinScore, c.MaxScore, c.ScoringGuide, c.OrderIndex,
+				)
+				if err != nil {
+					stmt.Close()
+					return fmt.Errorf("insert criteria: %w", err)
+				}
+			}
+			stmt.Close()
+		}
+	}
+
+	// 4. Insert Questions
+	if len(questions) > 0 {
+		qQuery := `
+			INSERT INTO question_bank (
+				company_id, job_id, created_by, question_text, question_type,
+				skill_tags, level, expected_signals, is_ai_generated
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`
+		stmt, err := tx.PrepareContext(ctx, qQuery)
+		if err != nil {
+			return fmt.Errorf("prepare question statement: %w", err)
+		}
+
+		for _, q := range questions {
+			_, err := stmt.ExecContext(ctx,
+				q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
+				q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated,
+			)
+			if err != nil {
+				stmt.Close()
+				return fmt.Errorf("insert question: %w", err)
+			}
+		}
+		stmt.Close()
+	}
+
+	return tx.Commit()
+}

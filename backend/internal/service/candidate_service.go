@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,7 @@ import (
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/pagination"
+	"backend/internal/pkg/utils"
 	"backend/internal/repository"
 )
 
@@ -270,12 +272,18 @@ func (s *CandidateService) ParseCV(ctx context.Context, companyID, candidateID, 
 		return err
 	}
 
-	result, err := s.cvAnalyzer.AnalyzeCV(ctx, cvText, jobContext, companyID)
+	// Truncate long CVs to prevent Resource Exhaustion (DoS)
+	safeCVText := utils.TruncateText(cvText, 20000)
+
+	result, err := s.cvAnalyzer.AnalyzeCV(ctx, safeCVText, jobContext, companyID)
 	if err != nil {
-		return errors.NewInternal("failed to analyze CV with AI")
+		return errors.NewInternal(fmt.Sprintf("failed to analyze CV with AI: %v", err))
 	}
 
-	resultBytes, _ := json.Marshal(result)
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return errors.NewInternal(fmt.Sprintf("failed to marshal CV analysis result: %v", err))
+	}
 
 	patch := map[string]any{
 		"ai_cv_summary":  sql.NullString{String: result.Summary, Valid: true},

@@ -302,18 +302,17 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
 	candidateID := chi.URLParam(r, "candidate_id")
 
-	// Stub AI Parsing
-	stubJSON := `{"skills":["Go", "Python", "React"], "experience":"3 years backend"}`
-	stubSummary := "Strong backend engineer with Go experience."
-
-	_, err := h.svc.GetByID(r.Context(), companyID, candidateID)
-	if err != nil {
-		writeServiceError(w, err, requestID)
+	var req request.ParseCVRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("invalid JSON body", []string{err.Error()}), requestID)
+		return
+	}
+	if msgs := validator.Validate(&req); msgs != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("validation failed", msgs), requestID)
 		return
 	}
 
-	// Fake service update
-	err = h.svc.UpdateCVParseResult(r.Context(), companyID, candidateID, stubJSON, stubSummary)
+	err := h.svc.ParseCV(r.Context(), companyID, candidateID, req.CVText, req.JobContext)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return

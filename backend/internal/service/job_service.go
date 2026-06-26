@@ -14,7 +14,9 @@ import (
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/pagination"
+	"backend/internal/pkg/utils"
 	"backend/internal/repository"
+	"strings"
 )
 
 // JobService implements business logic for Job CRUD and analysis.
@@ -194,24 +196,26 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 		return err
 	}
 
-	result, err := s.jdAnalyzer.AnalyzeJD(ctx, job.Description, job.Title, job.Level.String, job.Department.String, companyID)
+	// 1. Prevent duplicate analysis
+	if job.AIAnalysisJSON != nil && string(job.AIAnalysisJSON) != "null" {
+		return errors.NewConflict("job has already been analyzed")
+	}
+
+	// 2. Truncate long descriptions to prevent Resource Exhaustion (DoS)
+	safeDescription := utils.TruncateText(job.Description, 15000)
+
+	result, err := s.jdAnalyzer.AnalyzeJD(ctx, safeDescription, job.Title, job.Level.String, job.Department.String, companyID)
+	resultBytes, err := json.Marshal(result)
 	if err != nil {
-		return errors.NewInternal(fmt.Sprintf("failed to analyze JD with AI: %v", err))
+		return errors.NewInternal(fmt.Sprintf("failed to marshal AI analysis result: %v", err))
 	}
 
-	// Update Job
-	resultBytes, _ := json.Marshal(result)
-	patch := map[string]any{
-		"ai_summary":       result.Summary,
-		"ai_analysis_json": models.JSONB(resultBytes),
-	}
-	if _, err := s.jobRepo.Update(ctx, companyID, jobID, patch); err != nil {
-		return errors.NewInternal("failed to save AI analysis to job")
-	}
+	// Prepare Rubric & Criteria
+	var rubric *models.Rubric
+	var criteria []models.RubricCriteria
 
-	// Create Rubric
 	if len(result.SuggestedRubric) > 0 {
-		rubric := &models.Rubric{
+		rubric = &models.Rubric{
 			ID:          uuid.NewString(),
 			CompanyID:   companyID,
 			JobID:       sql.NullString{String: jobID, Valid: true},
@@ -219,7 +223,7 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 			TotalWeight: 100,
 			CreatedBy:   job.CreatedBy,
 		}
-		var criteria []models.RubricCriteria
+		
 		for i, c := range result.SuggestedRubric {
 			criteria = append(criteria, models.RubricCriteria{
 				ID:          uuid.NewString(),
@@ -232,17 +236,20 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 				OrderIndex:  i,
 			})
 		}
-		if err := s.rubricRepo.CreateRubricWithCriteria(ctx, rubric, criteria); err != nil {
-			return errors.NewInternal(fmt.Sprintf("failed to create rubric: %v", err))
-		}
 	}
 
-	// Save generated questions to question bank
+	// Prepare Questions
+	var questions []models.QuestionBank
 	if len(result.SuggestedQuestions) > 0 {
-		var questions []models.QuestionBank
 		for _, sq := range result.SuggestedQuestions {
-			tagsBytes, _ := json.Marshal([]string{sq.TargetSkill})
-			signalsBytes, _ := json.Marshal(sq.ExpectedSignals)
+			tagsBytes, err := json.Marshal([]string{sq.TargetSkill})
+			if err != nil {
+				return errors.NewInternal(fmt.Sprintf("failed to marshal target skill tags: %v", err))
+			}
+			signalsBytes, err := json.Marshal(sq.ExpectedSignals)
+			if err != nil {
+				return errors.NewInternal(fmt.Sprintf("failed to marshal expected signals: %v", err))
+			}
 			questions = append(questions, models.QuestionBank{
 				CompanyID:       sql.NullString{String: companyID, Valid: true},
 				JobID:           sql.NullString{String: jobID, Valid: true},
@@ -255,9 +262,14 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 				IsAIGenerated:   true,
 			})
 		}
-		if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
-			return errors.NewInternal(fmt.Sprintf("failed to save generated questions: %v", err))
+	}
+
+	// 3. Save all results transactionally
+	if err := s.jobRepo.SaveAIAnalysisWithTx(ctx, companyID, jobID, result.Summary, resultBytes, rubric, criteria, questions); err != nil {
+		if strings.Contains(err.Error(), "CONFLICT") {
+			return errors.NewConflict("job has already been analyzed")
 		}
+		return errors.NewInternal(fmt.Sprintf("failed to save AI analysis results: %v", err))
 	}
 
 	return nil

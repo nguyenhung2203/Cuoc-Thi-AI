@@ -84,9 +84,10 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 	}
 	
 	// Extract temp/max_tokens from params if present (simplified logic)
-	// In reality you would parse tmpl.Params JSONB to get exact values.
-
-	payloadBytes, _ := json.Marshal(payload)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
 
 	// 3. Setup Retry and Circuit Breaker
 	var responseBody []byte
@@ -180,7 +181,7 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 	s.logSvc.LogAsync(logEntry)
 
 	if aiResp.InsufficientData {
-		return nil, fmt.Errorf("insufficient data")
+		return nil, apierrors.NewValidation("insufficient data", []string{"AI needs more information to process this request"})
 	}
 
 	return aiResp.Data, nil
