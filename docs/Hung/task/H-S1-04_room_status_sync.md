@@ -5,7 +5,7 @@
 | **Task ID** | H-S1-04 |
 | **Sprint** | 1 — Interview Room MVP |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -66,13 +66,13 @@ Khi client reconnect (join lại room):
 
 ## Definition of Done
 
-- [ ] Room status machine đúng theo spec
-- [ ] Không có transition bất hợp lệ (ví dụ: completed → active)
-- [ ] Mọi status change broadcast cho client
-- [ ] Client reload → nhận đúng room status
-- [ ] Redis cache status đúng
-- [ ] Auto-expire room quá hạn
-- [ ] DB `interview_rooms.status` và `interviews.status` sync
+- [x] Room status machine đúng theo spec
+- [x] Không có transition bất hợp lệ (ví dụ: completed → active)
+- [x] Mọi status change broadcast cho client
+- [x] Client reload → nhận đúng room status
+- [x] Redis cache status đúng
+- [x] Auto-expire room quá hạn
+- [x] DB `interview_rooms.status` và `interviews.status` sync
 
 ---
 
@@ -85,9 +85,9 @@ Khi client reconnect (join lại room):
 
 ## Checklist test
 
-- [ ] Room mới → status = `waiting`
-- [ ] Start → status = `active`
-- [ ] End → status = `completed`
-- [ ] Client reload khi active → nhận `room_status: "active"`
-- [ ] Chuyển completed → active → bị reject
-- [ ] Room waiting quá lâu → auto expire
+- [x] Room mới → status = `waiting`
+- [x] Start → status = `active`
+- [x] End → status = `completed`
+- [x] Client reload khi active → nhận `room_status: "active"`
+- [x] Chuyển completed → active → bị reject
+- [x] Room waiting quá lâu → auto expire

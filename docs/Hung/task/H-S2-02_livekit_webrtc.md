@@ -5,7 +5,7 @@
 | **Task ID** | H-S2-02 |
 | **Sprint** | 2 — Chat + LiveKit WebRTC |
 | **Độ khó** | Rất khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -53,11 +53,11 @@ Frontend → LiveKit SDK → LiveKit SFU Server
 
 ## Definition of Done
 
-- [ ] Recruiter và Candidate video/audio call qua LiveKit
-- [ ] Token generation từ backend hoạt động
-- [ ] Mic/camera on/off đúng
-- [ ] Reconnect media khi mạng chập chờn
-- [ ] Nếu LiveKit lỗi → room WebSocket vẫn hoạt động
+- [x] Recruiter và Candidate video/audio call qua LiveKit
+- [x] Token generation từ backend hoạt động
+- [x] Mic/camera on/off đúng
+- [x] Reconnect media khi mạng chập chờn
+- [x] Nếu LiveKit lỗi → room WebSocket vẫn hoạt động
 
 ---
 
@@ -70,8 +70,8 @@ Frontend → LiveKit SDK → LiveKit SFU Server
 
 ## Checklist test
 
-- [ ] 2 peer connect qua LiveKit → thấy/nghe nhau
-- [ ] Tắt mic → peer kia không nghe
-- [ ] Tắt camera → peer kia không thấy
-- [ ] Reload → reconnect media thành công
-- [ ] LiveKit down → chat/room state vẫn hoạt động qua WebSocket
+- [x] 2 peer connect qua LiveKit → thấy/nghe nhau
+- [x] Tắt mic → peer kia không nghe
+- [x] Tắt camera → peer kia không thấy
+- [x] Reload → reconnect media thành công
+- [x] LiveKit down → chat/room state vẫn hoạt động qua WebSocket
