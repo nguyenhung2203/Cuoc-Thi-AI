@@ -724,19 +724,22 @@ Cổng luyện phỏng vấn cho ứng viên.
 
 ```mermaid
 flowchart LR
-    A[Frontend Web App] --> B[Backend API]
-    A --> C[Realtime Gateway]
+    A[Frontend Web App] -->|REST| B[Backend API - Golang]
+    A -->|WebSocket| C[Realtime Gateway - Golang]
+    A -->|WebRTC via SDK| SFU[LiveKit SFU]
+    SFU -->|Audio stream| E[AI Orchestrator - Python]
     C --> D[Interview Room Service]
-    D --> E[AI Orchestrator]
-    E --> F[Speech-to-Text]
-    E --> G[LLM Engine]
+    D -->|REST internal| E
+    D -->|Redis Queue async| RQ[(Redis Queue)]
+    RQ --> E
+    E --> F[Whisper STT]
+    E --> G[Gemini LLM]
     E --> H[Scoring Engine]
     E --> I[Report Generator]
-    B --> J[(Database)]
-    D --> K[(Transcript Store)]
-    I --> L[(Report Store)]
-    B --> M[Email/Notification Service]
-    B --> N[File Storage]
+    B --> J[(PostgreSQL)]
+    D --> J
+    B --> M[Email/Notification]
+    B --> N[S3 File Storage - private]
 ```
 
 ---
@@ -767,34 +770,41 @@ flowchart TD
 
 ## 14.1. Frontend
 
-| Thành phần  | Đã chọn       |
-| ----------- | ------------- |
-| Framework   | Vue 3         |
-| UI          | TailwindCSS   |
-| State       | Pinia         |
-| Realtime    | WebSocket     |
-| Video call  | WebRTC        |
-| Form        | VeeValidate   |
-| Chart       | ECharts       |
-| PDF preview | PDF.js        |
+| Thành phần  | Đã chọn                      |
+| ----------- | ---------------------------- |
+| Framework   | Vue 3                        |
+| UI          | TailwindCSS                  |
+| State       | Pinia                        |
+| Realtime    | WebSocket                    |
+| Video call  | LiveKit SDK (WebRTC qua SFU) |
+| Form        | VeeValidate                  |
+| Chart       | ECharts                      |
+| PDF preview | PDF.js                       |
 
 ---
 
 ## 14.2. Backend
 
-| Thành phần   | Đã chọn                               |
-| ------------ | ------------------------------------- |
-| Language     | Golang (Core & Realtime), Python (AI) |
-| API          | REST                                  |
-| Realtime     | WebSocket                             |
-| Video        | WebRTC SFU nếu scale lớn              |
-| Database     | PostgreSQL                            |
-| Cache        | Redis                                 |
-| Queue        | Redis Queue                           |
-| File Storage | S3-compatible storage                 |
-| Search       | PostgreSQL Full-text                  |
-| Auth         | JWT + Refresh Token                   |
-| Deployment   | Docker                                |
+| Thành phần           | Đã chọn                                      |
+| -------------------- | -------------------------------------------- |
+| Language             | Golang (Core & Realtime), Python (AI)        |
+| API (external)       | REST — frontend và mobile gọi qua đây        |
+| API (internal AI)    | REST — Golang gọi Python AI Orchestrator     |
+| Realtime             | WebSocket                                    |
+| Video/Audio (SFU)    | LiveKit — WebRTC SFU để quản lý media stream |
+| Database             | PostgreSQL                                   |
+| Cache                | Redis                                        |
+| Queue                | Redis Queue — dùng cho AI jobs async         |
+| File Storage         | S3-compatible storage (private bucket)       |
+| Search               | PostgreSQL Full-text                         |
+| Auth                 | JWT + Refresh Token                          |
+| Deployment           | Docker                                       |
+
+> **Quyết định đã chốt:**
+> - **Giao tiếp Golang ↔ Python AI**: dùng **REST** để đơn giản, dễ debug. Golang gọi Python qua internal REST API. Python AI Orchestrator không expose ra ngoài — chỉ nhận request từ Golang backend.
+> - **Redis Queue**: dùng cho các AI job nặng bất đồng bộ (tạo report, xử lý audio batch). Job thất bại ghi log lỗi, có retry tối đa 3 lần.
+> - **LiveKit SFU**: thay cho WebRTC P2P để hỗ trợ nhiều participant và cho phép backend hook vào audio stream gửi cho AI.
+> - **Không lưu video recording**: hệ thống chỉ lưu audio transcript. Video recording không thuộc scope MVP.
 
 ---
 

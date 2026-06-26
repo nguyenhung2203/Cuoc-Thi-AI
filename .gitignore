@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Environment
+.env
+.env.local
+.env.production
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test
+coverage/
+*.cover
+*.out
+htmlcov/
+
+# Docker
+docker-compose.override.yml
+
+# Temp
+tmp/
+temp/
+
+# Generated
+*.gen.go

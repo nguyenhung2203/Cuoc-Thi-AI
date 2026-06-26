@@ -247,13 +247,18 @@ Indexes:
 
 ## 7. Bảng candidates
 
-Lưu hồ sơ ứng viên theo company.
+Lưu hồ sơ ứng viên theo company — đây là **CRM record** thuộc về công ty, không phải tài khoản người dùng.
+
+> **Phân biệt rõ hai khái niệm:**
+> - `candidates` = hồ sơ CRM do recruiter quản lý, thuộc `company_id`. Một người có thể có nhiều bản ghi candidate ở nhiều công ty khác nhau.
+> - `users` = tài khoản đăng nhập hệ thống. Candidate chỉ cần user account khi họ tự đăng nhập để dùng mock interview.
+> - `user_id` trong bảng `candidates` là nullable — chỉ điền khi candidate tự tạo account và recruiter liên kết. Không bắt buộc cho luồng tuyển dụng thật.
 
 | Field | Type | Required | Mô tả |
 |---|---|---:|---|
 | id | uuid | Có | Primary key |
-| company_id | uuid | Có | FK companies.id |
-| user_id | uuid | Không | FK users.id nếu candidate có account |
+| company_id | uuid | Có | FK companies.id — bắt buộc, mọi candidate thuộc về một company cụ thể |
+| user_id | uuid | Không | FK users.id — chỉ điền khi candidate tự tạo account và được liên kết |
 | full_name | varchar(255) | Có | Họ tên |
 | email | varchar(255) | Có | Email |
 | phone | varchar(50) | Không | SĐT |
@@ -586,10 +591,13 @@ Constraints:
 
 Phiên luyện phỏng vấn của candidate.
 
+> **Lưu ý:** Bảng này dùng `user_id` (FK users.id), **không** dùng `candidate_id` (FK candidates.id).
+> Mock interview là tính năng cá nhân — chỉ user đã đăng nhập mới làm được. Không liên quan đến hồ sơ CRM của công ty nào.
+
 | Field | Type | Required | Mô tả |
 |---|---|---:|---|
 | id | uuid | Có | Primary key |
-| candidate_user_id | uuid | Có | FK users.id |
+| user_id | uuid | Có | FK users.id — user đã đăng nhập thực hiện mock interview |
 | target_role | varchar(255) | Có | Vị trí luyện |
 | target_level | varchar(100) | Không | intern/junior/middle/senior |
 | cv_file_id | uuid | Không | CV dùng để luyện |
@@ -632,7 +640,7 @@ Metadata file.
 | storage_key | text | Có | Key trên object storage |
 | mime_type | varchar(255) | Có | MIME |
 | size_bytes | bigint | Có | Dung lượng |
-| file_type | varchar(100) | Có | cv/recording/avatar/attachment |
+| file_type | varchar(100) | Có | cv/audio_recording/avatar/attachment — không lưu video recording |
 | checksum | varchar(255) | Không | Hash file |
 | created_at | timestamptz | Có | Ngày tạo |
 
@@ -687,6 +695,53 @@ Thông báo cơ bản.
 
 ---
 
+## 24.1 Bảng ai_prompt_templates
+
+Quản lý các mẫu prompt cho AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| name | varchar(255) | Có | Tên template |
+| version | varchar(50) | Có | Phiên bản |
+| content | text | Có | Nội dung prompt |
+| variables_schema | jsonb | Không | Định nghĩa biến truyền vào |
+| model | varchar(100) | Có | Model sử dụng (vd: gemini-pro) |
+| params | jsonb | Không | Cấu hình model |
+| is_active | boolean | Có | Đang được dùng |
+| created_by | uuid | Không | Người tạo |
+| created_at | timestamptz | Có | Ngày tạo |
+| updated_at | timestamptz | Có | Ngày cập nhật |
+
+Indexes:
+- unique index `(name, version)`.
+
+---
+
+## 24.2 Bảng ai_request_logs
+
+Lịch sử gọi AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| template_id | uuid | Không | FK ai_prompt_templates.id |
+| template_version | varchar(50) | Không | Phiên bản prompt lúc gọi |
+| interview_id | uuid | Không | FK interviews.id |
+| job_id | uuid | Không | FK jobs.id |
+| candidate_id | uuid | Không | FK candidates.id |
+| input_json | jsonb | Không | Payload request |
+| output_json | jsonb | Không | Payload response |
+| latency_ms | int | Không | Thời gian phản hồi |
+| tokens_in | int | Không | Số token đầu vào |
+| tokens_out | int | Không | Số token đầu ra |
+| cost | numeric | Không | Chi phí ước tính |
+| status | varchar(50) | Có | success/failed |
+| error | text | Không | Lỗi nếu có |
+| created_at | timestamptz | Có | Ngày tạo |
+
+---
+
 ## 25. Quan hệ quan trọng
 
 | Quan hệ | Mô tả |
@@ -727,6 +782,8 @@ Thông báo cơ bản.
 20. mock_interview_messages
 21. audit_logs
 22. notifications
+23. ai_prompt_templates
+24. ai_request_logs
 
 ---
 
@@ -776,3 +833,47 @@ Khi AI IDE làm backend/database:
 4. Không expose hash/token nội bộ ra API.
 5. Khi thêm status mới, phải cập nhật enum ở tài liệu và API spec.
 6. Khi làm API list, phải kiểm tra index tương ứng.
+
+---
+
+## 30. Hệ thống AI Foundation (Sprint 3)
+
+### 30.1. ai_prompt_templates
+
+Quản lý các mẫu prompt để gọi AI (ví dụ: chấm điểm, sinh câu hỏi).
+
+- `id`: UUID, PK
+- `company_id`: UUID, NULLABLE, FK -> `companies(id)` (NULL nếu là system-wide template)
+- `name`: VARCHAR, tên định danh của template (vd: `analyze_cv`)
+- `version`: INT, phiên bản
+- `content`: TEXT, nội dung prompt chứa các biến dạng `{{var}}`
+- `variables_schema`: JSONB
+- `model`: VARCHAR
+- `params`: JSONB (vd: temperature)
+- `is_active`: BOOLEAN
+- `created_by`: UUID, FK -> `users(id)`
+- `created_at`: TIMESTAMPTZ
+- `updated_at`: TIMESTAMPTZ
+- `deleted_at`: TIMESTAMPTZ, NULLABLE (Soft delete)
+- *Constraint*: `UNIQUE(name, version)`
+
+### 30.2. ai_request_logs
+
+Lưu vết tất cả các cuộc gọi sang AI Service để đối soát chi phí, debug.
+
+- `id`: UUID, PK
+- `company_id`: UUID, FK -> `companies(id)`
+- `template_id`: UUID, FK -> `ai_prompt_templates(id)`
+- `template_version`: INT
+- `interview_id`: UUID, NULLABLE, FK -> `interviews(id)`
+- `job_id`: UUID, NULLABLE, FK -> `jobs(id)`
+- `candidate_id`: UUID, NULLABLE, FK -> `candidates(id)`
+- `input_json`: JSONB (Đã được mask dữ liệu nhạy cảm)
+- `output_json`: JSONB
+- `latency_ms`: INT
+- `tokens_in`: INT
+- `tokens_out`: INT
+- `cost`: NUMERIC
+- `status`: VARCHAR (`success`, `failed`, `timeout`, `fallback`)
+- `error`: TEXT
+- `created_at`: TIMESTAMPTZ

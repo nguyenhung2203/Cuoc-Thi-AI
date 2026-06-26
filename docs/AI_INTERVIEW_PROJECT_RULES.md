@@ -335,12 +335,52 @@ Event phải dùng envelope chuẩn theo `REALTIME_EVENTS.md`:
 - Bắt buộc HTTPS ở production.
 - JWT/Session phải có thời hạn.
 - Refresh token phải an toàn.
-- File CV/recording dùng signed URL hoặc quyền truy cập kiểm soát.
+- File CV/audio dùng Signed URL với TTL giới hạn (xem chi tiết bên dưới).
 - Không expose storage key trực tiếp nếu không cần.
 - Audit log cho hành động quan trọng.
-- Rate limit cho API nhạy cảm.
+- Rate limit cho API nhạy cảm (login, register, forgot-password, AI generation endpoints).
 - Validate input cả frontend và backend.
 - Không tin dữ liệu từ client.
+
+### 11.1. Signed URL Policy — CV và Audio Recording
+
+**Quy tắc bắt buộc:**
+
+- Mọi file CV và audio recording lưu trên S3 **phải ở chế độ private bucket**. Không được public object.
+- Ứng dụng chỉ cấp **Signed URL** khi user yêu cầu đọc file — không bao giờ expose `storage_key` trực tiếp ra API response.
+- **TTL Signed URL:**
+  - CV xem trong ứng dụng: **15 phút**
+  - Audio recording tải về: **5 phút**
+  - CV dùng cho AI parse (internal): **10 phút** (chỉ backend-to-storage, không ra frontend)
+- **Điều kiện cấp Signed URL:**
+  - User đã xác thực (Bearer token hợp lệ).
+  - User có quyền truy cập `company_id` của file đó (kiểm tra `company_members`).
+  - Candidate chỉ được xem file CV của chính mình — không xem file của candidate khác.
+- **Audit log bắt buộc** khi cấp Signed URL cho audio recording.
+- Sau khi Signed URL hết hạn, client phải gọi API lại để lấy URL mới — **không cache URL cũ**.
+
+**Endpoint chuẩn để lấy Signed URL:**
+
+```http
+GET /api/v1/files/:file_id/signed-url
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://s3.example.com/...",
+    "expires_at": "2026-06-23T10:15:00Z"
+  }
+}
+```
+
+**Không được làm:**
+- Không trả `storage_key` hay S3 path trong bất kỳ API response nào.
+- Không lưu Signed URL vào DB.
+- Không dùng Signed URL > 1 lần cho file nhạy cảm (audio) — tạo mới mỗi lần.
 
 ---
 

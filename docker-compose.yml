@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # ===== CACHE =====
+  redis:
+    image: redis:7-alpine
+    container_name: ai-interview-redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data:/data
+
+  # ===== LIVEKIT =====
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: ai-interview-livekit
+    command: --config /etc/livekit.yaml --dev
+    ports:
+      - "17880:7880"
+      - "17881:7881"
+      - "17882:7882/udp"
+    volumes:
+      - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml
+
+  # ===== MINIO (S3) =====
+  minio:
+    image: minio/minio:latest
+    container_name: ai-interview-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    volumes:
+      - minio_data:/data
+
+  # ===== BACKEND API =====
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: ../deploy/docker/backend-api.Dockerfile
+    container_name: ai-interview-api
+    ports:
+      - "18080:8080"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_started
+
+  # ===== BACKEND REALTIME =====
+  backend-realtime:
+    build:
+      context: ./backend
+      dockerfile: ../deploy/docker/backend-realtime.Dockerfile
+    container_name: ai-interview-realtime
+    ports:
+      - "18081:8081"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_started
+
+  # ===== AI SERVICE =====
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: ../deploy/docker/ai-service.Dockerfile
+    container_name: ai-interview-ai
+    ports:
+      - "18000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  # ===== FRONTEND =====
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../deploy/docker/frontend.Dockerfile
+    container_name: ai-interview-frontend
+    ports:
+      - "13000:3000"
+    depends_on:
+      - backend-api
+
+volumes:
+  redis_data:
+  minio_data:

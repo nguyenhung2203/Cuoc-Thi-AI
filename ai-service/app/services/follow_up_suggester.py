@@ -1,0 +1,2 @@
+class FollowUpSuggester:
+    pass
