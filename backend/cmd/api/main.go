@@ -49,8 +49,10 @@ func main() {
 	interviewRepo := repository.NewInterviewRepository(db)
 	transcriptRepo := repository.NewTranscriptRepository(db)
 
+	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
+
 	// 4. Services
-	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret)
+	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo)

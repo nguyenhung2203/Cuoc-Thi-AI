@@ -7,10 +7,11 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"backend/internal/dto/request"
-	"backend/internal/pkg/errors"
-	"backend/internal/pkg/response"
-	"backend/internal/service"
+	"backend/internal/dto/response"
 	"backend/internal/middleware"
+	"backend/internal/pkg/errors"
+	pkgresponse "backend/internal/pkg/response"
+	"backend/internal/service"
 )
 
 type AuthHandler struct {
@@ -27,90 +28,159 @@ func (h *AuthHandler) Routes(r chi.Router) {
 	r.Post("/login", h.Login)
 	r.Post("/refresh", h.Refresh)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout", h.Logout)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout-all", h.LogoutAll)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Get("/me", h.Me)
+}
+
+func setRefreshTokenCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    token,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/api/v1/auth",
+		MaxAge:   604800, // 7 days
+	})
+}
+
+func clearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/api/v1/auth",
+		MaxAge:   -1,
+	})
+}
+
+func getClientIP(r *http.Request) string {
+	ip := r.Header.Get("X-Real-IP")
+	if ip == "" {
+		ip = r.Header.Get("X-Forwarded-For")
+	}
+	if ip == "" {
+		ip = r.RemoteAddr
+	}
+	return ip
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req request.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, errors.NewBadRequest("invalid request body"), "")
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
 		return
 	}
 
-	tokens, err := h.authService.Register(r.Context(), req)
+	ipAddress := getClientIP(r)
+	userAgent := r.UserAgent()
+
+	authResp, refreshToken, err := h.authService.Register(r.Context(), req, ipAddress, userAgent)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			response.Error(w, appErr, "")
+			pkgresponse.Error(w, appErr, "")
 		} else {
-			response.Error(w, errors.NewInternal("registration failed"), "")
+			pkgresponse.Error(w, errors.NewInternal("registration failed"), "")
 		}
 		return
 	}
 
-	response.JSON(w, http.StatusCreated, tokens, nil, "")
+	setRefreshTokenCookie(w, refreshToken)
+	pkgresponse.JSON(w, http.StatusCreated, authResp, nil, "")
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req request.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, errors.NewBadRequest("invalid request body"), "")
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
 		return
 	}
 
-	tokens, err := h.authService.Login(r.Context(), req)
+	ipAddress := getClientIP(r)
+	userAgent := r.UserAgent()
+
+	authResp, refreshToken, err := h.authService.Login(r.Context(), req, ipAddress, userAgent)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			response.Error(w, appErr, "")
+			pkgresponse.Error(w, appErr, "")
 		} else {
-			response.Error(w, errors.NewInternal("login failed"), "")
+			pkgresponse.Error(w, errors.NewInternal("login failed"), "")
 		}
 		return
 	}
 
-	response.JSON(w, http.StatusOK, tokens, nil, "")
+	setRefreshTokenCookie(w, refreshToken)
+	pkgresponse.JSON(w, http.StatusOK, authResp, nil, "")
 }
 
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req request.RefreshRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.Error(w, errors.NewBadRequest("invalid request body"), "")
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		pkgresponse.Error(w, errors.NewUnauthorized("refresh token not found in cookies"), "")
 		return
 	}
 
-	tokens, err := h.authService.RefreshToken(r.Context(), req)
+	ipAddress := getClientIP(r)
+	userAgent := r.UserAgent()
+
+	tokens, newRefreshToken, err := h.authService.RefreshToken(r.Context(), cookie.Value, ipAddress, userAgent)
 	if err != nil {
+		clearRefreshTokenCookie(w)
 		if appErr, ok := errors.IsAppError(err); ok {
-			response.Error(w, appErr, "")
+			pkgresponse.Error(w, appErr, "")
 		} else {
-			response.Error(w, errors.NewInternal("refresh failed"), "")
+			pkgresponse.Error(w, errors.NewInternal("refresh failed"), "")
 		}
 		return
 	}
 
-	response.JSON(w, http.StatusOK, tokens, nil, "")
+	setRefreshTokenCookie(w, newRefreshToken)
+	pkgresponse.JSON(w, http.StatusOK, tokens, nil, "")
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
 	if !ok || userID == "" {
-		response.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
 		return
 	}
 
 	me, err := h.authService.GetMe(r.Context(), userID)
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
-			response.Error(w, appErr, "")
+			pkgresponse.Error(w, appErr, "")
 		} else {
-			response.Error(w, errors.NewInternal("failed to fetch profile"), "")
+			pkgresponse.Error(w, errors.NewInternal("failed to fetch profile"), "")
 		}
 		return
 	}
 
-	response.JSON(w, http.StatusOK, me, nil, "")
+	pkgresponse.JSON(w, http.StatusOK, me, nil, "")
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Stub for JWT blocklist
-	response.JSON(w, http.StatusOK, map[string]string{"message": "logged out successfully"}, nil, "")
+	cookie, err := r.Cookie("refresh_token")
+	if err == nil {
+		_ = h.authService.Logout(r.Context(), cookie.Value)
+	}
+
+	clearRefreshTokenCookie(w)
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "logged out successfully"}, nil, "")
+}
+
+func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+
+	revokedCount, _ := h.authService.LogoutAll(r.Context(), userID)
+	clearRefreshTokenCookie(w)
+	pkgresponse.JSON(w, http.StatusOK, response.LogoutAllResponse{
+		Message:         "All sessions revoked. Please login again.",
+		RevokedSessions: revokedCount,
+	}, nil, "")
 }

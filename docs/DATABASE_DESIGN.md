@@ -115,6 +115,7 @@ system
 ```mermaid
 erDiagram
     users ||--o{ company_members : joins
+    users ||--o{ refresh_tokens : has
     companies ||--o{ company_members : has
     companies ||--o{ jobs : owns
     companies ||--o{ candidates : owns
@@ -159,6 +160,36 @@ Indexes:
 - unique index `users_email_unique` on `email`.
 - index `users_role_idx` on `role`.
 - index `users_status_idx` on `status`.
+
+---
+
+## 3.1. Bảng refresh_tokens
+
+Lưu trữ danh sách refresh token để quản lý Token Family và Refresh Token Rotation.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| user_id | uuid | Có | FK users.id |
+| family_id | uuid | Có | ID chung cho một phiên đăng nhập |
+| token_hash | text | Có | Hash của refresh token (SHA-256) |
+| is_revoked | boolean | Có | Đánh dấu token đã bị thu hồi/sử dụng |
+| ip_address | varchar(100) | Không | IP khi tạo token — dùng để phát hiện bất thường |
+| user_agent | text | Không | Browser/device info — phát hiện thiết bị lạ |
+| expires_at | timestamptz | Có | Thời gian hết hạn |
+| created_at | timestamptz | Có | Ngày tạo |
+
+Indexes:
+
+- index on `user_id` — phục vụ Logout All Sessions và Admin block user.
+- index on `family_id` — phục vụ Token Family Revocation.
+- index on `token_hash` — phục vụ lookup khi refresh.
+
+Cleanup Policy:
+
+> Cần có **cron job / scheduled task** để xóa các token đã hết hạn hoặc đã revoke lâu ngày:
+> `DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (is_revoked = true AND created_at < NOW() - INTERVAL '30 days')`
+> Khuyến nghị chạy hàng ngày để tránh bảng phình to.
 
 ---
 
@@ -746,6 +777,7 @@ Lịch sử gọi AI.
 
 | Quan hệ | Mô tả |
 |---|---|
+| user -> refresh_tokens | Một user có nhiều refresh token (Token Family) |
 | company -> jobs | Một company có nhiều job |
 | company -> candidates | Một company quản lý nhiều candidate |
 | job -> candidates | N-N qua job_candidates |
@@ -761,7 +793,8 @@ Lịch sử gọi AI.
 ## 26. Migration thứ tự đề xuất
 
 1. users
-2. companies
+2. refresh_tokens
+3. companies
 3. company_members
 4. files
 5. jobs

@@ -11,6 +11,4 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
-}
+// RefreshRequest không cần nữa — refresh token được đọc từ HttpOnly Cookie

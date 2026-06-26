@@ -96,11 +96,13 @@
 
 > Endpoint theo [API_SPEC.md](../API_SPEC.md) mục 2.
 
-- [x] `POST /auth/register` — body `{ email, password, full_name, role }`, trả `{ user, access_token, refresh_token }`
-- [x] `POST /auth/login` — body `{ email, password }`, trả token giống register
+- [x] `POST /auth/register` — body `{ email, password, full_name, role }`, trả `{ user, access_token }` và set `HttpOnly Cookie` cho `refresh_token`
+- [x] `POST /auth/login` — body `{ email, password }`, trả token giống register + HttpOnly Cookie
 - [x] `GET /auth/me` **(BỔ SUNG)** — trả `{ id, email, full_name, role, companies: [{ id, name, role }] }`. Lai cần để hiển thị user info sau login
-- [x] `POST /auth/refresh` — đổi access token
+- [x] `POST /auth/refresh` — đọc Cookie để đổi token, kiểm tra Token Family Revocation
+- [x] Tạo migration và DB schema cho bảng `refresh_tokens` (Token Family)
 - [x] `POST /auth/logout` — revoke token
+- [x] `POST /auth/logout-all` **(BỔ SUNG)** — revoke tất cả token của user
 - [x] Hash password (bcrypt/argon2)
 - [x] Middleware xác thực Bearer token, attach `user` + danh sách `company_members` vào request context
 - [x] Xử lý invite token cho candidate join room: route public `/interviews/join/:invite_token`
@@ -513,6 +515,10 @@
 ## CHECKLIST TEST CUỐI CỦA KHÔI
 
 - [ ] Test: Auth register/login/logout/refresh
+- [ ] Test: Register/Login trả `access_token` trong JSON, `refresh_token` trong HttpOnly Cookie (không lộ ra body)
+- [ ] Test: `POST /auth/refresh` đọc Cookie, trả token mới, Cookie được rotate
+- [ ] Test: Gửi lại Refresh Token cũ (đã dùng) → bị từ chối + revoke toàn bộ Family
+- [ ] Test: `POST /auth/logout-all` revoke tất cả sessions của user
 - [ ] Test: `GET /auth/me` trả đúng companies + role
 - [ ] Test: Token hết hạn → 401 chuẩn
 - [ ] Test: Recruiter không xem được company khác (cross-tenant leak)

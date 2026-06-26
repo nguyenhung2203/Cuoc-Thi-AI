@@ -797,7 +797,7 @@ flowchart TD
 | Queue                | Redis Queue — dùng cho AI jobs async         |
 | File Storage         | S3-compatible storage (private bucket)       |
 | Search               | PostgreSQL Full-text                         |
-| Auth                 | JWT + Refresh Token                          |
+| Auth                 | JWT Access Token + HttpOnly Refresh Token (Token Family) |
 | Deployment           | Docker                                       |
 
 > **Quyết định đã chốt:**
@@ -959,6 +959,7 @@ flowchart TD
 ```mermaid
 erDiagram
     USERS ||--o{ COMPANIES : creates
+    USERS ||--o{ REFRESH_TOKENS : has
     COMPANIES ||--o{ JOBS : owns
     JOBS ||--o{ INTERVIEWS : has
     CANDIDATES ||--o{ INTERVIEWS : joins
@@ -974,13 +975,14 @@ erDiagram
 
 ## 17.1. Auth API
 
-| Method | Endpoint       | Mô tả              |
-| ------ | -------------- | ------------------ |
-| POST   | /auth/register | Đăng ký            |
-| POST   | /auth/login    | Đăng nhập          |
-| POST   | /auth/logout   | Đăng xuất          |
-| POST   | /auth/refresh  | Refresh token      |
-| GET    | /auth/me       | Lấy thông tin user |
+| Method | Endpoint           | Mô tả              |
+| ------ | ------------------ | ------------------ |
+| POST   | /auth/register     | Đăng ký            |
+| POST   | /auth/login        | Đăng nhập          |
+| POST   | /auth/logout       | Đăng xuất (phiên hiện tại) |
+| POST   | /auth/logout-all   | Đăng xuất tất cả thiết bị |
+| POST   | /auth/refresh      | Refresh token (từ HttpOnly Cookie) |
+| GET    | /auth/me           | Lấy thông tin user |
 
 ---
 
