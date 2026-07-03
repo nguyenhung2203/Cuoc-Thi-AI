@@ -44,7 +44,7 @@ func (r *InterviewRepository) Create(ctx context.Context, interview *models.Inte
 		)
 	`
 	if _, err = tx.NamedExecContext(ctx, q1, interview); err != nil {
-		return errors.NewInternal("failed to insert interview")
+		return errors.NewInternal("failed to insert interview: " + err.Error())
 	}
 
 	q2 := `
@@ -57,7 +57,7 @@ func (r *InterviewRepository) Create(ctx context.Context, interview *models.Inte
 		)
 	`
 	if _, err = tx.NamedExecContext(ctx, q2, room); err != nil {
-		return errors.NewInternal("failed to insert interview room")
+		return errors.NewInternal("failed to insert interview room: " + err.Error())
 	}
 
 	return nil

@@ -19,6 +19,15 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 
+	// SMTP
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+
+	// Gemini
+	GeminiAPIKey string
+
 	// JWT
 	JWTSecret     string
 	JWTAccessTTL  string
@@ -50,6 +59,11 @@ func Load() (*Config, error) {
 		DBPassword:    getEnv("DB_PASSWORD", ""),
 		DBName:        getEnv("DB_NAME", ""),
 		DBSSLMode:     getEnv("DB_SSL_MODE", "disable"),
+		SMTPHost:      getEnv("SMTP_HOST", "smtp.example.com"),
+		SMTPPort:      getEnv("SMTP_PORT", "587"),
+		SMTPUser:      getEnv("SMTP_USER", ""),
+		SMTPPass:      getEnv("SMTP_PASS", ""),
+		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		JWTAccessTTL:  getEnv("JWT_ACCESS_TTL", "15m"),
 		JWTRefreshTTL: getEnv("JWT_REFRESH_TTL", "168h"), // 7 days

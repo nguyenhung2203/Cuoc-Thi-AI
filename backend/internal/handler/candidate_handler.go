@@ -19,12 +19,13 @@ import (
 
 // CandidateHandler wires the CandidateService to HTTP endpoints.
 type CandidateHandler struct {
-	svc *service.CandidateService
+	svc   *service.CandidateService
+	aiSvc *service.AIService
 }
 
 // NewCandidateHandler constructs a CandidateHandler.
-func NewCandidateHandler(svc *service.CandidateService) *CandidateHandler {
-	return &CandidateHandler{svc: svc}
+func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService) *CandidateHandler {
+	return &CandidateHandler{svc: svc, aiSvc: aiSvc}
 }
 
 // Routes registers all candidate endpoints on r.
@@ -252,7 +253,7 @@ func (h *CandidateHandler) UpdatePipeline(w http.ResponseWriter, r *http.Request
 // ---------------------------------------------------------------------------
 
 func toCandidateListItem(c models.Candidate) response.CandidateListItem {
-	return response.CandidateListItem{
+	item := response.CandidateListItem{
 		ID:       c.ID,
 		FullName: c.FullName,
 		Email:    c.Email,
@@ -260,6 +261,13 @@ func toCandidateListItem(c models.Candidate) response.CandidateListItem {
 		Status:   string(c.Status),
 		Source:   c.Source.String,
 	}
+	if c.LatestJobID.Valid && c.LatestJobTitle.Valid {
+		item.LatestJob = &response.JobBasicInfo{
+			ID:    c.LatestJobID.String,
+			Title: c.LatestJobTitle.String,
+		}
+	}
+	return item
 }
 
 func toCandidateDetail(c models.Candidate) response.CandidateDetail {
@@ -267,7 +275,24 @@ func toCandidateDetail(c models.Candidate) response.CandidateDetail {
 	if len(c.Tags) > 0 {
 		_ = json.Unmarshal(c.Tags, &tags)
 	}
-	return response.CandidateDetail{
+	
+	var skills []string
+	var experience string
+	var education string
+	if len(c.ParsedCVJSON) > 0 && string(c.ParsedCVJSON) != "null" {
+		var parsed struct {
+			Skills     []string `json:"skills"`
+			Experience string   `json:"experience"`
+			Education  string   `json:"education"`
+		}
+		if err := json.Unmarshal(c.ParsedCVJSON, &parsed); err == nil {
+			skills = parsed.Skills
+			experience = parsed.Experience
+			education = parsed.Education
+		}
+	}
+
+	detail := response.CandidateDetail{
 		ID:          c.ID,
 		CompanyID:   c.CompanyID,
 		FullName:    c.FullName,
@@ -278,9 +303,26 @@ func toCandidateDetail(c models.Candidate) response.CandidateDetail {
 		Source:      c.Source.String,
 		Tags:        tags,
 		AICVSummary: c.AICVSummary.String,
+		Skills:      skills,
+		Experience:  experience,
+		Education:   education,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
 	}
+	if c.CVFileID.Valid {
+		detail.CVFile = &response.CVFile{
+			ID:           c.CVFileID.String,
+			OriginalName: c.CVOriginalName.String,
+			DownloadURL:  "/api/v1/files/" + c.CVFileID.String + "/signed-url",
+		}
+	}
+	if c.LatestJobID.Valid && c.LatestJobTitle.Valid {
+		detail.LatestJob = &response.JobBasicInfo{
+			ID:    c.LatestJobID.String,
+			Title: c.LatestJobTitle.String,
+		}
+	}
+	return detail
 }
 
 func toJobCandidateItem(jc models.JobCandidate) response.JobCandidateItem {
@@ -302,20 +344,9 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
 	candidateID := chi.URLParam(r, "candidate_id")
 
-	// Stub AI Parsing
-	stubJSON := `{"skills":["Go", "Python", "React"], "experience":"3 years backend"}`
-	stubSummary := "Strong backend engineer with Go experience."
-
-	_, err := h.svc.GetByID(r.Context(), companyID, candidateID)
+	err := h.aiSvc.ParseCV(r.Context(), companyID, candidateID)
 	if err != nil {
-		writeServiceError(w, err, requestID)
-		return
-	}
-
-	// Fake service update
-	err = h.svc.UpdateCVParseResult(r.Context(), companyID, candidateID, stubJSON, stubSummary)
-	if err != nil {
-		writeServiceError(w, err, requestID)
+		writeServiceError(w, apierrors.NewInternal(err.Error()), requestID)
 		return
 	}
 

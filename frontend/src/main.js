@@ -1,10 +1,14 @@
 import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import router from './router'
-import './styles/main.css'
+import './styles/global.css'
 import App from './App.vue'
+import router from './router'
+
+import { authStore } from './stores/auth.store'
 
 const app = createApp(App)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
+
+// Khởi tạo Auth Store (Lấy thông tin User nếu có token) trước khi load app
+authStore.init().finally(() => {
+  app.use(router)
+  app.mount('#app')
+})

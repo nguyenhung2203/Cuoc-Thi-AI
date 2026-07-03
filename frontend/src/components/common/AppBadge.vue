@@ -1,16 +1,18 @@
-<template>
-  <div class="appbadge">
-    <!-- AppBadge Component -->
-    <slot></slot>
-  </div>
-</template>
-
-<script>
-export default {
-  name: 'AppBadge'
-}
+<script setup>
+defineProps({
+  type: {
+    type: String,
+    default: 'default' // primary, success, warning, danger, default
+  },
+  className: {
+    type: String,
+    default: ''
+  }
+})
 </script>
 
-<style scoped>
-/* Styles for AppBadge */
-</style>
+<template>
+  <span :class="['badge', `badge-${type}`, className]" v-bind="$attrs">
+    <slot></slot>
+  </span>
+</template>
