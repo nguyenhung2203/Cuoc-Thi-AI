@@ -17,15 +17,8 @@ func (r *MessageRouter) sendError(conn *ClientConnection, requestID, code, messa
 		return
 	}
 	raw, _ := env.ToJSON()
-
-	select {
-	case conn.Send <- raw:
-	default:
-		log.Printf("[ws] send buffer full for connID=%s, dropping error event", conn.ID)
-
 	if !conn.TrySend(raw) {
 		log.Printf("[ws] send buffer full/closed for connID=%s, dropping error event", conn.ID)
-
 	}
 }
 
@@ -50,9 +43,7 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 	if created {
 		r.presenceManager.StartWatcher(room.ID)
 	}
-
 	r.roomManager.CancelEmptyRoomTimer(room.ID)
-
 
 	// 2. Determine display name: prioritize token claims, fallback to payload
 	displayName := conn.DisplayName
@@ -63,11 +54,9 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		displayName = "User"
 	}
 
-
 	if conn.DisplayName == "" {
 		conn.DisplayName = displayName
 	}
-
 
 	// 3. Create or restore participant
 	oldP := room.FindParticipantByUserID(conn.UserID)
@@ -195,10 +184,10 @@ func (r *MessageRouter) handleRoomLeave(conn *ClientConnection, env *events.Enve
 	room.RemoveParticipant(conn.ID)
 	log.Printf("[room] participant=%s left room=%s", conn.ID, conn.RoomID)
 
-
 	if r.auditLogger != nil {
 		r.auditLogger.LogEvent("room_leave", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
 	}
+
 	// Simulate database update: left_at in interview_participants table
 	log.Printf("[db] UPDATE interview_participants SET left_at = '%s', connection_state = 'left' WHERE id = '%s'",
 		time.Now().UTC().Format(time.RFC3339), conn.ID)
@@ -228,11 +217,9 @@ func (r *MessageRouter) handleRoomLeave(conn *ClientConnection, env *events.Enve
 		room.BroadcastAll(rawPresence)
 	}
 
-
 	// 4. Start empty room grace timer if no online participants remain
 	if !room.HasOnlineParticipants() {
 		r.roomManager.StartEmptyRoomTimer(room.ID, r.presenceManager)
-
 	}
 }
 

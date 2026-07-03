@@ -16,7 +16,6 @@ import (
 // Server is the WebSocket realtime gateway.
 // It wires together the HTTP upgrader, connection manager, room manager, and message router.
 type Server struct {
-
 	connManager        *ConnectionManager
 	roomManager        *RoomManager
 	router             *MessageRouter
@@ -31,7 +30,6 @@ func NewServer(addr string) *Server {
 	rm := NewRoomManager()
 	router := NewMessageRouter(cm, rm)
 
-
 	tp := NewTranscriptPipeline(rm, 1000)
 	router.SetTranscriptPipeline(tp)
 
@@ -42,7 +40,6 @@ func NewServer(addr string) *Server {
 		router:             router,
 		transcriptPipeline: tp,
 		transcriptSaver:    router.GetTranscriptSaver(),
-
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
@@ -77,7 +74,6 @@ func (s *Server) GetHandler() http.Handler {
 	return s.httpServer.Handler
 }
 
-
 // GetRoomManager returns the RoomManager for testing purposes.
 func (s *Server) GetRoomManager() *RoomManager {
 	return s.roomManager
@@ -107,14 +103,12 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 
-
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
 	log.Println("[realtime] shutting down...")
 	if s.transcriptSaver != nil {
 		s.transcriptSaver.Close()
 	}
-
 	s.connManager.CloseAll()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -136,7 +130,6 @@ func (s *Server) handleInternal(w http.ResponseWriter, r *http.Request) {
 		s.handleTranscriptPush(w, r, pathParts[3])
 		return
 	}
-
 	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "suggestion" {
 		s.handleAISuggestionPush(w, r, pathParts[3])
 		return
@@ -150,10 +143,8 @@ func (s *Server) handleInternal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	http.NotFound(w, r)
 }
-
 
 // handleAIErrorPush processes the AI error webhook from Khôi's AI Orchestrator.
 func (s *Server) handleAIErrorPush(w http.ResponseWriter, r *http.Request, roomID string) {
@@ -236,7 +227,6 @@ func (s *Server) handleAIScoreUpdatePush(w http.ResponseWriter, r *http.Request,
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
-
 // handleTranscriptPush processes the transcript webhook from the AI Orchestrator.
 func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, roomID string) {
 	room := s.roomManager.Get(roomID)
@@ -251,7 +241,6 @@ func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, ro
 		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
-
 
 	resolvedPID, resolvedType, resolvedName := room.ResolveSpeaker(payload.ParticipantID, payload.TrackID, "", payload.SpeakerType, payload.SpeakerName)
 	payload.ParticipantID = resolvedPID

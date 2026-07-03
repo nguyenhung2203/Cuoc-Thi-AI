@@ -28,7 +28,6 @@
 - [x] `job_candidates` — bảng nối job ↔ candidate **(KHÔNG phải `candidate_jobs`)** — có `pipeline_status`, `fit_score`, `ai_match_json`, unique `(job_id, candidate_id)`
 
 **Bảng phỏng vấn:**
-
 - [x] `interview_templates` — mẫu phỏng vấn theo company
 - [x] `question_bank` — kho câu hỏi **(KHÔNG phải `interview_questions`)** — có `question_type`, `skill_tags`, `level`, `expected_signals`, `is_ai_generated`
 - [x] `rubrics` — bộ tiêu chí đánh giá theo job/company
@@ -49,7 +48,6 @@
 - [x] `files` — metadata file CV/recording/avatar **(BẢNG MỚI BỔ SUNG)** — có `storage_key`, `mime_type`, `size_bytes`, `file_type`, `checksum`
 - [x] `audit_logs` — log hành động (`actor_user_id`, `action`, `resource_type`, `before_json`/`after_json`, `ip_address`)
 - [x] `notifications` — thông báo trong app **(BẢNG MỚI BỔ SUNG)** — có `type`, `title`, `data_json`, `read_at`. Cần cho K-S5-04 (notify khi report ready/failed)
-
 
 **Cần đồng bộ với DATABASE_DESIGN.md trước khi code:**
 - [x] **CHƯA CÓ trong DATABASE_DESIGN.md:** `ai_prompt_templates` và `ai_request_logs` (dùng cho K-S3-02, K-S3-03). **Action:** soạn schema 2 bảng này, tạo PR cập nhật `DATABASE_DESIGN.md` mục 19.5/19.6 trước khi viết migration. Đề xuất field tối thiểu:
@@ -102,14 +100,12 @@
 - [x] `POST /auth/login` — body `{ email, password }`, trả token giống register
 - [x] `GET /auth/me` **(BỔ SUNG)** — trả `{ id, email, full_name, role, companies: [{ id, name, role }] }`. Lai cần để hiển thị user info sau login
 - [x] `POST /auth/refresh` — đổi access token
-
 - [x] `POST /auth/logout` — revoke token
 - [x] Hash password (bcrypt/argon2)
 - [x] Middleware xác thực Bearer token, attach `user` + danh sách `company_members` vào request context
 - [x] Xử lý invite token cho candidate join room: route public `/interviews/join/:invite_token`
 - [x] Token hết hạn → trả `UNAUTHORIZED` 401 chuẩn
 - [x] **DoD:** API protected chặn user chưa đăng nhập, `GET /auth/me` trả đúng companies kèm role
-
 
 ---
 
@@ -118,13 +114,11 @@
 - [x] Phân role hệ thống: `admin`, `recruiter`, `candidate` (theo `users.role`)
 - [x] Phân role trong company: `owner`, `admin`, `member`, `viewer` (theo `company_members.role`)
 - [x] Middleware permission lấy `company_id` từ URL → kiểm tra user là member của company
-
 - [x] Helper `requirePermission(action, resource)` cho các action quan trọng (job:create, job:update, interview:create...)
 - [x] Scope dữ liệu mọi query theo `company_id` (theo DATABASE_DESIGN mục 27)
 - [ ] Candidate chỉ xem dữ liệu của chính mình (mock interview, report được share)
 - [x] Test cross-company không leak (tạo 2 company, recruiter A không xem được job của B)
 - [x] **DoD:** Không leak dữ liệu giữa company, API chặn sai quyền với code `FORBIDDEN`
-
 
 ---
 
@@ -206,7 +200,6 @@
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 6.
 
-
 - [x] `GET /companies/:company_id/interviews?status=&date=&page=&page_size=`
 - [x] `POST /companies/:company_id/interviews` — body `{ job_id, candidate_id, recruiter_id, template_id?, rubric_id?, scheduled_at, duration_minutes, mode, send_invite }`; tạo luôn record `interview_rooms` và sinh `invite_token`/`invite_url`
 - [x] `GET /companies/:company_id/interviews/:interview_id` — chi tiết kèm `room`, `rubric`, `job`, `candidate`, `recruiter`
@@ -216,13 +209,11 @@
 - [x] Lưu `consent_recording`, `consent_ai`
 - [x] **DoD:** Tạo lịch đúng, có room + invite_url, RBAC company scope
 
-
 ---
 
 ### K-S2-02: Room Link/Token Backend `[Khó]`
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 7. Dùng bảng `interview_rooms`.
-
 
 - [x] Sinh `room_code` unique, `invite_token_hash` lưu trong `interviews`, `invite_expires_at`
 - [x] `GET /companies/:company_id/interviews/:interview_id/room` — trả room detail (chỉ member)
@@ -231,11 +222,9 @@
 - [x] Revoke token khi end/cancel interview
 - [x] **DoD:** Hùng dùng được API validate token, không leak `invite_token_hash` ra response
 
-
 ---
 
 ### K-S2-03: Start/End Interview API `[Trung bình]`
-
 
 - [x] `POST /companies/:company_id/interviews/:interview_id/start` — set `status=active`, `started_at`, mở `interview_rooms.status=active`, emit event cho Hùng
 - [x] `POST /companies/:company_id/interviews/:interview_id/end` — set `status=completed`, `ended_at`, đóng room, **trigger báo cáo tự động** (K-S5-03)
@@ -244,13 +233,11 @@
 - [x] State machine: scheduled → waiting → active → completed (hoặc cancelled/expired)
 - [x] **DoD:** State chuyển đúng, end interview trigger report generation
 
-
 ---
 
 ### K-S2-04: Transcript Storage API `[Khó]`
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 8. Đây là endpoint Hùng push lên.
-
 
 - [x] `GET /companies/:company_id/interviews/:interview_id/transcripts?since=&limit=` — list transcript
 - [x] `POST /companies/:company_id/interviews/:interview_id/transcripts` — Hùng push (`speaker_type`, `content`, `language`, `start_time_ms`, `end_time_ms`, `confidence`, `is_final`, `source`)
@@ -259,11 +246,9 @@
 - [x] Index `(interview_id, created_at)` để load nhanh
 - [x] **DoD:** Hùng push transcript được realtime, Lai đọc được, hỗ trợ edit thủ công
 
-
 ---
 
 ## SPRINT 3 — AI FOUNDATION
-
 
 ### K-S3-01: AI Orchestrator Service `[Rất khó]` ✅ DONE
 
@@ -316,7 +301,6 @@
 - [x] Map lỗi AI → error code `AI_SERVICE_ERROR` (502)
 - [x] Không làm crash backend khi AI provider lỗi
 - [x] **DoD:** AI lỗi được handle gọn, không sập backend
-
 
 ---
 

@@ -55,10 +55,10 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	// 4. Save to simulated database history
 	r.roomManager.SaveChatMessage(room.ID, msgPayload)
 
-
 	// Simulate database INSERT query logging into interview_transcripts
 	log.Printf("[db] INSERT INTO interview_transcripts (id, interview_id, speaker_type, speaker_name, content, source, visibility, created_at) VALUES ('%s', '%s', '%s', '%s', '%s', 'chat', '%s', '%s')",
 		msgPayload.MessageID, room.InterviewID, msgPayload.SenderType, msgPayload.SenderName, msgPayload.Message, msgPayload.Visibility, msgPayload.CreatedAt.Format(time.RFC3339))
+
 	if r.transcriptSaver != nil {
 		record := TranscriptRecord{
 			ID:            msgPayload.MessageID,
