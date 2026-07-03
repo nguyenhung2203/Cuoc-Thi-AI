@@ -1,17 +1,32 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Table from '../../components/common/AppTable.vue'
 import { Target, TrendingUp, Eye } from 'lucide-vue-next'
+import { mockService } from '../../services/mock.service'
 
 const router = useRouter()
-const history = ref([
-  { id: 1, role: 'Frontend Developer', level: 'Middle', date: '20/10/2023', score: 8.5 },
-  { id: 2, role: 'Frontend Developer', level: 'Junior', date: '15/10/2023', score: 7.0 },
-  { id: 3, role: 'React Developer', level: 'Junior', date: '05/10/2023', score: 6.5 },
-])
+const history = ref([])
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    const data = await mockService.getHistory()
+    history.value = data
+  } catch (err) {
+    console.error('Lỗi tải lịch sử mock', err)
+  } finally {
+    loading.value = false
+  }
+})
+
+const averageScore = computed(() => {
+  if (history.value.length === 0) return 0
+  const sum = history.value.reduce((acc, curr) => acc + curr.score, 0)
+  return (sum / history.value.length).toFixed(1)
+})
 
 const columns = [
   { header: 'Vị trí luyện tập', key: 'role' },
@@ -37,7 +52,7 @@ const columns = [
           </div>
           <div>
             <p class="text-helper">Điểm trung bình</p>
-            <h2 class="text-h1">7.3<span style="font-size: 16px; color: var(--text-muted); font-weight: 400">/10</span></h2>
+            <h2 class="text-h1">{{ averageScore }}<span style="font-size: 16px; color: var(--text-muted); font-weight: 400">/10</span></h2>
           </div>
         </div>
       </Card>
@@ -49,7 +64,7 @@ const columns = [
           </div>
           <div>
             <p class="text-helper">Số lần luyện tập</p>
-            <h2 class="text-h1">3<span style="font-size: 16px; color: var(--text-muted); font-weight: 400"> lần</span></h2>
+            <h2 class="text-h1">{{ history.length }}<span style="font-size: 16px; color: var(--text-muted); font-weight: 400"> lần</span></h2>
           </div>
         </div>
       </Card>
@@ -64,7 +79,13 @@ const columns = [
     </div>
 
     <Card title="Lịch sử bài luyện tập">
-      <Table :columns="columns" :data="history">
+      <div v-if="loading" style="padding: 32px; text-align: center; color: var(--text-muted)">
+        Đang tải lịch sử...
+      </div>
+      <Table v-else :columns="columns" :data="history">
+        <template #date="{ row }">
+          {{ new Date(row.date).toLocaleDateString('vi-VN') }}
+        </template>
         <template #score="{ row }">
           <span :style="{ fontWeight: 'bold', color: row.score >= 8 ? 'var(--success)' : row.score >= 7 ? 'var(--warning)' : 'var(--danger)' }">
             {{ row.score }}/10

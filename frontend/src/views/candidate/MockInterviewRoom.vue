@@ -1,75 +1,98 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mic, ArrowRight, Play, Square, RefreshCw, Send, CheckCircle } from 'lucide-vue-next'
+import { mockService } from '../../services/mock.service'
 
 const router = useRouter()
+const route = useRoute()
+const mockId = route.query.mock_id
+
 const recording = ref(false)
 const questionIndex = ref(1)
 const analyzing = ref(false)
 const feedback = ref(null)
 const textAnswer = ref('')
 const showEndModal = ref(false)
+const messages = ref([])
 
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
+
+const loadMessages = async () => {
+  if (!mockId) return
+  const msgs = await mockService.getMessages(mockId)
+  messages.value = msgs || []
+  // Lấy câu hỏi cuối cùng của AI để hiển thị
+  const aiMsgs = messages.value.filter(m => m.sender_type === 'ai')
+  if (aiMsgs.length > 0) {
+    const lastAI = aiMsgs[aiMsgs.length - 1]
+    if (lastAI.score_json) {
+      const parsed = JSON.parse(lastAI.score_json)
+      feedback.value = {
+        score: `${parsed.score}/10`,
+        message: 'AI đã đánh giá câu trả lời của bạn.',
+        improvement: ''
+      }
+    } else {
+      feedback.value = null
+    }
+  }
+}
 
 onMounted(() => {
   if (history.state?.message) {
     window.history.replaceState({}, document.title)
   }
+  loadMessages()
 })
 
-const questions = [
-  "Hãy giới thiệu ngắn gọn về bản thân và kinh nghiệm làm việc của bạn.",
-  "Bạn đã từng sử dụng React trong dự án nào? Hãy mô tả một thử thách lớn nhất bạn gặp phải.",
-  "Làm thế nào để bạn quản lý state trong một ứng dụng React lớn?"
-]
-
 const handleRecord = () => {
+  // Mock recording logic for now since voice parsing is not requested yet
   if (!recording.value) {
     recording.value = true
     feedback.value = null
   } else {
     recording.value = false
-    analyzing.value = true
-    setTimeout(() => {
-      analyzing.value = false
-      feedback.value = {
-        score: 'Tốt',
-        message: 'Câu trả lời rõ ràng, cấu trúc tốt. Đã đề cập được số năm kinh nghiệm và công nghệ chính.',
-        improvement: 'Có thể thêm một ví dụ ngắn về dự án gần nhất để tăng tính thuyết phục.'
-      }
-    }, 2000)
+    handleSendText() // Fallback to text send for now
   }
 }
 
-const handleSendText = () => {
-  if (!textAnswer.value) return
+const handleSendText = async () => {
+  if (!textAnswer.value && !recording.value) return
   analyzing.value = true
   feedback.value = null
-  setTimeout(() => {
-    analyzing.value = false
-    feedback.value = {
-      score: 'Khá',
-      message: 'Bạn đã nêu được các ý chính, câu văn mạch lạc.',
-      improvement: 'Cố gắng trả lời bằng giọng nói để rèn luyện sự tự tin tốt hơn nhé!'
+  const contentToSend = textAnswer.value || 'Đây là câu trả lời ghi âm mẫu (chức năng ghi âm chưa tích hợp whisper)'
+  
+  try {
+    const msgs = await mockService.sendMessage(mockId, contentToSend)
+    messages.value = msgs || []
+    textAnswer.value = ''
+    questionIndex.value++
+    
+    const lastAI = messages.value[messages.value.length - 1]
+    if (lastAI && lastAI.score_json) {
+      const parsed = JSON.parse(lastAI.score_json)
+      feedback.value = {
+        score: `${parsed.score}/10`,
+        message: 'AI đã đánh giá câu trả lời của bạn.',
+        improvement: ''
+      }
     }
-  }, 1500)
+  } catch (error) {
+    console.error(error)
+  } finally {
+    analyzing.value = false
+  }
 }
 
-const handleNext = () => {
-  if (questionIndex.value < questions.length) {
-    questionIndex.value++
-    feedback.value = null
-    textAnswer.value = ''
-  } else {
-    router.push({ path: '/mock-results', state: { message: 'Hoàn thành bài thi thử!' } })
-  }
+const handleNext = async () => {
+  await mockService.finishMockInterview(mockId)
+  router.push({ path: '/mock-results', query: { mock_id: mockId } })
 }
 </script>
 
@@ -102,7 +125,7 @@ const handleNext = () => {
       <!-- Left: AI Interviewer -->
       <div style="flex: 4; display: flex; flex-direction: column; padding: 24px; gap: 24px; border-right: 1px solid var(--border); background-color: var(--surface)">
         <!-- AI Avatar Area -->
-        <div style="flex: 1; background-color: var(--surface-soft); border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--border); position: relative">
+        <div style="flex: 1; background-color: var(--surface-soft); border-radius: var(--radius-lg); display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid var(--border); position: relative; margin-bottom: 24px;">
           <div style="width: 120px; height: 120px; border-radius: 50%; background-color: var(--accent); display: flex; align-items: center; justify-content: center; color: white; margin-bottom: 24px; box-shadow: 0 0 0 12px rgba(8, 145, 178, 0.1)">
             <span style="font-size: 32px; font-weight: bold">AI</span>
           </div>
@@ -118,16 +141,16 @@ const handleNext = () => {
           </div>
         </div>
 
-        <!-- Current Question -->
-        <Card style="background-color: var(--surface)">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 12px">
-            <Badge type="info">Câu hỏi hiện tại</Badge>
-            <Button variant="ghost" style="padding: 4px 8px; height: auto"><Play size="14" style="margin-right: 4px"/> Nghe lại</Button>
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; padding-right: 16px;">
+          <div v-for="(msg, idx) in messages" :key="idx" style="margin-bottom: 24px;">
+            <p v-if="msg.sender_type === 'ai'" class="text-h2" style="font-size: 24px; line-height: 1.5; margin-bottom: 8px">
+              {{ msg.content }}
+            </p>
+            <p v-else class="text-body" style="background: var(--surface-soft); padding: 12px; border-radius: 8px;">
+              <strong>Bạn:</strong> {{ msg.content }}
+            </p>
           </div>
-          <p class="text-body" style="font-size: 16px; line-height: 1.6; font-weight: 500">
-            {{ questions[questionIndex - 1] }}
-          </p>
-        </Card>
+        </div>
       </div>
 
       <!-- Right: Candidate Answer -->

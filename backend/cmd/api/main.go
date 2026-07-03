@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -48,6 +49,10 @@ func main() {
 	fileRepo := repository.NewFileRepository(db)
 	interviewRepo := repository.NewInterviewRepository(db)
 	transcriptRepo := repository.NewTranscriptRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
+	reportRepo := repository.NewReportRepository(db)
+	mockRepo := repository.NewMockInterviewRepository(db)
+	candidatePortalRepo := repository.NewCandidatePortalRepository(db)
 
 	// 4. Services
 	authSvc := service.NewAuthService(userRepo, cfg.JWTSecret)
@@ -57,6 +62,11 @@ func main() {
 	fileSvc := service.NewFileService(fileRepo)
 	interviewSvc := service.NewInterviewService(interviewRepo)
 	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
+	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
+	notificationSvc := service.NewNotificationService(notificationRepo)
+	reportSvc := service.NewReportService(reportRepo, transcriptSvc, aiSvc)
+	mockSvc := service.NewMockService(mockRepo, aiSvc)
+	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo)
 
 	aiPromptRepo := repository.NewAIPromptRepository(db)
 	aiLogRepo := repository.NewAILogRepository(db)
@@ -68,11 +78,15 @@ func main() {
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)
-	candidateHandler := handler.NewCandidateHandler(candidateSvc)
+	candidateHandler := handler.NewCandidateHandler(candidateSvc, aiSvc)
 	fileHandler := handler.NewFileHandler(fileSvc)
 	interviewHandler := handler.NewInterviewHandler(interviewSvc)
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
+	reportHandler := handler.NewReportHandler(reportSvc)
 	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
+	notificationHandler := handler.NewNotificationHandler(notificationSvc)
+	mockHandler := handler.NewMockHandler(mockSvc)
+	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 
 	// In a real app, aiOrchestrator would be injected into handlers that need it (e.g. JobHandler for AnalyzeJD)
 
@@ -95,12 +109,23 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
+	// Serve static uploads
+	workDir, _ := os.Getwd()
+	filesDir := http.Dir(filepath.Join(workDir, "uploads"))
+	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(filesDir)))
+
 	// API v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth routes
 		r.Route("/auth", func(r chi.Router) {
 			r.Use(middleware.AuthRateLimitMiddleware)
 			authHandler.Routes(r)
+		})
+
+		// Public career site routes
+		r.Route("/public", func(r chi.Router) {
+			publicJobHandler := handler.NewPublicJobHandler(jobSvc)
+			publicJobHandler.Routes(r)
 		})
 
 		// Public interview routes
@@ -116,6 +141,11 @@ func main() {
 			r.Route("/admin", func(r chi.Router) {
 				// Require admin role middleware would normally go here
 				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
+			})
+
+			// Candidate Portal routes
+			r.Route("/portal", func(r chi.Router) {
+				candidatePortalHandler.Routes(r)
 			})
 
 			// File routes — user accesses own files directly (not company-scoped)
@@ -139,6 +169,15 @@ func main() {
 					r.Route("/{interview_id}/transcripts", func(r chi.Router) {
 						transcriptHandler.Routes(r)
 					})
+					r.Route("/{interview_id}/report", func(r chi.Router) {
+						reportHandler.Routes(r)
+					})
+				})
+				r.Route("/notifications", func(r chi.Router) {
+					notificationHandler.ProtectedRoutes(r)
+				})
+				r.Route("/mock-interviews", func(r chi.Router) {
+					mockHandler.ProtectedRoutes(r)
 				})
 			})
 		})

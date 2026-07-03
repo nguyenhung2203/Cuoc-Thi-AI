@@ -1,12 +1,46 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
+import Toast from '../../components/common/AppToast.vue'
 import { AlertTriangle, Video, Mic, ShieldCheck } from 'lucide-vue-next'
+import { interviewService } from '../../services/interview.service'
 
 const router = useRouter()
+const route = useRoute()
 const agreed = ref(false)
+const loading = ref(true)
+const errorMsg = ref('')
+const interviewInfo = ref(null)
+const inviteToken = ref(route.query.token || '')
+
+onMounted(async () => {
+  if (!inviteToken.value) {
+    errorMsg.value = 'Link mời phỏng vấn không hợp lệ hoặc bị thiếu token.'
+    loading.value = false
+    return
+  }
+
+  try {
+    const data = await interviewService.joinByToken(inviteToken.value)
+    interviewInfo.value = data
+  } catch (error) {
+    errorMsg.value = error.message || 'Không thể xác thực link mời phỏng vấn. Link có thể đã hết hạn.'
+  } finally {
+    loading.value = false
+  }
+})
+
+const handleJoin = () => {
+  if (!agreed.value) return
+  // Pass token and details to candidate room
+  router.push({ 
+    path: '/candidate-room', 
+    query: { token: inviteToken.value },
+    state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value } 
+  })
+}
 </script>
 
 <template>
@@ -17,10 +51,12 @@ const agreed = ref(false)
           <ShieldCheck size="32" />
         </div>
         <h1 class="text-h1">Chuẩn bị vào phòng phỏng vấn</h1>
-        <p class="text-helper" style="margin-top: 8px; font-size: 15px">Vị trí: Frontend Developer - TechCorp Inc.</p>
+        <div v-if="loading" class="text-helper" style="margin-top: 8px">Đang xác thực thông tin...</div>
+        <div v-else-if="errorMsg" class="text-helper" style="margin-top: 8px; color: var(--danger)">{{ errorMsg }}</div>
+        <p v-else class="text-helper" style="margin-top: 8px; font-size: 15px">Vị trí: {{ interviewInfo?.job_title }} - {{ interviewInfo?.company_name }}</p>
       </div>
 
-      <Card style="padding: 32px">
+      <Card v-if="!loading && !errorMsg" style="padding: 32px">
         <div style="background-color: rgba(217, 119, 6, 0.1); border: 1px solid rgba(217, 119, 6, 0.3); border-radius: var(--radius); padding: 20px; margin-bottom: 24px; display: flex; gap: 16px">
           <AlertTriangle size="24" color="var(--warning)" style="flex-shrink: 0" />
           <div>
@@ -56,10 +92,15 @@ const agreed = ref(false)
 
         <div style="display: flex; gap: 16px">
           <Button variant="secondary" style="flex: 1" @click="router.push('/home')">Từ chối & Quay lại</Button>
-          <Button variant="primary" style="flex: 1" :disabled="!agreed" @click="router.push({ path: '/candidate-room', state: { message: 'Vào phòng phỏng vấn thành công!' } })">
+          <Button variant="primary" style="flex: 1" :disabled="!agreed" @click="handleJoin">
             Tham gia phỏng vấn
           </Button>
         </div>
+      </Card>
+      
+      <Card v-if="errorMsg" style="padding: 32px; text-align: center">
+        <p class="text-body" style="color: var(--danger); margin-bottom: 24px">{{ errorMsg }}</p>
+        <Button variant="primary" @click="router.push('/home')">Quay về trang chủ</Button>
       </Card>
     </div>
   </div>

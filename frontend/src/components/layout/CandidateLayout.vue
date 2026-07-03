@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown } from 'lucide-vue-next'
+import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -10,6 +10,7 @@ const showProfileMenu = ref(false)
 
 const candidateMenu = [
   { path: '/home', name: 'Tổng quan', icon: Home },
+  { path: '/job-board', name: 'Tìm việc', icon: Briefcase },
   { path: '/my-interviews', name: 'Phỏng vấn', icon: Calendar },
   { path: '/mock-setup', name: 'Luyện tập AI', icon: Bot },
   { path: '/mock-results', name: 'Kết quả', icon: Award }
@@ -21,10 +22,9 @@ const profileMenu = [
   { path: '/settings', name: 'Cài đặt', icon: Settings }
 ]
 
-const handleLogout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('role')
-  router.push('/login')
+const handleLogout = async () => {
+  const { authStore } = await import('../../stores/auth.store')
+  await authStore.logout()
 }
 </script>
 

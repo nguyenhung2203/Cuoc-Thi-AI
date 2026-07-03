@@ -4,16 +4,34 @@ import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import { Play, FileText, Sparkles } from 'lucide-vue-next'
+import { mockService } from '../../services/mock.service'
 
 const router = useRouter()
 const loading = ref(false)
 
-const handleStart = (e) => {
+const setup = ref({
+  jobRole: 'frontend',
+  level: 'junior',
+  type: 'tech',
+  style: 'friendly',
+  useCurrentCv: false
+})
+
+const handleStart = async (e) => {
   e.preventDefault()
   loading.value = true
-  setTimeout(() => {
-    router.push({ path: '/mock-room', state: { message: 'Bắt đầu phiên luyện tập thành công!' } })
-  }, 800)
+  try {
+    const session = await mockService.startMockInterview({
+      target_role: setup.value.jobRole,
+      target_level: setup.value.level,
+      cv_file_id: setup.value.useCurrentCv ? 'my_cv_id_here' : ''
+    })
+    router.push({ path: '/mock-room', query: { mock_id: session.id } })
+  } catch (error) {
+    console.error(error)
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -29,7 +47,7 @@ const handleStart = (e) => {
         <form @submit="handleStart">
           <div class="input-group">
             <label class="input-label">Vị trí ứng tuyển (Target Role)</label>
-            <select class="input-field" required>
+            <select class="input-field" required v-model="setup.jobRole">
               <option value="frontend">Frontend Developer</option>
               <option value="backend">Backend Developer</option>
               <option value="fullstack">Fullstack Developer</option>
@@ -39,7 +57,7 @@ const handleStart = (e) => {
 
           <div class="input-group">
             <label class="input-label">Cấp độ (Level)</label>
-            <select class="input-field" required>
+            <select class="input-field" required v-model="setup.level">
               <option value="fresher">Fresher</option>
               <option value="junior">Junior</option>
               <option value="middle">Middle</option>
@@ -49,7 +67,7 @@ const handleStart = (e) => {
 
           <div class="input-group">
             <label class="input-label">Loại phỏng vấn</label>
-            <select class="input-field" required>
+            <select class="input-field" required v-model="setup.type">
               <option value="tech">Phỏng vấn Kỹ thuật (Technical)</option>
               <option value="behavior">Phỏng vấn Hành vi (Behavioral)</option>
               <option value="hr">Phỏng vấn Nhân sự (HR)</option>
@@ -58,7 +76,7 @@ const handleStart = (e) => {
 
           <div class="input-group">
             <label class="input-label">Phong cách AI (Interviewer Style)</label>
-            <select class="input-field" required>
+            <select class="input-field" required v-model="setup.style">
               <option value="friendly">Thân thiện, gợi mở</option>
               <option value="professional">Chuyên nghiệp, tiêu chuẩn</option>
               <option value="challenging">Khó tính, hay hỏi xoáy</option>
@@ -66,9 +84,10 @@ const handleStart = (e) => {
           </div>
 
           <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center">
-            <span class="text-helper" style="display: flex; align-items: center; gap: 8px">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer" class="text-helper">
+              <input type="checkbox" v-model="setup.useCurrentCv" />
               <FileText size="16" /> Sử dụng CV hiện tại trong Hồ sơ
-            </span>
+            </label>
             <Button type="submit" size="large" :disabled="loading">
               <Play size="16" /> {{ loading ? 'Đang khởi tạo...' : 'Bắt đầu ngay' }}
             </Button>
