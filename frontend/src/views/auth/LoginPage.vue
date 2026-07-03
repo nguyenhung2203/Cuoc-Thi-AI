@@ -21,7 +21,9 @@ onMounted(() => {
   }
 })
 
-const handleLogin = (e) => {
+import { authStore } from '../../stores/auth.store'
+
+const handleLogin = async (e) => {
   e.preventDefault()
   if (!email.value || !password.value) {
     error.value = 'Vui lòng nhập đầy đủ email và mật khẩu'
@@ -31,21 +33,27 @@ const handleLogin = (e) => {
   error.value = ''
   loading.value = true
 
-  setTimeout(() => {
-    loading.value = false
-    localStorage.setItem('token', 'mock-token')
+  try {
+    const user = await authStore.login(email.value, password.value)
     
-    const emailLower = email.value.toLowerCase()
-    const userName = email.value.split('@')[0]
-    
-    if (emailLower.includes('hr') || emailLower.includes('recruiter') || emailLower.includes('admin')) {
-      localStorage.setItem('role', 'recruiter')
-      router.push({ path: '/dashboard', state: { message: `Chào mừng ${userName} quay trở lại màn hình quản lý!` } })
+    // Check for redirect query param (e.g. from Career Site)
+    const redirectPath = route.query.redirect
+    if (redirectPath) {
+      router.push(redirectPath)
+    } else if (user.role === 'recruiter' || user.role === 'admin' || user.role === 'owner') {
+      router.push({ path: '/dashboard', state: { message: `Chào mừng ${user.full_name} quay trở lại màn hình quản lý!` } })
     } else {
-      localStorage.setItem('role', 'candidate')
-      router.push({ path: '/home', state: { message: `Đăng nhập thành công! Chào mừng ${userName} quay trở lại.` } })
+      router.push({ path: '/home', state: { message: `Đăng nhập thành công! Chào mừng ${user.full_name}.` } })
     }
-  }, 1000)
+  } catch (err) {
+    if (err.message === 'invalid email or password') {
+      error.value = 'Email hoặc mật khẩu không chính xác.'
+    } else {
+      error.value = err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại email hoặc mật khẩu.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 

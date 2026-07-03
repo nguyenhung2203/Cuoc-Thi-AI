@@ -5,21 +5,44 @@ import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, CheckCircle, FileText } from 'lucide-vue-next'
+import { useLiveKit } from '../../composables/useLiveKit'
 
 const router = useRouter()
-const micOn = ref(true)
-const cameraOn = ref(true)
+const route = useRoute()
+
+const {
+  isConnected, error, isMicOn, isCameraOn,
+  localVideoEl, remoteVideoEl,
+  connectToRoom, toggleMic, toggleCamera, disconnect
+} = useLiveKit()
+
 const activeTab = ref('info')
 
 const showLeaveModal = ref(false)
 const isLeaving = ref(false)
 
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
+const interviewInfo = ref(history.state?.interviewInfo || null)
 
-onMounted(() => {
+onMounted(async () => {
   if (history.state?.message) {
-    window.history.replaceState({}, document.title)
+    window.history.replaceState({ interviewInfo: history.state.interviewInfo }, document.title)
   }
+  
+  // Logic kết nối LiveKit
+  const token = route.query.token
+  if (token) {
+    try {
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+      await connectToRoom(livekitUrl, token)
+    } catch (err) {
+      console.error('Không thể vào phòng', err)
+    }
+  }
+})
+
+onUnmounted(() => {
+  disconnect()
 })
 
 const handleLeave = () => {
@@ -44,8 +67,8 @@ const confirmLeave = () => {
     <div style="height: 64px; background-color: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px">
       <div style="display: flex; align-items: center; gap: 16px">
         <div>
-          <h1 class="text-h2">Phỏng vấn: Frontend Developer</h1>
-          <p class="text-helper" style="margin-top: 4px">Công ty TechCorp Inc.</p>
+          <h1 class="text-h2">Phỏng vấn: {{ interviewInfo?.job_title || 'Vị trí ứng tuyển' }}</h1>
+          <p class="text-helper" style="margin-top: 4px">Công ty {{ interviewInfo?.company_name || 'Tuyển dụng' }}</p>
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 12px">
@@ -72,29 +95,35 @@ const confirmLeave = () => {
         <div style="flex: 1; display: flex; gap: 16px; position: relative">
           <!-- Recruiter Video (Large) -->
           <div style="flex: 1; background-color: #1E293B; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden">
-            <div style="text-align: center; color: white">
+            <!-- Thẻ video thật cho LiveKit (Remote - Recruiter) -->
+            <video ref="remoteVideoEl" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;"></video>
+            
+            <div style="text-align: center; color: white; position: relative; z-index: 1;">
               <div style="width: 80px; height: 80px; border-radius: 50%; background-color: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; font-weight: bold">R</div>
-              <div style="font-size: 16px">Recruiter Camera Feed</div>
+              <div style="font-size: 16px">Đang chờ nhà tuyển dụng...</div>
             </div>
-            <div style="position: absolute; bottom: 16px; left: 16px; background-color: rgba(0,0,0,0.6); color: white; padding: 4px 12px; border-radius: var(--radius); font-size: 13px">
-              Trần Thị B (HR Manager)
+            
+            <div style="position: absolute; bottom: 16px; left: 16px; background-color: rgba(0,0,0,0.6); color: white; padding: 4px 12px; border-radius: var(--radius); font-size: 13px; z-index: 2">
+              Nhà Tuyển Dụng
             </div>
           </div>
           
           <!-- Candidate Self View (Small/PiP or Side) -->
-          <div style="width: 240px; background-color: #334155; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: absolute; top: 16px; right: 16px; height: 160px; box-shadow: var(--shadow-md); border: 2px solid rgba(255,255,255,0.1)">
-             <div style="color: white; font-size: 12px">Your Camera</div>
+          <div style="width: 240px; background-color: #334155; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: absolute; top: 16px; right: 16px; height: 160px; box-shadow: var(--shadow-md); border: 2px solid rgba(255,255,255,0.1); overflow: hidden; z-index: 10">
+             <!-- Thẻ video thật cho LiveKit (Local) -->
+             <video ref="localVideoEl" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; transform: scaleX(-1);"></video>
+             <div style="color: white; font-size: 12px; position: relative; z-index: 1">Your Camera</div>
           </div>
         </div>
 
         <!-- Control Bar -->
         <div style="height: 72px; background-color: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 16px">
-          <Button :variant="micOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="micOn = !micOn">
-            <Mic v-if="micOn" size="20" />
+          <Button :variant="isMicOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="toggleMic">
+            <Mic v-if="isMicOn" size="20" />
             <MicOff v-else size="20" />
           </Button>
-          <Button :variant="cameraOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="cameraOn = !cameraOn">
-            <Video v-if="cameraOn" size="20" />
+          <Button :variant="isCameraOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="toggleCamera">
+            <Video v-if="isCameraOn" size="20" />
             <VideoOff v-else size="20" />
           </Button>
           <div style="width: 1px; height: 32px; background-color: var(--border); margin: 0 8px"></div>

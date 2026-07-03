@@ -8,7 +8,9 @@ import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-vue-next'
-import { mockApi } from '../../utils/mockData'
+import { candidateService } from '../../services/candidate.service'
+import { jobService } from '../../services/job.service'
+import { authStore } from '../../stores/auth.store'
 
 const router = useRouter()
 const candidates = ref([])
@@ -19,11 +21,65 @@ const showFilterModal = ref(false)
 const deletingId = ref(null)
 const localToast = ref(null)
 
+const jobs = ref([])
+const filters = ref({ job_id: '', status: '', keyword: '' })
+
+const fetchCandidates = async () => {
+  loading.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) return
+    
+    // Clean up empty filters
+    const params = {}
+    if (filters.value.job_id) params.job_id = filters.value.job_id
+    if (filters.value.status) params.status = filters.value.status
+    if (filters.value.keyword) params.keyword = filters.value.keyword
+
+    const response = await candidateService.getCandidates(companyId, params)
+    candidates.value = response.map(c => ({
+      id: c.id,
+      name: c.full_name,
+      email: c.email,
+      appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
+      status: c.status || 'New'
+    }))
+  } catch (error) {
+    localToast.value = { type: 'error', message: 'Lỗi tải danh sách ứng viên: ' + (error.message || 'Không xác định') }
+    candidates.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(async () => {
-  const data = await mockApi.candidates.getAll()
-  candidates.value = data
-  loading.value = false
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) throw new Error('Không tìm thấy company ID')
+    
+    // Fetch both jobs for dropdown and initial candidates
+    const [jobsRes] = await Promise.all([
+      jobService.getJobs(companyId),
+      fetchCandidates()
+    ])
+    jobs.value = jobsRes
+  } catch (error) {
+    console.error(error)
+  }
 })
+
+const applyFilter = () => {
+  showFilterModal.value = false
+  fetchCandidates()
+  localToast.value = { type: 'success', message: 'Đã áp dụng bộ lọc!' }
+}
+
+const clearFilter = () => {
+  filters.value.job_id = ''
+  filters.value.status = ''
+  showFilterModal.value = false
+  fetchCandidates()
+}
 
 const getStatusType = (status) => {
   if (status === 'New') return 'info'
@@ -33,10 +89,17 @@ const getStatusType = (status) => {
   return 'neutral'
 }
 
-const confirmDelete = () => {
-  candidates.value = candidates.value.filter(c => c.id !== deletingId.value)
-  showDeleteModal.value = false
-  localToast.value = { type: 'success', message: 'Đã xóa hồ sơ ứng viên thành công!' }
+const confirmDelete = async () => {
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await candidateService.updateCandidate(companyId, deletingId.value, { status: 'deleted' }) // Hoặc gọi API delete nếu có
+    candidates.value = candidates.value.filter(c => c.id !== deletingId.value)
+    showDeleteModal.value = false
+    localToast.value = { type: 'success', message: 'Đã xóa hồ sơ ứng viên thành công!' }
+  } catch (error) {
+    showDeleteModal.value = false
+    localToast.value = { type: 'error', message: 'Lỗi xóa ứng viên: ' + (error.message || 'Không xác định') }
+  }
 }
 
 const columns = [
@@ -68,6 +131,8 @@ const columns = [
             placeholder="Tìm tên, email..." 
             class="input-field"
             style="width: 100%; padding-left: 36px"
+            v-model="filters.keyword"
+            @keyup.enter="fetchCandidates"
           />
         </div>
         <Button variant="secondary" @click="showFilterModal = true">Lọc theo Job</Button>
@@ -117,15 +182,14 @@ const columns = [
       <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px">
         <div class="input-group">
           <label class="input-label">Vị trí ứng tuyển (Job)</label>
-          <select class="input-field">
+          <select class="input-field" v-model="filters.job_id">
             <option value="">Tất cả vị trí</option>
-            <option value="Frontend">Frontend Developer</option>
-            <option value="Backend">Backend Engineer</option>
+            <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
           </select>
         </div>
         <div class="input-group">
           <label class="input-label">Trạng thái hồ sơ</label>
-          <select class="input-field">
+          <select class="input-field" v-model="filters.status">
             <option value="">Tất cả trạng thái</option>
             <option value="New">Mới (New)</option>
             <option value="Interviewing">Đang phỏng vấn (Interviewing)</option>
@@ -135,8 +199,8 @@ const columns = [
         </div>
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 12px">
-        <Button variant="ghost" @click="showFilterModal = false">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="showFilterModal = false; localToast = { type: 'success', message: 'Đã áp dụng bộ lọc!' }">Áp dụng</Button>
+        <Button variant="ghost" @click="clearFilter">Xóa bộ lọc</Button>
+        <Button variant="primary" @click="applyFilter">Áp dụng</Button>
       </div>
     </Modal>
   </div>

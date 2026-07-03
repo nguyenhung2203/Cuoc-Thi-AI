@@ -8,7 +8,10 @@ import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { Plus, Video, Copy, ExternalLink } from 'lucide-vue-next'
-import { mockApi } from '../../utils/mockData'
+import { interviewService } from '../../services/interview.service'
+import { jobService } from '../../services/job.service'
+import { candidateService } from '../../services/candidate.service'
+import { authStore } from '../../stores/auth.store'
 
 const router = useRouter()
 const interviews = ref([])
@@ -25,13 +28,44 @@ const openEnterRoomModal = (row) => {
 
 const confirmEnterRoom = () => {
   showEnterRoomModal.value = false
-  router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!' } })
+  // Lưu interviewId vào state để trang Room biết vào phòng nào
+  router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!', interviewId: selectedInterview.value.id } })
 }
 
 onMounted(async () => {
-  const data = await mockApi.interviews.getAll()
-  interviews.value = data
-  loading.value = false
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) throw new Error('Không tìm thấy company ID')
+    
+    const [response, jobs, candidates] = await Promise.all([
+      interviewService.getInterviews(companyId),
+      jobService.getJobs(companyId),
+      candidateService.getCandidates(companyId)
+    ])
+    
+    const jobMap = jobs.reduce((acc, j) => { acc[j.id] = j; return acc; }, {})
+    const candidateMap = candidates.reduce((acc, c) => { acc[c.id] = c; return acc; }, {})
+
+    interviews.value = response.map(i => {
+      const candidate = i.candidate || candidateMap[i.candidate_id] || {}
+      const job = i.job || jobMap[i.job_id?.String || i.job_id] || {}
+      const dt = typeof i.scheduled_at === 'object' && i.scheduled_at !== null ? i.scheduled_at.Time : i.scheduled_at
+      
+      return {
+        id: i.id,
+        candidateName: candidate.full_name || candidate.name || 'Không rõ ứng viên',
+        jobTitle: job.title || 'Không rõ vị trí',
+        datetime: dt,
+        status: i.status === 'scheduled' ? 'Scheduled' : i.status,
+        link: i.invite_url || '' // Mock field, actual is in room object
+      }
+    })
+  } catch (error) {
+    console.error('Lỗi tải danh sách phỏng vấn:', error)
+    // Could set a toast error here
+  } finally {
+    loading.value = false
+  }
 })
 
 const copyLink = (link) => {

@@ -70,9 +70,25 @@ func (r *CandidateRepository) List(ctx context.Context, companyID, jobID, status
 		sortDir = "DESC"
 	}
 
+	selectCols := `
+		c.*,
+		(
+			SELECT jc.job_id 
+			FROM job_candidates jc 
+			WHERE jc.candidate_id = c.id 
+			ORDER BY jc.created_at DESC LIMIT 1
+		) as latest_job_id,
+		(
+			SELECT j.title 
+			FROM job_candidates jc 
+			JOIN jobs j ON j.id = jc.job_id 
+			WHERE jc.candidate_id = c.id 
+			ORDER BY jc.created_at DESC LIMIT 1
+		) as latest_job_title
+	`
 	listQuery := fmt.Sprintf(
-		"SELECT c.* %s %s ORDER BY %s %s LIMIT $%d OFFSET $%d",
-		from, whereClause, sortBy, sortDir, argIdx, argIdx+1,
+		"SELECT %s %s %s ORDER BY %s %s LIMIT $%d OFFSET $%d",
+		selectCols, from, whereClause, sortBy, sortDir, argIdx, argIdx+1,
 	)
 	args = append(args, p.PageSize, p.Offset())
 
@@ -89,11 +105,27 @@ func (r *CandidateRepository) List(ctx context.Context, companyID, jobID, status
 
 // GetByID returns a candidate scoped to companyID. Returns nil, nil when not found.
 func (r *CandidateRepository) GetByID(ctx context.Context, companyID, candidateID string) (*models.Candidate, error) {
-	const q = `
-		SELECT * FROM candidates
-		WHERE id = $1::uuid
-		  AND company_id = $2::uuid
-		  AND deleted_at IS NULL`
+	q := `
+		SELECT c.*,
+		(
+			SELECT jc.job_id 
+			FROM job_candidates jc 
+			WHERE jc.candidate_id = c.id 
+			ORDER BY jc.created_at DESC LIMIT 1
+		) as latest_job_id,
+		(
+			SELECT j.title 
+			FROM job_candidates jc 
+			JOIN jobs j ON j.id = jc.job_id 
+			WHERE jc.candidate_id = c.id 
+			ORDER BY jc.created_at DESC LIMIT 1
+		) as latest_job_title,
+		f.original_name as cv_original_name
+		FROM candidates c
+		LEFT JOIN files f ON c.cv_file_id = f.id
+		WHERE c.id = $1::uuid
+		  AND c.company_id = $2::uuid
+		  AND c.deleted_at IS NULL`
 
 	var c models.Candidate
 	if err := r.db.GetContext(ctx, &c, q, candidateID, companyID); err != nil {

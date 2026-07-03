@@ -91,6 +91,7 @@ func (s *CandidateService) Create(
 		Phone:        sql.NullString{String: req.Phone, Valid: req.Phone != ""},
 		Source:       sql.NullString{String: req.Source, Valid: req.Source != ""},
 		Status:       models.CandidateStatus("new"),
+		CVFileID:     sql.NullString{String: req.CVFileID, Valid: req.CVFileID != ""},
 		ParsedCVJSON: json.RawMessage("null"),
 		Tags:         json.RawMessage("[]"),
 		CreatedBy:    sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
@@ -156,6 +157,9 @@ func (s *CandidateService) Update(
 			return nil, errors.NewInternal("failed to marshal tags")
 		}
 		patch["tags"] = json.RawMessage(tagsJSON)
+	}
+	if req.CVFileID != nil {
+		patch["cv_file_id"] = sql.NullString{String: *req.CVFileID, Valid: *req.CVFileID != ""}
 	}
 
 	if len(patch) == 0 {

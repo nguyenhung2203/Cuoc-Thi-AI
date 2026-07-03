@@ -5,38 +5,94 @@ import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
-import { mockApi } from '../../utils/mockData'
-import { Sparkles, ArrowLeft, Save, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import Toast from '../../components/common/AppToast.vue'
+import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import { jobService } from '../../services/job.service'
+import { authStore } from '../../stores/auth.store'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
-const isNew = id === 'new'
+const isNew = ref(id === 'new')
 
-const job = ref({ title: '', status: 'Open', description: '' })
-const loading = ref(!isNew)
+const job = ref({ 
+  title: '', 
+  status: 'Open', 
+  description: '',
+  requirements: '',
+  benefits: ''
+})
+const loading = ref(!isNew.value)
 const saving = ref(false)
 const aiAnalyzing = ref(false)
 const rubric = ref(null)
+const localToast = ref(null)
+
+const unwrap = (val) => {
+  if (!val) return ''
+  if (typeof val === 'object' && 'String' in val) {
+    return val.Valid ? val.String : ''
+  }
+  return val
+}
 
 onMounted(async () => {
-  if (!isNew) {
-    const data = await mockApi.jobs.getById(id)
-    if (data) job.value = data
-    loading.value = false
+  if (!isNew.value) {
+    try {
+      const companyId = authStore.user?.companies?.[0]?.id
+      if (companyId) {
+        const data = await jobService.getJob(companyId, id)
+        const rawJob = data.data || data
+        job.value = {
+          ...rawJob,
+          status: rawJob.status === 'open' ? 'Open' : (rawJob.status === 'closed' ? 'Closed' : 'Draft'),
+          requirements: unwrap(rawJob.requirements),
+          benefits: unwrap(rawJob.benefits)
+        }
+      }
+    } catch (error) {
+      localToast.value = { type: 'error', message: 'Không thể tải chi tiết công việc' }
+    } finally {
+      loading.value = false
+    }
   }
 })
 
 const handleSave = async (e) => {
   e.preventDefault()
-  saving.value = true
-  if (isNew) {
-    await mockApi.jobs.create({ ...job.value, created: new Date().toISOString().split('T')[0] })
-  } else {
-    await new Promise(r => setTimeout(r, 600))
+  
+  if (!job.value.requirements.trim()) {
+    localToast.value = { type: 'error', message: 'Vui lòng nhập Yêu cầu ứng viên' }
+    return
   }
-  saving.value = false
-  router.push({ path: '/jobs', state: { message: 'Lưu thông tin công việc thành công!' } })
+  if (!job.value.benefits.trim()) {
+    localToast.value = { type: 'error', message: 'Vui lòng nhập Quyền lợi' }
+    return
+  }
+  
+  saving.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const payload = {
+      title: job.value.title,
+      description: job.value.description,
+      requirements: job.value.requirements,
+      benefits: job.value.benefits,
+      status: job.value.status === 'Open' ? 'open' : (job.value.status === 'Closed' ? 'closed' : 'draft')
+    }
+    
+    if (isNew.value) {
+      await jobService.createJob(companyId, payload)
+    } else {
+      await jobService.updateJob(companyId, id, payload)
+    }
+    
+    router.push({ path: '/jobs', state: { message: 'Lưu thông tin công việc thành công!' } })
+  } catch (error) {
+    localToast.value = { type: 'error', message: error.message || 'Lưu công việc thất bại' }
+  } finally {
+    saving.value = false
+  }
 }
 
 const handleAiAnalyze = () => {
@@ -76,6 +132,7 @@ const handleAiAnalyze = () => {
               label="Tiêu đề công việc" 
               v-model="job.title" 
               required 
+              minlength="2"
             />
             
             <div class="input-group">
@@ -90,9 +147,33 @@ const handleAiAnalyze = () => {
               <label class="input-label">Mô tả công việc (JD)</label>
               <textarea 
                 class="input-field" 
-                rows="10"
+                rows="6"
                 v-model="job.description"
-                placeholder="Nhập yêu cầu công việc..."
+                placeholder="Nhập yêu cầu công việc (tối thiểu 10 ký tự)..."
+                required
+                minlength="10"
+              ></textarea>
+            </div>
+
+            <div class="input-group">
+              <label class="input-label">Yêu cầu ứng viên (*)</label>
+              <textarea 
+                class="input-field" 
+                rows="6"
+                v-model="job.requirements"
+                placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
+                required
+              ></textarea>
+            </div>
+
+            <div class="input-group">
+              <label class="input-label">Quyền lợi (*)</label>
+              <textarea 
+                class="input-field" 
+                rows="6"
+                v-model="job.benefits"
+                placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
+                required
               ></textarea>
             </div>
 

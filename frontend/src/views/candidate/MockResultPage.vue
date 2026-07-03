@@ -1,42 +1,80 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { mockService } from '../../services/mock.service'
+import { apiService } from '../../services/api.service'
 
 const route = useRoute()
 const router = useRouter()
-const id = route.params.id
+const id = route.query.mock_id || route.params.id
 
-// Mock data cho một kết quả chi tiết
-const sessionData = {
-  role: 'Frontend Developer',
-  level: 'Middle',
-  date: '20/10/2023',
-  overallScore: 8.5,
-  summaryFeedback: 'Bạn đã làm rất tốt trong việc giải thích các khái niệm cốt lõi của React. Tuy nhiên, phần System Design cần cụ thể hơn về cách scale ứng dụng.',
-  questions: [
-    {
-      id: 1,
-      question: 'Bạn hãy giải thích cơ chế Virtual DOM trong React và tại sao nó lại giúp tăng hiệu suất?',
-      candidateAnswer: 'Virtual DOM là một bản copy của Real DOM. Khi state thay đổi, React tạo ra một Virtual DOM mới, so sánh với cái cũ (diffing), và chỉ cập nhật những node bị thay đổi lên Real DOM.',
-      score: 9,
-      feedback: 'Câu trả lời rất chính xác, ngắn gọn và đi thẳng vào trọng tâm. Bạn có thể bổ sung thêm về quá trình Reconciliation để đạt điểm tuyệt đối.',
-      goodPoints: ['Hiểu rõ khái niệm bản copy', 'Nắm được quá trình diffing'],
-      improvePoints: ['Thiếu key term Reconciliation']
-    },
-    {
-      id: 2,
-      question: 'Làm thế nào để tối ưu hóa hiệu suất (performance) của một ứng dụng React lớn?',
-      candidateAnswer: 'Tôi thường dùng useMemo và useCallback để tránh re-render. Ngoài ra cũng dùng React.lazy để code splitting.',
-      score: 7.5,
-      feedback: 'Các ý chính đều đúng, tuy nhiên bạn cần giải thích rõ HƯỚNG áp dụng thực tế thay vì chỉ liệt kê hooks. Khi nào KHÔNG NÊN dùng useMemo cũng là một ý quan trọng.',
-      goodPoints: ['Đề cập đúng các công cụ tối ưu (useMemo, React.lazy)'],
-      improvePoints: ['Cần ví dụ thực tế', 'Thiếu cân nhắc trade-off khi lạm dụng useMemo']
+const loading = ref(true)
+const sessionData = ref(null)
+
+onMounted(async () => {
+  if (!id) {
+    loading.value = false
+    return
+  }
+  try {
+    const data = await apiService.get(`/mock-interviews/${id}`)
+    const messages = await mockService.getMessages(id)
+    
+    // Parse questions from messages
+    let formattedQuestions = []
+    let lastQ = null
+    for (let m of messages) {
+      if (m.sender_type === 'ai') {
+        if (m.question_type) lastQ = m.content
+      } else if (m.sender_type === 'candidate') {
+        // find the ai score next
+        const nextAi = messages.find(m2 => m2.sender_type === 'ai' && m2.created_at > m.created_at)
+        let score = 0, feedback = ''
+        if (nextAi && nextAi.score_json) {
+           const sj = JSON.parse(nextAi.score_json)
+           score = sj.score
+           feedback = nextAi.content
+        }
+        if (lastQ) {
+          formattedQuestions.push({
+            id: formattedQuestions.length + 1,
+            question: lastQ,
+            candidateAnswer: m.content,
+            score: score,
+            feedback: feedback
+          })
+        }
+      }
     }
-  ]
-}
+
+    // fallback score logic if final_score null
+    let finalScore = data.final_score
+    if (finalScore == null && formattedQuestions.length > 0) {
+       finalScore = formattedQuestions.reduce((sum, q) => sum + q.score, 0) / formattedQuestions.length
+    }
+    
+    sessionData.value = {
+      role: data.target_role,
+      level: data.target_level || 'Junior',
+      date: new Date(data.created_at).toLocaleDateString('vi-VN'),
+      overallScore: finalScore ? finalScore.toFixed(1) : '0',
+      summaryFeedback: data.feedback_json || 'Không có nhận xét chung',
+      questions: formattedQuestions.map(q => ({
+        ...q,
+        goodPoints: ['Đã trả lời câu hỏi'],
+        improvePoints: ['Có thể cung cấp thêm ví dụ']
+      }))
+    }
+  } catch (err) {
+    console.error('Lỗi tải kết quả mock', err)
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
@@ -47,11 +85,17 @@ const sessionData = {
       </Button>
       <div>
         <h1 class="text-h1">Chi tiết kết quả luyện tập</h1>
-        <p class="text-helper" style="margin-top: 4px">{{ sessionData.role }} - Cấp độ {{ sessionData.level }} - Ngày {{ sessionData.date }}</p>
+        <p v-if="sessionData" class="text-helper" style="margin-top: 4px">{{ sessionData.role }} - Cấp độ {{ sessionData.level }} - Ngày {{ sessionData.date }}</p>
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 24px">
+    <div v-if="loading" style="text-align: center; padding: 40px; color: var(--text-muted)">
+      Đang tải kết quả...
+    </div>
+    <div v-else-if="!sessionData" style="text-align: center; padding: 40px; color: var(--danger)">
+      Không thể tải kết quả bài luyện tập.
+    </div>
+    <div v-else style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 24px">
       <Card>
         <div style="text-align: center; margin-bottom: 24px">
           <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background-color: rgba(22, 163, 74, 0.1); color: var(--success); font-size: 28px; font-weight: bold; margin-bottom: 16px">

@@ -28,7 +28,6 @@ func (h *FileHandler) Routes(r chi.Router) {
 	
 	// Company scoped routes for candidate CV
 	r.Post("/companies/{company_id}/candidates/{candidate_id}/cv", h.UploadCV)
-	r.Post("/companies/{company_id}/candidates/{candidate_id}/parse-cv", h.ParseCV)
 }
 
 func (h *FileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
@@ -39,11 +38,7 @@ func (h *FileHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
 	h.handleUpload(w, r, "cv")
 }
 
-func (h *FileHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
-	requestID := getRequestID(r)
-	// Stub parsing logic
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "parsing_triggered"}, nil, requestID)
-}
+
 
 func (h *FileHandler) handleUpload(w http.ResponseWriter, r *http.Request, fileType string) {
 	requestID := getRequestID(r)

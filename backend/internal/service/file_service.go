@@ -36,10 +36,15 @@ func (s *FileService) ProcessUpload(ctx context.Context, file multipart.File, he
 	checksum := hex.EncodeToString(hasher.Sum(nil))
 	file.Seek(0, 0)
 
-	// Check if exists
+	// Check if exists in DB
 	existing, err := s.fileRepo.FindByChecksum(ctx, checksum)
 	if err == nil && existing != nil {
-		return s.SaveMetadata(ctx, companyID, userID, header.Filename, existing.StorageKey, existing.MimeType, header.Size, fileType, checksum)
+		// Also verify it actually exists on disk
+		uploadDir := filepath.Join(".", "uploads")
+		existingPath := filepath.Join(uploadDir, existing.StorageKey)
+		if _, err := os.Stat(existingPath); err == nil {
+			return s.SaveMetadata(ctx, companyID, userID, header.Filename, existing.StorageKey, existing.MimeType, header.Size, fileType, checksum)
+		}
 	}
 
 	uploadDir := filepath.Join(".", "uploads")
@@ -132,7 +137,7 @@ func (s *FileService) GetSignedURL(
 		return "", time.Time{}, errors.NewNotFound("file not found or access denied")
 	}
 
-	stubURL := "http://localhost:8080/uploads/" + file.StorageKey
+	stubURL := "http://localhost:18080/uploads/" + file.StorageKey
 	expiresAt = time.Now().Add(15 * time.Minute)
 
 	return stubURL, expiresAt, nil

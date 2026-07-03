@@ -84,10 +84,11 @@ func (s *InterviewService) CreateInterview(ctx context.Context, req CreateInterv
 		ID:          roomID,
 		InterviewID: interviewID,
 		RoomCode:    roomCode,
-		Status:      "waiting",
-		Provider:    sql.NullString{String: "livekit", Valid: true},
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Status:           "waiting",
+		Provider:         sql.NullString{String: "livekit", Valid: true},
+		ConnectionConfig: []byte("{}"),
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if err := s.repo.Create(ctx, interview, room); err != nil {

@@ -5,6 +5,7 @@ import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
+import { authStore } from '../../stores/auth.store'
 import { Save, Key, Bell, Shield, User, Monitor } from 'lucide-vue-next'
 
 const role = localStorage.getItem('role') || 'recruiter'
@@ -77,8 +78,8 @@ const confirmDeleteAccount = () => {
           <Card title="Thông tin tài khoản">
             <form @submit="handleSave">
               <div style="display: flex; flex-direction: column; gap: 16px">
-                <Input label="Tên người dùng" :defaultValue="role === 'recruiter' ? 'Recruiter User' : 'Candidate User'" />
-                <Input label="Email đăng nhập" type="email" :defaultValue="role === 'recruiter' ? 'recruiter@test.com' : 'candidate@test.com'" disabled />
+                <Input label="Tên người dùng" :modelValue="authStore.user?.full_name || ''" disabled />
+                <Input label="Email đăng nhập" type="email" :modelValue="authStore.user?.email || ''" disabled />
                 
                 <div style="border-top: 1px solid var(--border); padding-top: 24px; margin-top: 8px">
                   <h3 class="text-body" style="font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px">

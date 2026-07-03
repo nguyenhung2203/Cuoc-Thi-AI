@@ -79,6 +79,46 @@ func (r *JobRepository) List(ctx context.Context, companyID string, status, keyw
 	return &JobListResult{Jobs: jobs, Total: total}, nil
 }
 
+// ListAllOpen returns all open jobs across all companies (for public job board).
+func (r *JobRepository) ListAllOpen(ctx context.Context, keyword string, p pagination.Params) (*JobListResult, error) {
+	args := []any{}
+	argIdx := 1
+
+	where := []string{"j.status = 'open'", "j.deleted_at IS NULL"}
+
+	if keyword != "" {
+		where = append(where, fmt.Sprintf("(j.title ILIKE $%d OR j.description ILIKE $%d)", argIdx, argIdx))
+		args = append(args, "%"+keyword+"%")
+		argIdx++
+	}
+
+	whereClause := "WHERE " + strings.Join(where, " AND ")
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM jobs j %s", whereClause)
+	var total int
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, fmt.Errorf("all open jobs count: %w", err)
+	}
+
+	listQuery := fmt.Sprintf(
+		`SELECT j.*, c.name as company_name FROM jobs j 
+		 LEFT JOIN companies c ON c.id = j.company_id 
+		 %s ORDER BY j.created_at DESC LIMIT $%d OFFSET $%d`,
+		whereClause, argIdx, argIdx+1,
+	)
+	args = append(args, p.PageSize, p.Offset())
+
+	var jobs []models.Job
+	if err := r.db.SelectContext(ctx, &jobs, listQuery, args...); err != nil {
+		return nil, fmt.Errorf("all open jobs select: %w", err)
+	}
+	if jobs == nil {
+		jobs = []models.Job{}
+	}
+
+	return &JobListResult{Jobs: jobs, Total: total}, nil
+}
+
 // GetByID returns a job scoped to companyID. Returns nil, nil when not found.
 func (r *JobRepository) GetByID(ctx context.Context, companyID, jobID string) (*models.Job, error) {
 	const q = `
@@ -93,6 +133,23 @@ func (r *JobRepository) GetByID(ctx context.Context, companyID, jobID string) (*
 			return nil, nil
 		}
 		return nil, fmt.Errorf("job get by id: %w", err)
+	}
+	return &job, nil
+}
+
+// GetByIDAnyCompany returns a job without scoping to companyID.
+func (r *JobRepository) GetByIDAnyCompany(ctx context.Context, jobID string) (*models.Job, error) {
+	const q = `
+		SELECT * FROM jobs
+		WHERE id = $1::uuid
+		  AND deleted_at IS NULL`
+
+	var job models.Job
+	if err := r.db.GetContext(ctx, &job, q, jobID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("job get by id any company: %w", err)
 	}
 	return &job, nil
 }
