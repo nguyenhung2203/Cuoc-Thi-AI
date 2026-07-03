@@ -4,6 +4,8 @@ import (
 	"log"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"backend/internal/realtime/events"
 )
 
@@ -15,10 +17,15 @@ func (r *MessageRouter) sendError(conn *ClientConnection, requestID, code, messa
 		return
 	}
 	raw, _ := env.ToJSON()
+
 	select {
 	case conn.Send <- raw:
 	default:
 		log.Printf("[ws] send buffer full for connID=%s, dropping error event", conn.ID)
+
+	if !conn.TrySend(raw) {
+		log.Printf("[ws] send buffer full/closed for connID=%s, dropping error event", conn.ID)
+
 	}
 }
 
@@ -44,6 +51,9 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		r.presenceManager.StartWatcher(room.ID)
 	}
 
+	r.roomManager.CancelEmptyRoomTimer(room.ID)
+
+
 	// 2. Determine display name: prioritize token claims, fallback to payload
 	displayName := conn.DisplayName
 	if displayName == "" {
@@ -53,65 +63,109 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		displayName = "User"
 	}
 
-	// Update connection display name if it was empty
+
 	if conn.DisplayName == "" {
 		conn.DisplayName = displayName
 	}
 
-	// 3. Create participant
-	p := &Participant{
-		ConnectionID:    conn.ID,
-		UserID:          conn.UserID,
-		ParticipantType: events.ParticipantType(conn.Role),
-		DisplayName:     displayName,
-		ConnectionState: events.ConnectionOnline,
-		JoinedAt:        time.Now().UTC(),
-		LastSeenAt:      time.Now().UTC(),
-		Connection:      conn,
+
+	// 3. Create or restore participant
+	oldP := room.FindParticipantByUserID(conn.UserID)
+	isReconnect := false
+	var missedEvents [][]byte
+	var oldLastSeen time.Time
+	var p *Participant
+
+	if oldP != nil {
+		isReconnect = true
+		oldConnID := oldP.ConnectionID
+		oldLastSeen = oldP.LastSeenAt
+
+		if oldP.Connection != nil && oldP.ConnectionID != conn.ID {
+			oldP.Connection.Close()
+		}
+		room.RemoveParticipant(oldConnID)
+
+		oldP.ConnectionID = conn.ID
+		oldP.Connection = conn
+		oldP.ConnectionState = events.ConnectionOnline
+		oldP.LastSeenAt = time.Now().UTC()
+		if displayName != "" && displayName != "User" {
+			oldP.DisplayName = displayName
+		}
+		p = oldP
+		room.AddParticipant(p)
+		room.UpdateParticipantIDInTracks(oldConnID, conn.ID)
+
+		missedEvents = room.GetMissedEvents(oldLastSeen, p.ParticipantType)
+		log.Printf("[room] participant=%s reconnected to room=%s (recovered %d missed events)", conn.ID, conn.RoomID, len(missedEvents))
+		
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("reconnect", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+		}
+	} else {
+		p = &Participant{
+			ConnectionID:    conn.ID,
+			UserID:          conn.UserID,
+			ParticipantType: events.ParticipantType(conn.Role),
+			DisplayName:     displayName,
+			ConnectionState: events.ConnectionOnline,
+			JoinedAt:        time.Now().UTC(),
+			LastSeenAt:      time.Now().UTC(),
+			Connection:      conn,
+			MediaRateLimiter: rate.NewLimiter(rate.Every(2*time.Second), 10),
+		}
+		room.AddParticipant(p)
+		log.Printf("[room] participant=%s joined room=%s as %s", conn.ID, conn.RoomID, p.ParticipantType)
+		
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("room_join", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+		}
 	}
 
-	// 4. Add to room
-	room.AddParticipant(p)
-	log.Printf("[room] participant=%s joined room=%s as %s", conn.ID, conn.RoomID, p.ParticipantType)
-
-	// Simulate database save: interview_participants table
 	log.Printf("[db] INSERT INTO interview_participants (id, interview_id, user_id, participant_type, display_name, joined_at, connection_state) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', 'online')",
 		conn.ID, conn.InterviewID, conn.UserID, p.ParticipantType, p.DisplayName, p.JoinedAt.Format(time.RFC3339))
-
-	// Simulate Redis presence write
 	log.Printf("[redis] SET presence:%s:%s value=online EX 90", conn.RoomID, conn.ID)
 
-	// 5. Send ACK room:joined to the client who joined
+	// 4. Send ACK room:joined to the client who joined
 	ackPayload := events.RoomJoinedPayload{
 		ParticipantID:   conn.ID,
 		RoomStatus:      room.Status,
 		InterviewStatus: string(room.Status),
 		Participants:    room.ParticipantList(),
 	}
+	if isReconnect {
+		ackPayload.MediaStatus = &p.MediaStatus
+		ackPayload.MissedEventsCount = len(missedEvents)
+		ackPayload.SyncFromTimestamp = oldLastSeen
+	}
+
 	ackEnv, err := events.NewEnvelope(events.EventRoomJoined, env.RequestID, room.ID, room.InterviewID, ackPayload)
 	if err == nil {
 		rawAck, _ := ackEnv.ToJSON()
-		select {
-		case conn.Send <- rawAck:
-		default:
-			log.Printf("[room] send buffer full for participant=%s ACK", conn.ID)
+		if !conn.TrySend(rawAck) {
+			log.Printf("[room] send buffer full/closed for participant=%s ACK", conn.ID)
 		}
 	}
 
-	// 6. Broadcast room:user_joined to everyone else in the room
-	joinPayload := events.RoomUserJoinedPayload{
-		ParticipantID:   conn.ID,
-		DisplayName:     p.DisplayName,
-		ParticipantType: p.ParticipantType,
-		JoinedAt:        p.JoinedAt,
-	}
-	joinEnv, err := events.NewEnvelope(events.EventRoomUserJoined, env.RequestID, room.ID, room.InterviewID, joinPayload)
-	if err == nil {
-		rawJoin, _ := joinEnv.ToJSON()
-		room.BroadcastExcept(conn.ID, rawJoin)
+	if isReconnect {
+		for _, rawMissed := range missedEvents {
+			conn.TrySend(rawMissed)
+		}
+	} else {
+		joinPayload := events.RoomUserJoinedPayload{
+			ParticipantID:   conn.ID,
+			DisplayName:     p.DisplayName,
+			ParticipantType: p.ParticipantType,
+			JoinedAt:        p.JoinedAt,
+		}
+		if joinEnv, err := events.NewEnvelope(events.EventRoomUserJoined, env.RequestID, room.ID, room.InterviewID, joinPayload); err == nil {
+			rawJoin, _ := joinEnv.ToJSON()
+			room.BroadcastExcept(conn.ID, rawJoin)
+		}
 	}
 
-	// 7. Broadcast room:presence_update to all participants in the room
+	// 5. Broadcast room:presence_update to all participants in the room
 	presencePayload := events.RoomPresenceUpdatePayload{
 		Participants: room.ParticipantList(),
 	}
@@ -141,6 +195,10 @@ func (r *MessageRouter) handleRoomLeave(conn *ClientConnection, env *events.Enve
 	room.RemoveParticipant(conn.ID)
 	log.Printf("[room] participant=%s left room=%s", conn.ID, conn.RoomID)
 
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("room_leave", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
+	}
 	// Simulate database update: left_at in interview_participants table
 	log.Printf("[db] UPDATE interview_participants SET left_at = '%s', connection_state = 'left' WHERE id = '%s'",
 		time.Now().UTC().Format(time.RFC3339), conn.ID)
@@ -170,13 +228,11 @@ func (r *MessageRouter) handleRoomLeave(conn *ClientConnection, env *events.Enve
 		room.BroadcastAll(rawPresence)
 	}
 
-	// 4. Clean up room if empty
-	room.mu.RLock()
-	participantsCount := len(room.Participants)
-	room.mu.RUnlock()
-	if participantsCount == 0 {
-		r.roomManager.Delete(room.ID)
-		r.presenceManager.StopWatcher(room.ID)
+
+	// 4. Start empty room grace timer if no online participants remain
+	if !room.HasOnlineParticipants() {
+		r.roomManager.StartEmptyRoomTimer(room.ID, r.presenceManager)
+
 	}
 }
 

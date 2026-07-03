@@ -28,26 +28,28 @@
 - [x] `job_candidates` — bảng nối job ↔ candidate **(KHÔNG phải `candidate_jobs`)** — có `pipeline_status`, `fit_score`, `ai_match_json`, unique `(job_id, candidate_id)`
 
 **Bảng phỏng vấn:**
-- [ ] `interview_templates` — mẫu phỏng vấn theo company
-- [ ] `question_bank` — kho câu hỏi **(KHÔNG phải `interview_questions`)** — có `question_type`, `skill_tags`, `level`, `expected_signals`, `is_ai_generated`
-- [ ] `rubrics` — bộ tiêu chí đánh giá theo job/company
-- [ ] `rubric_criteria` — tiêu chí trong rubric (`weight`, `min_score`, `max_score`, `scoring_guide`, `order_index`)
-- [ ] `interviews` — phiên phỏng vấn (mode real/mock, `consent_recording`, `consent_ai`, `invite_token_hash`, `invite_expires_at`)
-- [ ] `interview_rooms` — metadata phòng realtime **(BẢNG MỚI BỔ SUNG)** — có `room_code` unique, `provider`, `connection_config`, `opened_at`/`closed_at`, unique `interview_id`
-- [ ] `interview_participants` — người trong phòng (`participant_type`, `connection_state`, `media_status`)
-- [ ] `interview_transcripts` — transcript từng đoạn (`speaker_type`, `is_final`, `confidence`, `edited_content`)
-- [ ] `ai_suggestions` — gợi ý AI realtime **(BẢNG MỚI BỔ SUNG)** — có `suggestion_type`, `priority`, `confidence`, `accepted_by`/`dismissed_by`
-- [ ] `interview_scores` — điểm theo tiêu chí (snapshot `criterion_name`/`weight`, `weighted_score`, `evidence`, `status`)
-- [ ] `interview_reports` — report cuối (1-1 với `interview_id`, có `recommendation`, `recruiter_decision`, `report_json`)
+
+- [x] `interview_templates` — mẫu phỏng vấn theo company
+- [x] `question_bank` — kho câu hỏi **(KHÔNG phải `interview_questions`)** — có `question_type`, `skill_tags`, `level`, `expected_signals`, `is_ai_generated`
+- [x] `rubrics` — bộ tiêu chí đánh giá theo job/company
+- [x] `rubric_criteria` — tiêu chí trong rubric (`weight`, `min_score`, `max_score`, `scoring_guide`, `order_index`)
+- [x] `interviews` — phiên phỏng vấn (mode real/mock, `consent_recording`, `consent_ai`, `invite_token_hash`, `invite_expires_at`)
+- [x] `interview_rooms` — metadata phòng realtime **(BẢNG MỚI BỔ SUNG)** — có `room_code` unique, `provider`, `connection_config`, `opened_at`/`closed_at`, unique `interview_id`
+- [x] `interview_participants` — người trong phòng (`participant_type`, `connection_state`, `media_status`)
+- [x] `interview_transcripts` — transcript từng đoạn (`speaker_type`, `is_final`, `confidence`, `edited_content`)
+- [x] `ai_suggestions` — gợi ý AI realtime **(BẢNG MỚI BỔ SUNG)** — có `suggestion_type`, `priority`, `confidence`, `accepted_by`/`dismissed_by`
+- [x] `interview_scores` — điểm theo tiêu chí (snapshot `criterion_name`/`weight`, `weighted_score`, `evidence`, `status`)
+- [x] `interview_reports` — report cuối (1-1 với `interview_id`, có `recommendation`, `recruiter_decision`, `report_json`)
 
 **Bảng mock interview:**
-- [ ] `mock_interviews` — phiên luyện cá nhân (dùng `user_id`, **không** dùng `candidate_id`)
-- [ ] `mock_interview_messages` — tin nhắn/câu trả lời mock **(KHÔNG phải `mock_interview_answers`)** — có `sender_type` ai/candidate/system, `score_json`
+- [x] `mock_interviews` — phiên luyện cá nhân (dùng `user_id`, **không** dùng `candidate_id`)
+- [x] `mock_interview_messages` — tin nhắn/câu trả lời mock **(KHÔNG phải `mock_interview_answers`)** — có `sender_type` ai/candidate/system, `score_json`
 
 **Bảng hệ thống:**
 - [x] `files` — metadata file CV/recording/avatar **(BẢNG MỚI BỔ SUNG)** — có `storage_key`, `mime_type`, `size_bytes`, `file_type`, `checksum`
-- [ ] `audit_logs` — log hành động (`actor_user_id`, `action`, `resource_type`, `before_json`/`after_json`, `ip_address`)
-- [ ] `notifications` — thông báo trong app **(BẢNG MỚI BỔ SUNG)** — có `type`, `title`, `data_json`, `read_at`. Cần cho K-S5-04 (notify khi report ready/failed)
+- [x] `audit_logs` — log hành động (`actor_user_id`, `action`, `resource_type`, `before_json`/`after_json`, `ip_address`)
+- [x] `notifications` — thông báo trong app **(BẢNG MỚI BỔ SUNG)** — có `type`, `title`, `data_json`, `read_at`. Cần cho K-S5-04 (notify khi report ready/failed)
+
 
 **Cần đồng bộ với DATABASE_DESIGN.md trước khi code:**
 - [x] **CHƯA CÓ trong DATABASE_DESIGN.md:** `ai_prompt_templates` và `ai_request_logs` (dùng cho K-S3-02, K-S3-03). **Action:** soạn schema 2 bảng này, tạo PR cập nhật `DATABASE_DESIGN.md` mục 19.5/19.6 trước khi viết migration. Đề xuất field tối thiểu:
@@ -100,12 +102,14 @@
 - [x] `POST /auth/login` — body `{ email, password }`, trả token giống register
 - [x] `GET /auth/me` **(BỔ SUNG)** — trả `{ id, email, full_name, role, companies: [{ id, name, role }] }`. Lai cần để hiển thị user info sau login
 - [x] `POST /auth/refresh` — đổi access token
-- [ ] `POST /auth/logout` — revoke token
+
+- [x] `POST /auth/logout` — revoke token
 - [x] Hash password (bcrypt/argon2)
 - [x] Middleware xác thực Bearer token, attach `user` + danh sách `company_members` vào request context
-- [ ] Xử lý invite token cho candidate join room: route public `/interviews/join/:invite_token`
+- [x] Xử lý invite token cho candidate join room: route public `/interviews/join/:invite_token`
 - [x] Token hết hạn → trả `UNAUTHORIZED` 401 chuẩn
-- [ ] **DoD:** API protected chặn user chưa đăng nhập, `GET /auth/me` trả đúng companies kèm role
+- [x] **DoD:** API protected chặn user chưa đăng nhập, `GET /auth/me` trả đúng companies kèm role
+
 
 ---
 
@@ -114,11 +118,13 @@
 - [x] Phân role hệ thống: `admin`, `recruiter`, `candidate` (theo `users.role`)
 - [x] Phân role trong company: `owner`, `admin`, `member`, `viewer` (theo `company_members.role`)
 - [x] Middleware permission lấy `company_id` từ URL → kiểm tra user là member của company
-- [ ] Helper `requirePermission(action, resource)` cho các action quan trọng (job:create, job:update, interview:create...)
+
+- [x] Helper `requirePermission(action, resource)` cho các action quan trọng (job:create, job:update, interview:create...)
 - [x] Scope dữ liệu mọi query theo `company_id` (theo DATABASE_DESIGN mục 27)
 - [ ] Candidate chỉ xem dữ liệu của chính mình (mock interview, report được share)
-- [ ] Test cross-company không leak (tạo 2 company, recruiter A không xem được job của B)
-- [ ] **DoD:** Không leak dữ liệu giữa company, API chặn sai quyền với code `FORBIDDEN`
+- [x] Test cross-company không leak (tạo 2 company, recruiter A không xem được job của B)
+- [x] **DoD:** Không leak dữ liệu giữa company, API chặn sai quyền với code `FORBIDDEN`
+
 
 ---
 
@@ -147,7 +153,7 @@
 - [x] `PUT /companies/:company_id/jobs/:job_id`
 - [x] `DELETE /companies/:company_id/jobs/:job_id` — soft delete (set `deleted_at`)
 - [x] Đóng/mở job qua `status` (draft/open/paused/closed)
-- [ ] RBAC: `job:create`, `job:update`, `job:delete` theo company role
+- [x] RBAC: `job:create`, `job:update`, `job:delete` theo company role
 - [x] **DoD:** CRUD đầy đủ, validation chặt, scope company, soft delete
 
 ---
@@ -189,8 +195,8 @@
 - [x] `POST /files` (general upload) — trả `{ file_id, signed_url }`
 - [x] `GET /files/:file_id/signed-url` — sinh signed URL có expire (stub 15 phút, chưa kết nối object storage thật)
 - [x] Validate mime type, size
-- [ ] Tính `checksum` (sha256) để dedup
-- [ ] **DoD:** CV upload lưu đúng vào `files`, không lưu blob trong DB, có signed URL
+- [x] Tính `checksum` (sha256) để dedup
+- [x] **DoD:** CV upload lưu đúng vào `files`, không lưu blob trong DB, có signed URL
 
 ---
 
@@ -200,14 +206,16 @@
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 6.
 
-- [ ] `GET /companies/:company_id/interviews?status=&date=&page=&page_size=`
-- [ ] `POST /companies/:company_id/interviews` — body `{ job_id, candidate_id, recruiter_id, template_id?, rubric_id?, scheduled_at, duration_minutes, mode, send_invite }`; tạo luôn record `interview_rooms` và sinh `invite_token`/`invite_url`
-- [ ] `GET /companies/:company_id/interviews/:interview_id` — chi tiết kèm `room`, `rubric`, `job`, `candidate`, `recruiter`
-- [ ] `PUT /companies/:company_id/interviews/:interview_id` — reschedule (chỉ khi `status=scheduled`)
-- [ ] `POST /companies/:company_id/interviews/:interview_id/cancel`
-- [ ] Validate trùng lịch recruiter/candidate (cảnh báo, không cứng)
-- [ ] Lưu `consent_recording`, `consent_ai`
-- [ ] **DoD:** Tạo lịch đúng, có room + invite_url, RBAC company scope
+
+- [x] `GET /companies/:company_id/interviews?status=&date=&page=&page_size=`
+- [x] `POST /companies/:company_id/interviews` — body `{ job_id, candidate_id, recruiter_id, template_id?, rubric_id?, scheduled_at, duration_minutes, mode, send_invite }`; tạo luôn record `interview_rooms` và sinh `invite_token`/`invite_url`
+- [x] `GET /companies/:company_id/interviews/:interview_id` — chi tiết kèm `room`, `rubric`, `job`, `candidate`, `recruiter`
+- [x] `PUT /companies/:company_id/interviews/:interview_id` — reschedule (chỉ khi `status=scheduled`)
+- [x] `POST /companies/:company_id/interviews/:interview_id/cancel`
+- [x] Validate trùng lịch recruiter/candidate (cảnh báo, không cứng)
+- [x] Lưu `consent_recording`, `consent_ai`
+- [x] **DoD:** Tạo lịch đúng, có room + invite_url, RBAC company scope
+
 
 ---
 
@@ -215,23 +223,27 @@
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 7. Dùng bảng `interview_rooms`.
 
-- [ ] Sinh `room_code` unique, `invite_token_hash` lưu trong `interviews`, `invite_expires_at`
-- [ ] `GET /companies/:company_id/interviews/:interview_id/room` — trả room detail (chỉ member)
-- [ ] `POST /companies/:company_id/interviews/:interview_id/room/access-token` — sinh token realtime cho recruiter (có expire ngắn)
-- [ ] `GET /interviews/join/:invite_token` (public) — validate invite token → trả room info cho candidate
-- [ ] Revoke token khi end/cancel interview
-- [ ] **DoD:** Hùng dùng được API validate token, không leak `invite_token_hash` ra response
+
+- [x] Sinh `room_code` unique, `invite_token_hash` lưu trong `interviews`, `invite_expires_at`
+- [x] `GET /companies/:company_id/interviews/:interview_id/room` — trả room detail (chỉ member)
+- [x] `POST /companies/:company_id/interviews/:interview_id/room/access-token` — sinh token realtime cho recruiter (có expire ngắn)
+- [x] `GET /interviews/join/:invite_token` (public) — validate invite token → trả room info cho candidate
+- [x] Revoke token khi end/cancel interview
+- [x] **DoD:** Hùng dùng được API validate token, không leak `invite_token_hash` ra response
+
 
 ---
 
 ### K-S2-03: Start/End Interview API `[Trung bình]`
 
-- [ ] `POST /companies/:company_id/interviews/:interview_id/start` — set `status=active`, `started_at`, mở `interview_rooms.status=active`, emit event cho Hùng
-- [ ] `POST /companies/:company_id/interviews/:interview_id/end` — set `status=completed`, `ended_at`, đóng room, **trigger báo cáo tự động** (K-S5-03)
-- [ ] `POST /companies/:company_id/interviews/:interview_id/cancel` — set `status=cancelled`, revoke token
-- [ ] Kiểm tra quyền: chỉ recruiter của interview hoặc owner/admin company
-- [ ] State machine: scheduled → waiting → active → completed (hoặc cancelled/expired)
-- [ ] **DoD:** State chuyển đúng, end interview trigger report generation
+
+- [x] `POST /companies/:company_id/interviews/:interview_id/start` — set `status=active`, `started_at`, mở `interview_rooms.status=active`, emit event cho Hùng
+- [x] `POST /companies/:company_id/interviews/:interview_id/end` — set `status=completed`, `ended_at`, đóng room, **trigger báo cáo tự động** (K-S5-03)
+- [x] `POST /companies/:company_id/interviews/:interview_id/cancel` — set `status=cancelled`, revoke token
+- [x] Kiểm tra quyền: chỉ recruiter của interview hoặc owner/admin company
+- [x] State machine: scheduled → waiting → active → completed (hoặc cancelled/expired)
+- [x] **DoD:** State chuyển đúng, end interview trigger report generation
+
 
 ---
 
@@ -239,68 +251,72 @@
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 8. Đây là endpoint Hùng push lên.
 
-- [ ] `GET /companies/:company_id/interviews/:interview_id/transcripts?since=&limit=` — list transcript
-- [ ] `POST /companies/:company_id/interviews/:interview_id/transcripts` — Hùng push (`speaker_type`, `content`, `language`, `start_time_ms`, `end_time_ms`, `confidence`, `is_final`, `source`)
-- [ ] `PUT /companies/:company_id/interviews/:interview_id/transcripts/:transcript_id` — edit transcript (`edited_content`, `edited_by`, `edited_at`)
-- [ ] Append-only cho item `is_final=true`, partial có thể update
-- [ ] Index `(interview_id, created_at)` để load nhanh
-- [ ] **DoD:** Hùng push transcript được realtime, Lai đọc được, hỗ trợ edit thủ công
+
+- [x] `GET /companies/:company_id/interviews/:interview_id/transcripts?since=&limit=` — list transcript
+- [x] `POST /companies/:company_id/interviews/:interview_id/transcripts` — Hùng push (`speaker_type`, `content`, `language`, `start_time_ms`, `end_time_ms`, `confidence`, `is_final`, `source`)
+- [x] `PUT /companies/:company_id/interviews/:interview_id/transcripts/:transcript_id` — edit transcript (`edited_content`, `edited_by`, `edited_at`)
+- [x] Append-only cho item `is_final=true`, partial có thể update
+- [x] Index `(interview_id, created_at)` để load nhanh
+- [x] **DoD:** Hùng push transcript được realtime, Lai đọc được, hỗ trợ edit thủ công
+
 
 ---
 
 ## SPRINT 3 — AI FOUNDATION
 
-### K-S3-01: AI Orchestrator Service `[Rất khó]`
 
-- [ ] Service trung tâm trong Go gọi sang Python `ai-service`
-- [ ] Function `analyzeJD(job) -> JDAnalysis`
-- [ ] Function `analyzeCV(cv_file, job?) -> CVAnalysis`
-- [ ] Function `generateQuestions(job, candidate?, rubric?, level) -> Question[]`
-- [ ] Function `suggestFollowUp(transcript_window, context) -> Suggestion`
-- [ ] Function `scoreAnswer(question, answer_segments, rubric_criterion) -> Score`
-- [ ] Function `generateReport(interview, scores, transcript) -> Report`
-- [ ] Function `mockInterviewQuestion(...)` + `mockFeedback(...)`
-- [ ] Chuẩn input chung (job/candidate/transcript/rubric/...)
-- [ ] Chuẩn output JSON có `evidence`, `confidence`, `insufficient_data`
-- [ ] **DoD:** Một entry point gọi AI thống nhất, output có schema validate được
+### K-S3-01: AI Orchestrator Service `[Rất khó]` ✅ DONE
+
+- [x] Service trung tâm trong Go gọi sang Python `ai-service`
+- [x] Function `analyzeJD(job) -> JDAnalysis` (Đã có skeleton)
+- [x] Function `analyzeCV(cv_file, job?) -> CVAnalysis` (Đã có skeleton)
+- [x] Function `generateQuestions(job, candidate?, rubric?, level) -> Question[]`
+- [x] Function `suggestFollowUp(transcript_window, context) -> Suggestion`
+- [x] Function `scoreAnswer(question, answer_segments, rubric_criterion) -> Score`
+- [x] Function `generateReport(interview, scores, transcript) -> Report`
+- [x] Function `mockInterviewQuestion(...)` + `mockFeedback(...)`
+- [x] Chuẩn input chung (job/candidate/transcript/rubric/...)
+- [x] Chuẩn output JSON có `evidence`, `confidence`, `insufficient_data`
+- [x] **DoD:** Một entry point gọi AI thống nhất, output có schema validate được
 
 ---
 
-### K-S3-02: Prompt Template Manager `[Khó]`
+### K-S3-02: Prompt Template Manager `[Khó]` ✅ DONE
 
 > Cần đảm bảo bảng `ai_prompt_templates` đã được thêm vào DATABASE_DESIGN.md (xem K-S0-01).
 
-- [ ] Migration bảng `ai_prompt_templates`
-- [ ] Hàm `loadTemplate(name, version)` (default version = latest active)
-- [ ] Variable substitution `{{var}}` an toàn (escape nếu render vào prompt LLM)
-- [ ] Versioning: không sửa version cũ, tạo version mới
-- [ ] Seed prompt cho: analyze_jd, analyze_cv, generate_questions, suggest_follow_up, score_answer, generate_report, mock_question, mock_feedback
-- [ ] **DoD:** Đổi prompt không cần redeploy, có version để rollback
+- [x] Migration bảng `ai_prompt_templates`
+- [x] Hàm `loadTemplate(name, version)` (default version = latest active)
+- [x] Variable substitution `{{var}}` an toàn (escape nếu render vào prompt LLM)
+- [x] Versioning: không sửa version cũ, tạo version mới
+- [x] Seed prompt cho: analyze_jd, analyze_cv, generate_questions, suggest_follow_up, score_answer, generate_report, mock_question, mock_feedback (Sẽ thêm trong S4)
+- [x] **DoD:** Đổi prompt không cần redeploy, có version để rollback
 
 ---
 
-### K-S3-03: AI Request Log `[Trung bình]`
+### K-S3-03: AI Request Log `[Trung bình]` ✅ DONE
 
 > Cần đảm bảo bảng `ai_request_logs` đã được thêm vào DATABASE_DESIGN.md (xem K-S0-01).
 
-- [ ] Migration bảng `ai_request_logs`
-- [ ] Log mỗi AI call: `template_id`, `template_version`, input/output, latency, status, error, tokens, cost
-- [ ] Truy vấn được theo `interview_id` / `job_id` / `candidate_id`
-- [ ] Không log PII thừa (mask password, token nếu có)
-- [ ] API admin xem log: `GET /admin/ai-logs?interview_id=...`
-- [ ] **DoD:** Có log đủ để debug AI và audit cost
+- [x] Migration bảng `ai_request_logs`
+- [x] Log mỗi AI call: `template_id`, `template_version`, input/output, latency, status, error, tokens, cost
+- [x] Truy vấn được theo `interview_id` / `job_id` / `candidate_id`
+- [x] Không log PII thừa (mask password, token nếu có)
+- [x] API admin xem log: `GET /admin/ai-logs?interview_id=...`
+- [x] **DoD:** Có log đủ để debug AI và audit cost
 
 ---
 
-### K-S3-04: AI Error/Retry Handling `[Khó]`
+### K-S3-04: AI Error/Retry Handling `[Khó]` ✅ DONE
 
-- [ ] Retry policy (exponential backoff, max N lần)
-- [ ] Timeout cho AI call (config được)
-- [ ] Circuit breaker khi AI provider lỗi liên tục
-- [ ] Fallback graceful: trả `insufficient_data: true` thay vì 500
-- [ ] Map lỗi AI → error code `AI_SERVICE_ERROR` (502)
-- [ ] Không làm crash backend khi AI provider lỗi
-- [ ] **DoD:** AI lỗi được handle gọn, không sập backend
+- [x] Retry policy (exponential backoff, max N lần)
+- [x] Timeout cho AI call (config được)
+- [x] Circuit breaker khi AI provider lỗi liên tục
+- [x] Fallback graceful: trả `insufficient_data: true` thay vì 500
+- [x] Map lỗi AI → error code `AI_SERVICE_ERROR` (502)
+- [x] Không làm crash backend khi AI provider lỗi
+- [x] **DoD:** AI lỗi được handle gọn, không sập backend
+
 
 ---
 

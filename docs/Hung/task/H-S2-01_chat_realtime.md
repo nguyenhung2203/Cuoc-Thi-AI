@@ -5,7 +5,7 @@
 | **Task ID** | H-S2-01 |
 | **Sprint** | 2 — Chat + LiveKit WebRTC |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -72,12 +72,12 @@ Implement chat realtime trong phòng phỏng vấn:
 
 ## Definition of Done
 
-- [ ] Gửi/nhận chat realtime
-- [ ] Chat `visibility: room` → tất cả nhận
-- [ ] Chat `visibility: recruiter_only` → candidate không nhận
-- [ ] Lưu chat vào DB
-- [ ] Reload vẫn xem được lịch sử
-- [ ] Không cho người ngoài room gửi chat
+- [x] Gửi/nhận chat realtime
+- [x] Chat `visibility: room` → tất cả nhận
+- [x] Chat `visibility: recruiter_only` → candidate không nhận
+- [x] Lưu chat vào DB
+- [x] Reload vẫn xem được lịch sử
+- [x] Không cho người ngoài room gửi chat
 
 ---
 
@@ -89,8 +89,8 @@ Implement chat realtime trong phòng phỏng vấn:
 
 ## Checklist test
 
-- [ ] Recruiter gửi chat → candidate nhận
-- [ ] Candidate gửi chat → recruiter nhận
-- [ ] `recruiter_only` chat → candidate không nhận
-- [ ] Message lưu DB đúng
-- [ ] Reload → lấy lại history
+- [x] Recruiter gửi chat → candidate nhận
+- [x] Candidate gửi chat → recruiter nhận
+- [x] `recruiter_only` chat → candidate không nhận
+- [x] Message lưu DB đúng
+- [x] Reload → lấy lại history

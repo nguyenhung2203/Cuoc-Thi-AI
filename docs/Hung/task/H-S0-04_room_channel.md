@@ -5,7 +5,7 @@
 | **Task ID** | H-S0-04 |
 | **Sprint** | 0 — Setup Realtime Foundation |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -93,13 +93,13 @@ CreateRoom → AddParticipant → BroadcastEvents → RemoveParticipant → Clos
 
 ## Definition of Done
 
-- [ ] Room được tạo khi có participant đầu tiên join
-- [ ] Participant được map đúng room
-- [ ] BroadcastAll gửi đúng cho tất cả trong room
-- [ ] BroadcastRecruitersOnly chỉ gửi cho recruiter
-- [ ] Event không bị gửi nhầm sang room khác
-- [ ] Remove participant khi leave/disconnect
-- [ ] Room cleanup khi không còn participant
+- [x] Room được tạo khi có participant đầu tiên join
+- [x] Participant được map đúng room
+- [x] BroadcastAll gửi đúng cho tất cả trong room
+- [x] BroadcastRecruitersOnly chỉ gửi cho recruiter
+- [x] Event không bị gửi nhầm sang room khác
+- [x] Remove participant khi leave/disconnect
+- [x] Room cleanup khi không còn participant
 
 ---
 
@@ -126,9 +126,9 @@ backend/
 
 ## Checklist test
 
-- [ ] 2 client join cùng room → broadcast đúng cả 2
-- [ ] 2 client ở 2 room khác nhau → không nhận event lẫn nhau
-- [ ] Recruiter-only event → candidate không nhận
-- [ ] Client leave → bị remove khỏi room
-- [ ] Room trống → room được cleanup
-- [ ] Nhiều room đồng thời → không race condition
+- [x] 2 client join cùng room → broadcast đúng cả 2
+- [x] 2 client ở 2 room khác nhau → không nhận event lẫn nhau
+- [x] Recruiter-only event → candidate không nhận
+- [x] Client leave → bị remove khỏi room
+- [x] Room trống → room được cleanup
+- [x] Nhiều room đồng thời → không race condition

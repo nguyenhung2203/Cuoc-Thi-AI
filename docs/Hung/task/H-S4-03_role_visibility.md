@@ -5,7 +5,7 @@
 | **Task ID** | H-S4-03 |
 | **Sprint** | 4 — AI Realtime Bridge |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -47,11 +47,11 @@
 
 ## Definition of Done
 
-- [ ] Visibility filter áp dụng cho TẤT CẢ event types
-- [ ] Unit test cho mỗi event × role combination
-- [ ] Candidate KHÔNG BAO GIỜ nhận event recruiter-only
-- [ ] Mock interview exception: candidate thấy `ai:thinking`
-- [ ] Security audit pass — không có bypass path
+- [x] Visibility filter áp dụng cho TẤT CẢ event types
+- [x] Unit test cho mỗi event × role combination
+- [x] Candidate KHÔNG BAO GIỜ nhận event recruiter-only
+- [x] Mock interview exception: candidate thấy `ai:thinking`
+- [x] Security audit pass — không có bypass path
 
 ---
 
@@ -63,10 +63,31 @@
 
 ## Checklist test
 
-- [ ] ai:suggestion → candidate KHÔNG nhận
-- [ ] ai:score_update → candidate KHÔNG nhận
-- [ ] ai:warning → candidate KHÔNG nhận
-- [ ] note:create → candidate KHÔNG nhận
-- [ ] report:ready → candidate KHÔNG nhận
-- [ ] chat:message room → CẢ HAI nhận
-- [ ] room:user_joined → CẢ HAI nhận
+- [x] ai:suggestion → candidate KHÔNG nhận
+- [x] ai:score_update → candidate KHÔNG nhận
+- [x] ai:warning → candidate KHÔNG nhận
+- [x] note:create → candidate KHÔNG nhận
+- [x] report:ready → candidate KHÔNG nhận
+- [x] chat:message room → CẢ HAI nhận
+- [x] room:user_joined → CẢ HAI nhận
+
+---
+
+## Bằng chứng nghiệm thu (Test Evidence)
+
+Chạy kiểm thử tự động toàn bộ test suite Role-based Event Visibility (`go test` qua compiled binary `tests.exe`):
+```text
+=== RUN   TestRoleVisibility_CentralMatrix
+2026/06/26 09:23:59 [room-mgr] created room=room_vis_matrix interview=iv_vis_matrix defaulting to waiting
+--- PASS: TestRoleVisibility_CentralMatrix (0.10s)
+=== RUN   TestRoleVisibility_MockInterviewException
+2026/06/26 09:23:59 [room-mgr] created room=room_mock_vis interview=iv_mock_vis defaulting to waiting
+--- PASS: TestRoleVisibility_MockInterviewException (0.05s)
+PASS
+```
+
+Các file đã sửa & tạo mới:
+1. `backend/internal/realtime/events/visibility.go`: Bổ sung quy tắc `EventNoteCreate: VisibleRecruitersOnly` vào bản đồ phân quyền chuẩn.
+2. `backend/internal/realtime/ai_handler.go`: Thay thế các lời gọi broadcast trực tiếp sang phương thức bộ lọc `BroadcastWithVisibility` cho các event AI (`ai:thinking`, `ai:suggestion`, `ai:score_update`).
+3. `backend/internal/realtime/server.go`: Cập nhật Webhook intake `handleAISuggestionPush` và `handleAIScoreUpdatePush` phát tín hiệu qua bộ lọc tập trung.
+4. `backend/tests/role_visibility_test.go`: Bộ kiểm thử nghiệm thu tự động kiểm chứng 7 loại event đối chiếu giữa 2 role Recruiter/Candidate cùng ngoại lệ Mock Interview.

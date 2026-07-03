@@ -5,7 +5,7 @@
 | **Task ID** | H-S4-04 |
 | **Sprint** | 4 — AI Realtime Bridge |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -63,12 +63,12 @@ Handle AI errors gracefully — AI lỗi KHÔNG crash room:
 
 ## Definition of Done
 
-- [ ] AI lỗi → gửi `ai:error` cho recruiter
-- [ ] Room KHÔNG crash khi AI down
-- [ ] Video/audio/chat vẫn hoạt động khi AI lỗi
-- [ ] Auto-retry cho recoverable errors
-- [ ] Candidate KHÔNG nhận `ai:error`
-- [ ] End interview vẫn hoạt động khi AI lỗi
+- [x] AI lỗi → gửi `ai:error` cho recruiter
+- [x] Room KHÔNG crash khi AI down
+- [x] Video/audio/chat vẫn hoạt động khi AI lỗi
+- [x] Auto-retry cho recoverable errors
+- [x] Candidate KHÔNG nhận `ai:error`
+- [x] End interview vẫn hoạt động khi AI lỗi
 
 ---
 
@@ -80,8 +80,23 @@ Handle AI errors gracefully — AI lỗi KHÔNG crash room:
 
 ## Checklist test
 
-- [ ] AI timeout → `ai:error` severity=degraded
-- [ ] AI down → `ai:error` severity=critical
-- [ ] AI lỗi → room chat/video vẫn hoạt động
-- [ ] recoverable → auto retry
-- [ ] End interview khi AI lỗi → vẫn thành công
+- [x] AI timeout → `ai:error` severity=degraded
+- [x] AI down → `ai:error` severity=critical
+- [x] AI lỗi → room chat/video vẫn hoạt động
+- [x] recoverable → auto retry
+- [x] End interview khi AI lỗi → vẫn thành công
+
+### Bằng chứng test (Test Evidence)
+```
+=== RUN   TestAIErrorHandling
+=== RUN   TestAIErrorHandling/AI_timeout_->_ai:error_severity=degraded_and_auto_retry
+=== RUN   TestAIErrorHandling/AI_down_->_ai:error_severity=critical
+=== RUN   TestAIErrorHandling/AI_lỗi_->_room_chat/video_vẫn_hoạt_động
+=== RUN   TestAIErrorHandling/End_interview_khi_AI_lỗi_->_vẫn_thành_công
+--- PASS: TestAIErrorHandling (0.41s)
+    --- PASS: TestAIErrorHandling/AI_timeout_->_ai:error_severity=degraded_and_auto_retry (0.35s)
+    --- PASS: TestAIErrorHandling/AI_down_->_ai:error_severity=critical (0.05s)
+    --- PASS: TestAIErrorHandling/AI_lỗi_->_room_chat/video_vẫn_hoạt_động (0.00s)
+    --- PASS: TestAIErrorHandling/End_interview_khi_AI_lỗi_->_vẫn_thành_công (0.00s)
+PASS
+```

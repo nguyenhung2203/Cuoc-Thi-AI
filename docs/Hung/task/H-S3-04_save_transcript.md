@@ -5,7 +5,7 @@
 | **Task ID** | H-S3-04 |
 | **Sprint** | 3 — Transcript Realtime |
 | **Độ khó** | Trung bình |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -48,11 +48,11 @@ Lưu transcript final vào database `interview_transcripts`:
 
 ## Definition of Done
 
-- [ ] Transcript final lưu DB đúng schema
-- [ ] Không lưu partial transcript vào DB
-- [ ] Batch insert hiệu quả
-- [ ] Data đủ cho AI scoring/report sử dụng
-- [ ] Index `(interview_id, created_at)` hoạt động
+- [x] Transcript final lưu DB đúng schema
+- [x] Không lưu partial transcript vào DB
+- [x] Batch insert hiệu quả
+- [x] Data đủ cho AI scoring/report sử dụng
+- [x] Index `(interview_id, created_at)` hoạt động
 
 ---
 
@@ -65,7 +65,32 @@ Lưu transcript final vào database `interview_transcripts`:
 
 ## Checklist test
 
-- [ ] Final transcript lưu DB đúng field
-- [ ] Partial transcript KHÔNG lưu DB
-- [ ] 100 transcript items → batch insert nhanh
-- [ ] Query by interview_id → kết quả đúng thứ tự
+- [x] Final transcript lưu DB đúng field
+- [x] Partial transcript KHÔNG lưu DB
+- [x] 100 transcript items → batch insert nhanh
+- [x] Query by interview_id → kết quả đúng thứ tự
+
+---
+
+## Bằng chứng nghiệm thu (Test Evidence)
+
+Chạy kiểm thử tự động toàn bộ test suite cơ chế Batch Saver (`go test -v ./tests/...`):
+```text
+=== RUN   TestTranscriptBatchSaver_FinalOnly
+--- PASS: TestTranscriptBatchSaver_FinalOnly (0.00s)
+=== RUN   TestTranscriptBatchSaver_FlushOnCapacity
+--- PASS: TestTranscriptBatchSaver_FlushOnCapacity (0.00s)
+=== RUN   TestTranscriptBatchSaver_FlushInterval
+--- PASS: TestTranscriptBatchSaver_FlushInterval (0.25s)
+=== RUN   TestTranscriptBatchSaver_QueryOrder
+--- PASS: TestTranscriptBatchSaver_QueryOrder (0.00s)
+PASS
+ok  	backend/tests	3.076s
+```
+
+Các file đã sửa & tạo mới:
+1. `backend/internal/realtime/transcript_saver.go`: Thiết lập struct `TranscriptRecord` & `TranscriptBatchSaver` async queue gom lô mỗi 5s hoặc đủ 100 items.
+2. `backend/internal/realtime/message_router.go`: Khởi tạo instance `transcriptSaver` gắn vào bộ định tuyến tin nhắn.
+3. `backend/internal/realtime/transcript_handler.go` & `chat_handler.go`: Gửi bản ghi final từ audio/chat vào queue.
+4. `backend/internal/realtime/server.go`: Gửi bản ghi final từ AI webhook và đảm bảo `Flush()` an toàn khi Shutdown server.
+5. `backend/tests/transcript_saver_test.go`: Unit test tự động nghiệm thu toàn bộ tiêu chí bài toán.

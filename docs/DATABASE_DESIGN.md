@@ -695,6 +695,53 @@ Thông báo cơ bản.
 
 ---
 
+## 24.1 Bảng ai_prompt_templates
+
+Quản lý các mẫu prompt cho AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| name | varchar(255) | Có | Tên template |
+| version | varchar(50) | Có | Phiên bản |
+| content | text | Có | Nội dung prompt |
+| variables_schema | jsonb | Không | Định nghĩa biến truyền vào |
+| model | varchar(100) | Có | Model sử dụng (vd: gemini-pro) |
+| params | jsonb | Không | Cấu hình model |
+| is_active | boolean | Có | Đang được dùng |
+| created_by | uuid | Không | Người tạo |
+| created_at | timestamptz | Có | Ngày tạo |
+| updated_at | timestamptz | Có | Ngày cập nhật |
+
+Indexes:
+- unique index `(name, version)`.
+
+---
+
+## 24.2 Bảng ai_request_logs
+
+Lịch sử gọi AI.
+
+| Field | Type | Required | Mô tả |
+|---|---|---:|---|
+| id | uuid | Có | Primary key |
+| template_id | uuid | Không | FK ai_prompt_templates.id |
+| template_version | varchar(50) | Không | Phiên bản prompt lúc gọi |
+| interview_id | uuid | Không | FK interviews.id |
+| job_id | uuid | Không | FK jobs.id |
+| candidate_id | uuid | Không | FK candidates.id |
+| input_json | jsonb | Không | Payload request |
+| output_json | jsonb | Không | Payload response |
+| latency_ms | int | Không | Thời gian phản hồi |
+| tokens_in | int | Không | Số token đầu vào |
+| tokens_out | int | Không | Số token đầu ra |
+| cost | numeric | Không | Chi phí ước tính |
+| status | varchar(50) | Có | success/failed |
+| error | text | Không | Lỗi nếu có |
+| created_at | timestamptz | Có | Ngày tạo |
+
+---
+
 ## 25. Quan hệ quan trọng
 
 | Quan hệ | Mô tả |
@@ -735,6 +782,8 @@ Thông báo cơ bản.
 20. mock_interview_messages
 21. audit_logs
 22. notifications
+23. ai_prompt_templates
+24. ai_request_logs
 
 ---
 
@@ -784,3 +833,47 @@ Khi AI IDE làm backend/database:
 4. Không expose hash/token nội bộ ra API.
 5. Khi thêm status mới, phải cập nhật enum ở tài liệu và API spec.
 6. Khi làm API list, phải kiểm tra index tương ứng.
+
+---
+
+## 30. Hệ thống AI Foundation (Sprint 3)
+
+### 30.1. ai_prompt_templates
+
+Quản lý các mẫu prompt để gọi AI (ví dụ: chấm điểm, sinh câu hỏi).
+
+- `id`: UUID, PK
+- `company_id`: UUID, NULLABLE, FK -> `companies(id)` (NULL nếu là system-wide template)
+- `name`: VARCHAR, tên định danh của template (vd: `analyze_cv`)
+- `version`: INT, phiên bản
+- `content`: TEXT, nội dung prompt chứa các biến dạng `{{var}}`
+- `variables_schema`: JSONB
+- `model`: VARCHAR
+- `params`: JSONB (vd: temperature)
+- `is_active`: BOOLEAN
+- `created_by`: UUID, FK -> `users(id)`
+- `created_at`: TIMESTAMPTZ
+- `updated_at`: TIMESTAMPTZ
+- `deleted_at`: TIMESTAMPTZ, NULLABLE (Soft delete)
+- *Constraint*: `UNIQUE(name, version)`
+
+### 30.2. ai_request_logs
+
+Lưu vết tất cả các cuộc gọi sang AI Service để đối soát chi phí, debug.
+
+- `id`: UUID, PK
+- `company_id`: UUID, FK -> `companies(id)`
+- `template_id`: UUID, FK -> `ai_prompt_templates(id)`
+- `template_version`: INT
+- `interview_id`: UUID, NULLABLE, FK -> `interviews(id)`
+- `job_id`: UUID, NULLABLE, FK -> `jobs(id)`
+- `candidate_id`: UUID, NULLABLE, FK -> `candidates(id)`
+- `input_json`: JSONB (Đã được mask dữ liệu nhạy cảm)
+- `output_json`: JSONB
+- `latency_ms`: INT
+- `tokens_in`: INT
+- `tokens_out`: INT
+- `cost`: NUMERIC
+- `status`: VARCHAR (`success`, `failed`, `timeout`, `fallback`)
+- `error`: TEXT
+- `created_at`: TIMESTAMPTZ

@@ -59,6 +59,10 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 		now.Format(time.RFC3339), room.InterviewID)
 	log.Printf("[redis] SET room_status:%s value=active", room.ID)
 
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("interview_start", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "consent_ai": payload.ConsentAI})
+	}
+
 	// 7. Simulate AI Orchestrator activation if consent_ai is true
 	if payload.ConsentAI {
 		log.Printf("[ai-orchestrator] starting AI pipeline for room=%s (interview=%s, consent_recording=%t)",
@@ -125,6 +129,10 @@ func (r *MessageRouter) handleInterviewEnd(conn *ClientConnection, env *events.E
 	log.Printf("[db] UPDATE interviews SET status = 'completed', ended_at = '%s' WHERE id = '%s'",
 		now.Format(time.RFC3339), room.InterviewID)
 	log.Printf("[redis] SET room_status:%s value=completed", room.ID)
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("interview_end", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "generate_report": payload.GenerateReport})
+	}
 
 	reportStatus := "failed"
 	// 7. Simulate triggering report generation if requested
