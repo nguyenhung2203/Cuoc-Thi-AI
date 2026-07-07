@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase } from 'lucide-vue-next'
+import { authStore } from '../../stores/auth.store'
+import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -9,6 +10,7 @@ const showNotifications = ref(false)
 const showProfileMenu = ref(false)
 
 const candidateMenu = [
+  { path: '/', name: 'Giới thiệu', icon: Globe },
   { path: '/home', name: 'Tổng quan', icon: Home },
   { path: '/job-board', name: 'Tìm việc', icon: Briefcase },
   { path: '/my-interviews', name: 'Phỏng vấn', icon: Calendar },
@@ -18,12 +20,10 @@ const candidateMenu = [
 
 const profileMenu = [
   { path: '/profile', name: 'Hồ sơ của tôi', icon: UserIcon },
-  { path: '/cv', name: 'Quản lý CV', icon: FileText },
-  { path: '/settings', name: 'Cài đặt', icon: Settings }
+  { path: '/candidate-settings', name: 'Cài đặt', icon: Settings }
 ]
 
 const handleLogout = async () => {
-  const { authStore } = await import('../../stores/auth.store')
   await authStore.logout()
 }
 </script>
@@ -31,12 +31,11 @@ const handleLogout = async () => {
 <template>
   <div class="candidate-layout">
     <!-- Top Navbar -->
-    <header class="top-navbar glass-nav">
+    <header class="top-navbar">
       <div class="nav-container">
         <!-- Logo -->
-        <div class="nav-brand" style="cursor: pointer;" @click="router.push('/home')">
-          <div class="brand-logo">Interview AI</div>
-          <div class="brand-subtitle">Candidate Portal</div>
+        <div class="nav-brand flex items-center" style="cursor: pointer;" @click="router.push('/home')">
+          <img src="/images/logo.png" alt="Logo" style="height: 56px; object-fit: contain;" />
         </div>
 
         <!-- Center Menu -->
@@ -55,74 +54,79 @@ const handleLogout = async () => {
 
         <!-- Right Actions -->
         <div class="nav-actions">
-          <!-- Notification Bell -->
-          <div style="position: relative; cursor: pointer; margin-right: 16px" @click="showNotifications = !showNotifications; showProfileMenu = false">
-            <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s" class="hover-circle">
-              <Bell size="20" color="var(--text-secondary)" />
-              <div style="position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background-color: var(--danger); border-radius: 50%; border: 2px solid var(--surface)"></div>
-            </div>
-            
-            <!-- Notifications Dropdown -->
-            <div v-if="showNotifications" class="dropdown-menu">
-              <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center">
-                <span style="font-weight: 600; color: var(--text-main)">Thông báo</span>
-                <span style="font-size: 12px; color: var(--primary); font-weight: 500">Đánh dấu đã đọc</span>
+          <template v-if="authStore.isAuthenticated">
+            <!-- Notification Bell -->
+            <div style="position: relative; cursor: pointer; margin-right: 16px" @click="showNotifications = !showNotifications; showProfileMenu = false">
+              <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s" class="hover-circle">
+                <Bell size="20" color="var(--text-secondary)" />
+                <div style="position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background-color: var(--danger); border-radius: 50%; border: 2px solid var(--surface)"></div>
               </div>
-              <div style="padding: 16px; border-bottom: 1px solid var(--border); background-color: rgba(37, 99, 235, 0.05); transition: background-color 0.2s" class="hover-bg">
-                <div class="text-body" style="font-weight: 600; margin-bottom: 6px; color: var(--text-main)">Lịch phỏng vấn mới! 🎉</div>
-                <div class="text-helper" style="color: var(--text-secondary); line-height: 1.5">
-                  Nhà tuyển dụng vừa lên lịch phỏng vấn với bạn cho vị trí <strong>Frontend Developer</strong> vào 10:00 sáng ngày mai. Hãy kiểm tra mục "Phỏng vấn của tôi".
+              
+              <!-- Notifications Dropdown -->
+              <div v-if="showNotifications" class="dropdown-menu">
+                <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center">
+                  <span style="font-weight: 600; color: var(--text-main)">Thông báo</span>
+                  <span style="font-size: 12px; color: var(--primary); font-weight: 500">Đánh dấu đã đọc</span>
                 </div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px">Vừa xong</div>
+                <div style="padding: 16px; border-bottom: 1px solid var(--border); background-color: rgba(37, 99, 235, 0.05); transition: background-color 0.2s" class="hover-bg">
+                  <div class="text-body" style="font-weight: 600; margin-bottom: 6px; color: var(--text-main)">Lịch phỏng vấn mới! 🎉</div>
+                  <div class="text-helper" style="color: var(--text-secondary); line-height: 1.5">
+                    Nhà tuyển dụng vừa lên lịch phỏng vấn với bạn cho vị trí <strong>Frontend Developer</strong> vào 10:00 sáng ngày mai. Hãy kiểm tra mục "Phỏng vấn của tôi".
+                  </div>
+                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px">Vừa xong</div>
+                </div>
+                <div style="padding: 12px; text-align: center; color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; background-color: var(--surface-soft)">
+                  Xem tất cả thông báo
+                </div>
               </div>
-              <div style="padding: 12px; text-align: center; color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; background-color: var(--surface-soft)">
-                Xem tất cả thông báo
-              </div>
-            </div>
-          </div>
-
-          <!-- User Profile Dropdown -->
-          <div style="position: relative; cursor: pointer" @click="showProfileMenu = !showProfileMenu; showNotifications = false">
-            <div style="display: flex; align-items: center; gap: 12px; padding: 4px 8px; border-radius: 24px; border: 1px solid var(--border); transition: border-color 0.2s" class="hover-border">
-              <div style="width: 32px; height: 32px; border-radius: 50%; background-color: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold">
-                C
-              </div>
-              <div style="display: flex; flex-direction: column">
-                <span style="font-size: 13px; font-weight: 600; color: var(--text-main)">Candidate User</span>
-              </div>
-              <ChevronDown size="16" color="var(--text-muted)" style="margin-right: 4px" />
             </div>
 
-            <div v-if="showProfileMenu" class="dropdown-menu" style="width: 240px">
-              <div style="padding: 16px; border-bottom: 1px solid var(--border)">
-                <div style="font-weight: 600; color: var(--text-main)">Candidate User</div>
-                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px">candidate@example.com</div>
+            <!-- User Profile Dropdown -->
+            <div style="position: relative; cursor: pointer" @click="showProfileMenu = !showProfileMenu; showNotifications = false">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 4px 8px; border-radius: 24px; border: 1px solid var(--border); transition: border-color 0.2s" class="hover-border">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold">
+                  {{ authStore.user?.full_name ? authStore.user.full_name[0].toUpperCase() : 'C' }}
+                </div>
+                <div style="display: flex; flex-direction: column">
+                  <span style="font-size: 13px; font-weight: 600; color: var(--text-main)">{{ authStore.user?.full_name || 'Ứng viên' }}</span>
+                </div>
+                <ChevronDown size="16" color="var(--text-muted)" style="margin-right: 4px" />
               </div>
-              <div style="padding: 8px">
-                <router-link 
-                  v-for="item in profileMenu" 
-                  :key="item.path"
-                  :to="item.path"
-                  class="dropdown-item"
-                >
-                  <component :is="item.icon" size="16" />
-                  {{ item.name }}
-                </router-link>
-              </div>
-              <div style="padding: 8px; border-top: 1px solid var(--border)">
-                <button class="dropdown-item text-danger" @click="handleLogout">
-                  <LogOut size="16" />
-                  Đăng xuất
-                </button>
+
+              <div v-if="showProfileMenu" class="dropdown-menu" style="width: 240px">
+                <div style="padding: 16px; border-bottom: 1px solid var(--border)">
+                  <div style="font-weight: 600; color: var(--text-main)">{{ authStore.user?.full_name || 'Ứng viên' }}</div>
+                  <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px">{{ authStore.user?.email || 'Chưa cập nhật' }}</div>
+                </div>
+                <div style="padding: 8px">
+                  <router-link 
+                    v-for="item in profileMenu" 
+                    :key="item.path"
+                    :to="item.path"
+                    class="dropdown-item"
+                  >
+                    <component :is="item.icon" size="16" />
+                    {{ item.name }}
+                  </router-link>
+                </div>
+                <div style="padding: 8px; border-top: 1px solid var(--border)">
+                  <button class="dropdown-item text-danger" @click="handleLogout">
+                    <LogOut size="16" />
+                    Đăng xuất
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+          <template v-else>
+            <button class="btn btn-primary" @click="router.push('/login')">Đăng nhập / Đăng ký</button>
+          </template>
         </div>
       </div>
     </header>
 
     <!-- Page Content -->
-    <main class="page-content" style="max-width: 1200px; margin: 0 auto; padding: 32px">
+    <main class="page-content" :class="{ 'container-bounded': route.path !== '/' }">
       <router-view />
     </main>
   </div>
@@ -132,19 +136,41 @@ const handleLogout = async () => {
 .candidate-layout {
   min-height: 100vh;
   background-color: var(--background);
+  overflow-x: hidden;
 }
 
 .top-navbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 40;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: 72px;
+  display: flex;
+  align-items: center;
+}
+
+.page-content {
+  padding-top: 72px;
+}
+
+.container-bounded {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.page-content.container-bounded {
+  padding-top: calc(72px + 32px);
 }
 
 .nav-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 32px;
-  height: 64px;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -174,19 +200,20 @@ const handleLogout = async () => {
 
 .nav-menu {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-weight: 500;
   font-size: 14px;
   text-decoration: none;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 

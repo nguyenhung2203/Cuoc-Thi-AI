@@ -54,120 +54,182 @@ const handleSaveDecision = async () => {
 </script>
 
 <template>
-  <div style="max-width: 900px; margin: 0 auto; padding-bottom: 64px">
+  <div class="max-w-5xl mx-auto pb-16 animate-fade-in space-y-6">
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px">
-      <div style="display: flex; align-items: center; gap: 16px">
-        <Button variant="ghost" @click="router.push('/interviews')" style="padding: 8px">
+    
+    <!-- Page Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-2">
+      <div class="flex items-center gap-4">
+        <button @click="router.push('/interviews')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
           <ArrowLeft size="20" />
-        </Button>
+        </button>
         <div>
-          <h1 class="text-h1">Báo cáo Phỏng vấn: {{ report?.candidate_name || 'Đang tải...' }}</h1>
-          <p class="text-helper" style="margin-top: 4px">{{ report?.job_title }} • {{ report ? new Date(report.date).toLocaleDateString('vi-VN') : '' }}</p>
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Báo cáo Phỏng vấn: <span class="text-indigo-600 dark:text-indigo-400">{{ report?.candidate_name || 'Đang tải...' }}</span></h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">{{ report?.job_title }} • {{ report ? new Date(report.date).toLocaleDateString('vi-VN') : '' }}</p>
         </div>
       </div>
-      <div style="display: flex; gap: 12px">
-        <Button variant="secondary"><Share2 size="16" /> Chia sẻ</Button>
-        <Button><Download size="16" /> Xuất PDF</Button>
+      <div class="flex gap-3">
+        <Button variant="secondary" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <Share2 size="16" class="mr-1.5" /> Chia sẻ
+        </Button>
+        <Button class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+          <Download size="16" class="mr-1.5" /> Xuất PDF
+        </Button>
       </div>
     </div>
 
-    <div v-if="loading" style="text-align: center; padding: 40px; color: var(--text-muted)">
-      Đang tổng hợp báo cáo AI...
+    <!-- Loading State -->
+    <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
+      <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+      <span class="font-medium text-lg">Đang tổng hợp báo cáo AI...</span>
     </div>
-    <div v-else-if="!report" style="text-align: center; padding: 40px; color: var(--danger)">
-      Không thể tải báo cáo.
+    
+    <!-- Error State -->
+    <div v-else-if="!report" class="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl p-8 text-center text-rose-600 dark:text-rose-400 font-medium flex flex-col items-center justify-center gap-2">
+      <AlertTriangle size="32" />
+      <span>Không thể tải báo cáo.</span>
     </div>
-    <div v-else>
-      <!-- Top Overview -->
-      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px">
-        <Card style="padding: 20px; text-align: center; background-color: var(--surface)">
-          <p class="text-helper" style="text-transform: uppercase; margin-bottom: 8px; font-weight: 600">Điểm tổng quan</p>
-          <p style="font-size: 36px; font-weight: 700; color: var(--primary)">{{ report.overall_score }}<span style="font-size: 18px; color: var(--text-muted)">/10</span></p>
-        </Card>
-        <Card style="padding: 20px; text-align: center; background-color: var(--surface)">
-          <p class="text-helper" style="text-transform: uppercase; margin-bottom: 8px; font-weight: 600">Đề xuất từ AI</p>
-          <Badge :type="report.ai_recommendation === 'hire' ? 'success' : 'warning'" style="font-size: 14px; padding: 6px 16px; margin-top: 4px">
-            {{ report.ai_recommendation === 'hire' ? 'Nên tuyển (Hire)' : report.ai_recommendation }}
-          </Badge>
-        </Card>
-        <Card style="padding: 20px; grid-column: span 2; background-color: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.1)">
-          <p class="text-helper" style="text-transform: uppercase; margin-bottom: 8px; font-weight: 600; color: var(--primary)">Nhận xét cốt lõi</p>
-          <p class="text-body" style="font-weight: 500">{{ report.core_feedback }}</p>
-        </Card>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px">
+    
+    <div v-else class="space-y-6">
+      <!-- Top Overview Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+        <!-- Score Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center items-center">
+          <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Điểm tổng quan</p>
+          <div class="flex items-baseline gap-1">
+            <span class="text-4xl font-extrabold text-indigo-600 dark:text-indigo-400 leading-none">{{ report.overall_score }}</span>
+            <span class="text-xl font-bold text-slate-400 dark:text-slate-500">/10</span>
+          </div>
+        </div>
         
-        <!-- Left: Rubric Scores -->
-        <div style="display: flex; flex-direction: column; gap: 24px">
-          <Card title="Điểm chi tiết (Rubric)">
-            <div style="display: flex; flex-direction: column; gap: 20px">
-              <div v-for="item in report.rubric_scores" :key="item.name">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px">
-                <span class="text-body" style="font-weight: 500">{{ item.name }}</span>
-                <span class="text-body" style="font-weight: 600">{{ item.score }}/10</span>
-              </div>
-              <div style="height: 8px; background-color: var(--surface-soft); border-radius: 4px; overflow: hidden">
-                <div :style="{ height: '100%', width: `${item.score * 10}%`, backgroundColor: item.color, borderRadius: '4px' }"></div>
+        <!-- Recommendation Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center items-center">
+          <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Đề xuất từ AI</p>
+          <span 
+            class="px-4 py-1.5 text-sm font-bold uppercase tracking-wider rounded-full border"
+            :class="[
+              report.ai_recommendation === 'hire' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
+              'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+            ]"
+          >
+            {{ report.ai_recommendation === 'hire' ? 'Nên tuyển (Hire)' : report.ai_recommendation }}
+          </span>
+        </div>
+        
+        <!-- Core Feedback Card -->
+        <div class="md:col-span-2 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-2xl shadow-sm border border-indigo-100/50 dark:border-indigo-500/10 p-6">
+          <p class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-1.5"><Sparkles size="14" /> Nhận xét cốt lõi</p>
+          <p class="text-slate-700 dark:text-slate-300 font-medium leading-relaxed">{{ report.core_feedback }}</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Scores & Decision -->
+        <div class="space-y-6">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5">Điểm chi tiết (Rubric)</h2>
+            <div class="space-y-5">
+              <div v-for="item in report.rubric_scores" :key="item.name" class="space-y-2">
+                <div class="flex justify-between items-center text-sm">
+                  <span class="font-semibold text-slate-700 dark:text-slate-300">{{ item.name }}</span>
+                  <span class="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded">{{ item.score }}/10</span>
+                </div>
+                <div class="h-2.5 bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden border border-slate-200/50 dark:border-slate-600/30">
+                  <div class="h-full rounded-full transition-all duration-500" :style="{ width: `${item.score * 10}%`, backgroundColor: item.color || '#6366f1' }"></div>
+                </div>
               </div>
             </div>
           </div>
-        </Card>
-        
-          <Card title="Quyết định của Bạn">
-            <select class="input-field" v-model="decision" style="width: 100%; margin-bottom: 16px">
-              <option value="Chưa quyết định">-- Chọn quyết định --</option>
-              <option value="offer">Gửi Offer</option>
-              <option value="reject">Từ chối</option>
-              <option value="next_round">Phỏng vấn vòng sau</option>
-            </select>
-            <textarea class="input-field" v-model="note" placeholder="Nhập ghi chú HR..." style="width: 100%; height: 100px; margin-bottom: 16px"></textarea>
-            <Button style="width: 100%" @click="handleSaveDecision">Lưu quyết định</Button>
-          </Card>
-      </div>
-
-        <!-- Right: Insights & Evidence -->
-        <div style="display: flex; flex-direction: column; gap: 24px">
           
-          <Card title="Phân tích Điểm mạnh & Rủi ro" style="border-top: 4px solid var(--accent)">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
-              <div>
-                <h4 class="text-body" style="display: flex; align-items: center; gap: 8px; color: var(--success); font-weight: 600; margin-bottom: 12px">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5">Quyết định của Bạn</h2>
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <select 
+                  v-model="decision" 
+                  class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+                >
+                  <option value="Chưa quyết định">-- Chọn quyết định --</option>
+                  <option value="offer">Gửi Offer</option>
+                  <option value="reject">Từ chối</option>
+                  <option value="next_round">Phỏng vấn vòng sau</option>
+                </select>
+              </div>
+              <div class="space-y-2">
+                <textarea 
+                  v-model="note" 
+                  placeholder="Nhập ghi chú HR..." 
+                  class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-none h-28"
+                ></textarea>
+              </div>
+              <Button class="w-full justify-center bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20 py-2.5" @click="handleSaveDecision">
+                <Save size="16" class="mr-1.5" /> Lưu quyết định
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Insights & Evidence -->
+        <div class="lg:col-span-2 space-y-6">
+          
+          <!-- Strengths & Weaknesses -->
+          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Phân tích Điểm mạnh & Rủi ro</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Strengths -->
+              <div class="bg-emerald-50/50 dark:bg-emerald-500/5 rounded-xl p-5 border border-emerald-100/50 dark:border-emerald-500/10">
+                <h4 class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold mb-4">
                   <CheckCircle size="18" /> Điểm mạnh
                 </h4>
-                <ul class="text-body" style="padding-left: 24px; display: flex; flex-direction: column; gap: 12px">
-                  <li v-for="(str, idx) in report.strengths" :key="idx">{{ str }}</li>
+                <ul class="space-y-3">
+                  <li v-for="(str, idx) in report.strengths" :key="idx" class="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
+                    <span class="leading-relaxed">{{ str }}</span>
+                  </li>
                 </ul>
               </div>
-              <div>
-                <h4 class="text-body" style="display: flex; align-items: center; gap: 8px; color: var(--warning); font-weight: 600; margin-bottom: 12px">
+              
+              <!-- Weaknesses -->
+              <div class="bg-rose-50/50 dark:bg-rose-500/5 rounded-xl p-5 border border-rose-100/50 dark:border-rose-500/10">
+                <h4 class="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold mb-4">
                   <AlertTriangle size="18" /> Điểm rủi ro (Cần lưu ý)
                 </h4>
-                <ul class="text-body" style="padding-left: 24px; display: flex; flex-direction: column; gap: 12px">
-                  <li v-for="(weak, idx) in report.weaknesses" :key="idx">{{ weak }}</li>
+                <ul class="space-y-3">
+                  <li v-for="(weak, idx) in report.weaknesses" :key="idx" class="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0"></span>
+                    <span class="leading-relaxed">{{ weak }}</span>
+                  </li>
                 </ul>
               </div>
             </div>
-          </Card>
+          </div>
 
-          <Card title="Trích xuất Transcript (Bằng chứng)">
-            <div style="display: flex; flex-direction: column; gap: 16px">
-              
+          <!-- Transcript Highlights -->
+          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
+              <FileText size="18" class="text-indigo-500" /> Trích xuất Transcript (Bằng chứng)
+            </h2>
+            
+            <div class="space-y-4">
               <div v-for="(hl, idx) in report.transcript_highlights" :key="idx" 
-                   :style="{ padding: '16px', backgroundColor: 'var(--surface-soft)', borderRadius: 'var(--radius)', borderLeft: `4px solid var(--${hl.type})` }">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-                  <Badge :type="hl.type">{{ hl.badge }}</Badge>
-                  <span class="text-helper">{{ hl.time }}</span>
+                   class="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700/50 relative overflow-hidden group">
+                <div class="absolute left-0 top-0 bottom-0 w-1 bg-slate-300 dark:bg-slate-600" :style="`background-color: var(--${hl.type})`"></div>
+                <div class="flex items-center gap-3 mb-2 ml-2">
+                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded border" :style="`color: var(--${hl.type}); border-color: var(--${hl.type})`">{{ hl.badge }}</span>
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ hl.time }}</span>
                 </div>
-                <p class="text-body" style="font-style: italic; color: var(--text-secondary)">
+                <p class="text-sm font-medium text-slate-600 dark:text-slate-300 italic ml-2">
                   "{{ hl.text }}"
                 </p>
               </div>
-
             </div>
-            <Button variant="ghost" style="width: 100%; margin-top: 16px"><FileText size="16" /> Xem toàn bộ Transcript</Button>
-          </Card>
+            
+            <Button variant="ghost" class="w-full mt-6 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border-none font-semibold transition-colors">
+              <FileText size="16" class="mr-1.5" /> Xem toàn bộ Transcript
+            </Button>
+          </div>
 
         </div>
       </div>

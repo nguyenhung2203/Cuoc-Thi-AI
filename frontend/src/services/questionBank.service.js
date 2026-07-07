@@ -17,15 +17,6 @@ export const questionBankService = {
   },
 
   /**
-   * Lấy chi tiết một câu hỏi
-   * @param {String} companyId
-   * @param {String} questionId
-   */
-  getQuestion: (companyId, questionId) => {
-    return apiService.get(`/companies/${companyId}/question-bank/${questionId}`);
-  },
-
-  /**
    * Recruiter thêm câu hỏi thủ công
    * @param {String} companyId
    * @param {Object} data { question_text, question_type, skill_tags, level, expected_signals }
@@ -45,7 +36,7 @@ export const questionBankService = {
   },
 
   /**
-   * Xóa câu hỏi (soft delete)
+   * Xóa câu hỏi
    * @param {String} companyId
    * @param {String} questionId
    */
@@ -62,37 +53,5 @@ export const questionBankService = {
    */
   generateWithAI: (companyId, jobId, data = { count: 10, level: 'middle' }) => {
     return apiService.post(`/companies/${companyId}/jobs/${jobId}/ai/generate-questions`, data);
-  }
-};
-
-/**
- * File Service
- * Các API liên quan đến Upload & Download File — API_SPEC.md §12
- */
-export const fileService = {
-  /**
-   * Upload file lên hệ thống (CV, tài liệu, v.v.)
-   * API_SPEC §12.1 — POST /files (multipart/form-data)
-   * @param {File} file — File object từ input
-   * @param {String} fileType — 'cv' | 'document' | 'image'
-   * @param {String} companyId — (optional) company_id nếu file thuộc về company
-   */
-  uploadFile: (file, fileType = 'cv', companyId = null) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('file_type', fileType);
-    if (companyId) {
-      formData.append('company_id', companyId);
-    }
-    return apiService.post('/files', formData);
-  },
-
-  /**
-   * Lấy Signed URL để tải file về (có thời hạn)
-   * API_SPEC §12.2 — GET /files/:file_id/download-url
-   * @param {String} fileId
-   */
-  getDownloadUrl: (fileId) => {
-    return apiService.get(`/files/${fileId}/download-url`);
   }
 };

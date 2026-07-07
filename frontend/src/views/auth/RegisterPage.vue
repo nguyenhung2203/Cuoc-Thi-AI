@@ -48,8 +48,8 @@ const handleRegister = async (e) => {
 <template>
   <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--background)">
     <div style="display: flex; flex-direction: column; gap: 32px; width: 100%; max-width: 450px">
-      <div style="text-align: center">
-        <h1 class="text-h1" style="margin-bottom: 8px; color: var(--primary)">Interview AI</h1>
+      <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <img src="/images/logo.png" alt="Logo" style="height: 80px; object-fit: contain; margin-bottom: 12px;" />
         <p class="text-body" style="color: var(--text-secondary)">Tạo tài khoản mới</p>
       </div>
       

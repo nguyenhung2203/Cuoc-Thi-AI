@@ -192,50 +192,82 @@ const handleViewCV = async () => {
 </script>
 
 <template>
-  <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" style="position: fixed; top: 20px; right: 20px; z-index: 9999;" />
-  <div v-if="loading">Đang tải...</div>
-  <div v-else>
-    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px">
-      <Button variant="ghost" @click="router.push('/candidates')" style="padding: 8px">
+  <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" class="fixed top-5 right-5 z-[9999]" />
+  <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
+    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+    <span class="font-medium">Đang tải chi tiết ứng viên...</span>
+  </div>
+  <div v-else class="animate-fade-in space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <button @click="router.push('/candidates')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
         <ArrowLeft size="20" />
-      </Button>
+      </button>
       <div>
-        <div style="display: flex; align-items: center; gap: 12px">
-          <h1 class="text-h1">{{ isNew ? 'Thêm Ứng Viên Mới' : candidate.name }}</h1>
-          <Badge v-if="!isNew" type="info">{{ candidate.status }}</Badge>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ isNew ? 'Thêm Ứng Viên Mới' : candidate.name }}</h1>
+          <span v-if="!isNew" 
+            class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border"
+            :class="[
+              candidate.status.toLowerCase() === 'new' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' : 
+              candidate.status.toLowerCase() === 'interviewing' ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 
+              candidate.status.toLowerCase() === 'offered' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
+              candidate.status.toLowerCase() === 'rejected' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' : 
+              'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
+            ]"
+          >
+            {{ candidate.status }}
+          </span>
         </div>
-        <p class="text-helper" style="margin-top: 4px">Candidates > {{ isNew ? 'New' : candidate.name }}</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Candidates > {{ isNew ? 'New' : candidate.name }}</p>
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
-      <Card title="Thông tin cá nhân">
-        <form @submit="handleSave">
-          <Input 
-            label="Họ và Tên" 
-            v-model="candidate.name" 
-            required 
-            minlength="2"
-          />
-          <Input 
-            label="Email" 
-            type="email"
-            v-model="candidate.email" 
-            required 
-          />
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Form Section -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 self-start">
+        <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin cá nhân</h2>
+        <form @submit="handleSave" class="space-y-5">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Họ và Tên</label>
+            <input 
+              v-model="candidate.name" 
+              required 
+              minlength="2"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </div>
           
-          <div class="input-group">
-            <label class="input-label">Vị trí ứng tuyển <span style="color:var(--danger)">*</span></label>
-            <select class="input-field" v-model="candidate.job_id" required :disabled="!isNew">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Email</label>
+            <input 
+              type="email"
+              v-model="candidate.email" 
+              required 
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            />
+          </div>
+          
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí ứng tuyển <span class="text-red-500">*</span></label>
+            <select 
+              v-model="candidate.job_id" 
+              required 
+              :disabled="!isNew"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <option value="" disabled>-- Chọn vị trí ứng tuyển --</option>
               <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
             </select>
-            <p v-if="!isNew" class="text-helper" style="margin-top: 4px; font-size: 12px">Không thể thay đổi vị trí của ứng viên đã tạo</p>
+            <p v-if="!isNew" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Không thể thay đổi vị trí của ứng viên đã tạo</p>
           </div>
           
-          <div class="input-group">
-            <label class="input-label">Trạng thái</label>
-            <select class="input-field" v-model="candidate.status">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
+            <select 
+              v-model="candidate.status"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+            >
               <option value="new">Mới (New)</option>
               <option value="interviewing">Đang phỏng vấn (Interviewing)</option>
               <option value="offered">Đã gửi Offer (Offered)</option>
@@ -243,87 +275,100 @@ const handleViewCV = async () => {
             </select>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: 24px; gap: 12px">
-            <Button type="button" variant="ghost" @click="router.push('/candidates')">Hủy</Button>
-            <Button type="submit" :disabled="saving">
-              <Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu ứng viên' }}
+          <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
+            <Button type="button" variant="ghost" @click="router.push('/candidates')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
+            <Button type="submit" :disabled="saving" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+              <Save size="16" class="mr-2" v-if="!saving" /> 
+              <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+              {{ saving ? 'Đang lưu...' : 'Lưu ứng viên' }}
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
 
-      <div style="display: flex; flex-direction: column; gap: 24px">
-        <Card title="Hồ sơ (CV & Resume)">
-          <div v-if="candidate.cv || selectedFile" style="border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; background-color: var(--surface-soft)">
-            <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px">
-              <FileText size="32" color="var(--primary)" />
-              <div style="flex: 1">
-                <p v-if="selectedFile" class="text-body" style="font-weight: 500">{{ selectedFile.name }}</p>
-                <p v-else class="text-body" style="font-weight: 500; color: var(--primary); cursor: pointer; text-decoration: underline" @click="handleViewCV" title="Nhấn để xem CV">{{ candidate.cv }}</p>
-                <p class="text-helper" style="color: var(--success); display: flex; align-items: center; gap: 4px; margin-top: 4px">
+      <div class="space-y-6">
+        <!-- CV Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Hồ sơ (CV & Resume)</h2>
+          <div v-if="candidate.cv || selectedFile" class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900">
+            <div class="flex items-center gap-4 mb-3">
+              <FileText size="32" class="text-indigo-500" />
+              <div class="flex-1">
+                <p v-if="selectedFile" class="font-medium text-slate-800 dark:text-slate-200">{{ selectedFile.name }}</p>
+                <p v-else class="font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline" @click="handleViewCV" title="Nhấn để xem CV">{{ candidate.cv }}</p>
+                <p class="text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-1 mt-1 font-medium">
                   <CheckCircle size="14" /> {{ selectedFile ? 'Sẵn sàng tải lên' : 'Đã lưu trên hệ thống' }}
                 </p>
               </div>
-              <Button type="button" variant="secondary" @click="fileInputRef?.click()" :disabled="uploading || isAiParsing">Thay đổi</Button>
+              <Button type="button" variant="secondary" @click="fileInputRef?.click()" :disabled="uploading || isAiParsing" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+                Thay đổi
+              </Button>
             </div>
             
-            <div v-if="cvPreviewUrl" style="width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; margin-top: 16px; margin-bottom: 12px;">
-              <img v-if="selectedFile && selectedFile.type.startsWith('image/')" :src="cvPreviewUrl" style="max-width: 100%; max-height: 400px; object-fit: contain; display: block; margin: 0 auto;" />
-              <iframe v-else-if="selectedFile && selectedFile.type === 'application/pdf'" :src="cvPreviewUrl" width="100%" height="400px" style="border: none; display: block;"></iframe>
+            <div v-if="cvPreviewUrl" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mt-4">
+              <img v-if="selectedFile && selectedFile.type.startsWith('image/')" :src="cvPreviewUrl" class="max-w-full max-h-[400px] object-contain mx-auto block" />
+              <iframe v-else-if="selectedFile && selectedFile.type === 'application/pdf'" :src="cvPreviewUrl" width="100%" height="400px" class="border-none block"></iframe>
             </div>
-            <div v-if="uploading" style="margin-top: 12px">
-              <p class="text-body" style="margin-bottom: 8px; font-weight: 500; font-size: 13px">Đang tải lên... {{ uploadProgress }}%</p>
-              <div style="height: 4px; background: var(--border); border-radius: 2px; overflow: hidden">
-                <div :style="`height: 100%; background: var(--primary); width: ${uploadProgress}%; transition: width 0.3s`"></div>
+            
+            <div v-if="uploading" class="mt-4">
+              <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Đang tải lên... {{ uploadProgress }}%</p>
+              <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full bg-indigo-600 transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
               </div>
             </div>
-            <div v-else-if="isAiParsing" style="margin-top: 16px; text-align: center; padding: 12px">
-              <Sparkles size="24" color="var(--accent)" style="margin: 0 auto 8px; animation: pulse 1.5s infinite" />
-              <p class="text-body" style="font-weight: 500; font-size: 14px">AI đang phân tích CV...</p>
+            <div v-else-if="isAiParsing" class="mt-4 text-center py-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+              <Sparkles size="24" class="text-indigo-500 mx-auto mb-2 animate-pulse" />
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">AI đang phân tích CV...</p>
             </div>
           </div>
           <div v-else 
-            style="border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 40px 24px; text-align: center; cursor: pointer; background-color: var(--surface-soft)"
+            class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-10 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
             @click="fileInputRef?.click()"
           >
-            <div>
-              <Upload size="32" color="var(--text-muted)" style="margin: 0 auto 12px" />
-              <p class="text-body" style="font-weight: 500; margin-bottom: 4px">Click để tải CV lên</p>
-              <p class="text-helper">Hỗ trợ PDF, DOCX, PNG, JPG (tối đa 5MB)</p>
-            </div>
+            <Upload size="36" class="text-slate-400 group-hover:text-indigo-500 mx-auto mb-3 transition-colors" />
+            <p class="font-semibold text-slate-700 dark:text-slate-300 mb-1">Click để tải CV lên</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Hỗ trợ PDF, DOCX, PNG, JPG (tối đa 5MB)</p>
           </div>
           <input 
             type="file" 
             ref="fileInputRef" 
-            style="display: none" 
+            class="hidden" 
             accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" 
             @change="handleFileUpload"
           />
-        </Card>
+        </div>
 
-        <Card v-if="parsedData" title="AI Bóc tách dữ liệu CV" style="border-top: 4px solid var(--accent)">
-          <div style="display: flex; flex-direction: column; gap: 16px">
-            <div style="display: flex; align-items: center; gap: 8px; color: var(--accent)">
-              <Sparkles size="16" /> <span style="font-size: 14px; font-weight: 500">Hoàn tất phân tích tự động</span>
+        <!-- AI Parsing Card -->
+        <div v-if="parsedData" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+            <Sparkles size="100" />
+          </div>
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 relative z-10">AI Bóc tách dữ liệu CV</h2>
+          <div class="flex flex-col gap-6 relative z-10">
+            <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
+              <Sparkles size="18" /> <span class="text-sm font-semibold">Hoàn tất phân tích tự động</span>
             </div>
+            
             <div>
-              <h4 class="text-helper" style="text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.05em">Kỹ năng nổi bật</h4>
-              <div style="display: flex; gap: 8px; flex-wrap: wrap">
-                <span v-for="s in parsedData.skills" :key="s" style="background-color: var(--surface-soft); padding: 4px 10px; border-radius: 6px; font-size: 13px; border: 1px solid var(--border)">
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Kỹ năng nổi bật</h4>
+              <div class="flex flex-wrap gap-2">
+                <span v-for="s in parsedData.skills" :key="s" class="px-3 py-1 rounded-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold">
                   {{ s }}
                 </span>
               </div>
             </div>
+            
             <div>
-              <h4 class="text-helper" style="text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.05em">Kinh nghiệm</h4>
-              <p class="text-body">{{ parsedData.experience }}</p>
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Kinh nghiệm</h4>
+              <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ parsedData.experience }}</p>
             </div>
+            
             <div>
-              <h4 class="text-helper" style="text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.05em">Học vấn</h4>
-              <p class="text-body">{{ parsedData.education }}</p>
+              <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Học vấn</h4>
+              <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ parsedData.education }}</p>
             </div>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   </div>

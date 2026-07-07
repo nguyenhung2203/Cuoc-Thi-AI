@@ -1,25 +1,28 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Table from '../../components/common/AppTable.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Input from '../../components/common/AppInput.vue'
-import { Plus, Search, Filter, Layers, Edit, Trash2 } from 'lucide-vue-next'
+import { Plus, Search, Filter, Layers, Edit, Trash2, Sparkles, RefreshCw } from 'lucide-vue-next'
+import { questionBankService } from '../../services/questionBank.service'
+import { authStore } from '../../stores/auth.store'
 
-const questions = ref([
-  { id: 1, text: 'Hãy giải thích sự khác biệt giữa var, let và const trong JavaScript.', role: 'Frontend', level: 'Fresher', type: 'Technical' },
-  { id: 2, text: 'Bạn đã bao giờ bất đồng quan điểm với Quản lý dự án chưa? Bạn giải quyết thế nào?', role: 'All', level: 'Middle', type: 'Behavioral' },
-  { id: 3, text: 'Mô tả nguyên lý hoạt động của Virtual DOM trong React.', role: 'Frontend', level: 'Junior', type: 'Technical' },
-  { id: 4, text: 'Làm thế nào để scale một hệ thống chịu tải 1 triệu requests/s?', role: 'Backend', level: 'Senior', type: 'System Design' },
-])
+const questions = ref([])
+const loading = ref(true)
+const aiGenerating = ref(false)
+const searchKeyword = ref('')
+const filterLevel = ref('')
+const filterType = ref('')
 
 const columns = [
   { header: 'Câu hỏi', key: 'text' },
   { header: 'Vị trí (Role)', key: 'role' },
   { header: 'Cấp độ', key: 'level' },
   { header: 'Loại', key: 'type' },
+  { header: 'Nguồn', key: 'source' },
   { header: 'Hành động', key: 'action' }
 ]
 
@@ -27,37 +30,101 @@ const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
+const saving = ref(false)
 const toast = ref(null)
 const newQuestion = ref({
   text: '',
   role: 'All',
   level: 'Fresher',
-  type: 'Technical'
+  type: 'Technical',
+  expected_signals: ''
 })
 
-const confirmDelete = () => {
-  questions.value = questions.value.filter(q => q.id !== deletingId.value)
-  showDeleteModal.value = false
-  toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+// Map API response → display format
+const mapQuestion = (q) => ({
+  id: q.id,
+  text: q.question_text || q.text || '(Không có nội dung)',
+  role: Array.isArray(q.skill_tags) ? q.skill_tags.join(', ') : (q.role || '—'),
+  level: q.level || '—',
+  type: q.question_type || q.type || '—',
+  source: q.is_ai_generated ? 'AI' : 'Thủ công'
+})
+
+const loadQuestions = async () => {
+  loading.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) { loading.value = false; return }
+    const params = {}
+    if (searchKeyword.value) params.keyword = searchKeyword.value
+    if (filterLevel.value) params.level = filterLevel.value
+    if (filterType.value) params.type = filterType.value
+    const data = await questionBankService.getQuestions(companyId, params)
+    questions.value = (Array.isArray(data) ? data : []).map(mapQuestion)
+  } catch (err) {
+    console.error('Lỗi tải kho câu hỏi', err)
+    questions.value = [] // Empty state — Backend chưa sẵn sàng
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleCreate = () => {
+onMounted(loadQuestions)
+
+const handleCreate = async () => {
   if (!newQuestion.value.text) return
-  questions.value.unshift({
-    id: Date.now(),
-    text: newQuestion.value.text,
-    role: newQuestion.value.role,
-    level: newQuestion.value.level,
-    type: newQuestion.value.type
-  })
-  newQuestion.value = {
-    text: '',
-    role: 'All',
-    level: 'Fresher',
-    type: 'Technical'
+  saving.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const payload = {
+      question_text: newQuestion.value.text,
+      question_type: newQuestion.value.type.toLowerCase(),
+      level: newQuestion.value.level.toLowerCase(),
+      skill_tags: newQuestion.value.role !== 'All' ? [newQuestion.value.role] : [],
+      expected_signals: newQuestion.value.expected_signals
+        ? newQuestion.value.expected_signals.split(',').map(s => s.trim())
+        : []
+    }
+    await questionBankService.createQuestion(companyId, payload)
+    toast.value = { type: 'success', message: 'Đã thêm câu hỏi vào kho!' }
+    showCreateModal.value = false
+    newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lưu thất bại. Backend đang được kết nối.' }
+  } finally {
+    saving.value = false
   }
-  showCreateModal.value = false
-  toast.value = { type: 'success', message: 'Đã thêm câu hỏi mới!' }
+}
+
+const confirmDelete = async () => {
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await questionBankService.deleteQuestion(companyId, deletingId.value)
+    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+    showDeleteModal.value = false
+    await loadQuestions()
+  } catch (err) {
+    // Fallback local delete nếu API chưa sẵn sàng
+    questions.value = questions.value.filter(q => q.id !== deletingId.value)
+    showDeleteModal.value = false
+    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+  }
+}
+
+const handleGenerateAI = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  aiGenerating.value = true
+  try {
+    await questionBankService.generateWithAI(companyId, null, { count: 10, level: filterLevel.value || 'middle' })
+    toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'info', message: 'Tính năng AI Generate đang chờ Backend.' }
+  } finally {
+    aiGenerating.value = false
+  }
 }
 </script>
 

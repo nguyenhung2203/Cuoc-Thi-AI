@@ -59,9 +59,9 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #94a3b8;
+.dark {
+  /* Premium Colors */
+  --text: #94a3b8;
     --text-h: #f8fafc;
     
     --bg: #0f172a;
@@ -86,7 +86,6 @@
     background-image: radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
                       radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%);
   }
-}
 
 body {
   margin: 0;
@@ -109,10 +108,8 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-@media (prefers-color-scheme: dark) {
-  .glass-nav {
-    background: rgba(30, 41, 59, 0.8);
-  }
+.dark .glass-nav {
+  background: rgba(30, 41, 59, 0.8);
 }
 
 /* Typography */
