@@ -347,6 +347,20 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	err := h.aiSvc.ParseCV(r.Context(), companyID, candidateID)
 	if err != nil {
 		writeServiceError(w, apierrors.NewInternal(err.Error()), requestID)
+
+	var req request.ParseCVRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("invalid JSON body", []string{err.Error()}), requestID)
+		return
+	}
+	if msgs := validator.Validate(&req); msgs != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("validation failed", msgs), requestID)
+		return
+	}
+
+	err := h.svc.ParseCV(r.Context(), companyID, candidateID, req.CVText, req.JobContext)
+	if err != nil {
+		writeServiceError(w, err, requestID)
 		return
 	}
 

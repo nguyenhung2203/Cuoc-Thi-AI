@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 
@@ -28,11 +27,11 @@ type Candidate struct {
 	Phone         sql.NullString  `db:"phone"           json:"phone,omitempty"`
 	AvatarURL     sql.NullString  `db:"avatar_url"      json:"avatar_url,omitempty"`
 	CVFileID      sql.NullString  `db:"cv_file_id"      json:"cv_file_id,omitempty"`
-	ParsedCVJSON  json.RawMessage `db:"parsed_cv_json"  json:"parsed_cv_json,omitempty"`
+	ParsedCVJSON  JSONB           `db:"parsed_cv_json"  json:"parsed_cv_json,omitempty"`
 	AICVSummary   sql.NullString  `db:"ai_cv_summary"   json:"ai_cv_summary,omitempty"`
 	Source        sql.NullString  `db:"source"          json:"source,omitempty"`
 	Status        CandidateStatus `db:"status"          json:"status"`
-	Tags          json.RawMessage `db:"tags"            json:"tags,omitempty"`
+	Tags          JSONB           `db:"tags"            json:"tags,omitempty"`
 	CreatedBy     sql.NullString  `db:"created_by"      json:"created_by,omitempty"`
 	CreatedAt     time.Time       `db:"created_at"      json:"created_at"`
 	UpdatedAt     time.Time       `db:"updated_at"      json:"updated_at"`

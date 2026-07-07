@@ -3,6 +3,7 @@ module backend
 go 1.25.8
 
 require (
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
@@ -13,11 +14,16 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
+
 	golang.org/x/crypto v0.53.0
+
+	github.com/sony/gobreaker/v2 v2.4.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/time v0.15.0
 )
 
 require (
+
 	cloud.google.com/go v0.115.0 // indirect
 	cloud.google.com/go/ai v0.8.0 // indirect
 	cloud.google.com/go/auth v0.20.0 // indirect
@@ -37,6 +43,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+
 	github.com/sony/gobreaker/v2 v2.4.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
@@ -54,4 +61,8 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+
 )

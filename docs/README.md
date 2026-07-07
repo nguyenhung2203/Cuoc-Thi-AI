@@ -8,7 +8,7 @@
 - **Database**: PostgreSQL
 - **Cache/Queue**: Redis
 - **Realtime**: WebSocket
-- **Auth**: JWT + Refresh Token
+- **Auth**: JWT Access Token + HttpOnly Refresh Token (Token Family)
 
 ---
 

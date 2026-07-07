@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 
@@ -13,9 +12,9 @@ type AIPromptTemplate struct {
 	Name            string          `db:"name" json:"name"`
 	Version         int             `db:"version" json:"version"`
 	Content         string          `db:"content" json:"content"`
-	VariablesSchema json.RawMessage `db:"variables_schema" json:"variables_schema"`
+	VariablesSchema JSONB `db:"variables_schema" json:"variables_schema"`
 	Model           string          `db:"model" json:"model"`
-	Params          json.RawMessage `db:"params" json:"params"`
+	Params          JSONB `db:"params" json:"params"`
 	IsActive        bool            `db:"is_active" json:"is_active"`
 	CreatedBy       sql.NullString  `db:"created_by" json:"created_by"`
 	CreatedAt       time.Time       `db:"created_at" json:"created_at"`
@@ -32,8 +31,8 @@ type AIRequestLog struct {
 	InterviewID     sql.NullString  `db:"interview_id" json:"interview_id"`
 	JobID           sql.NullString  `db:"job_id" json:"job_id"`
 	CandidateID     sql.NullString  `db:"candidate_id" json:"candidate_id"`
-	InputJSON       json.RawMessage `db:"input_json" json:"input_json"`
-	OutputJSON      json.RawMessage `db:"output_json" json:"output_json"`
+	InputJSON       JSONB `db:"input_json" json:"input_json"`
+	OutputJSON      JSONB `db:"output_json" json:"output_json"`
 	LatencyMs       sql.NullInt32   `db:"latency_ms" json:"latency_ms"`
 	TokensIn        sql.NullInt32   `db:"tokens_in" json:"tokens_in"`
 	TokensOut       sql.NullInt32   `db:"tokens_out" json:"tokens_out"`

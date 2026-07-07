@@ -2,7 +2,6 @@ package models
 
 import (
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 
@@ -15,7 +14,7 @@ type Company struct {
 	Industry  string          `db:"industry"   json:"industry"`
 	Size      string          `db:"size"       json:"size"`
 	CreatedBy string          `db:"created_by" json:"created_by"`
-	Settings  json.RawMessage `db:"settings"   json:"settings,omitempty"`
+	Settings  JSONB           `db:"settings"   json:"settings,omitempty"`
 	CreatedAt time.Time       `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time       `db:"updated_at" json:"updated_at"`
 	DeletedAt sql.NullTime    `db:"deleted_at" json:"-"`

@@ -33,6 +33,12 @@ Nền tảng phỏng vấn trực tuyến có AI real-time hỗ trợ nhà tuy�
 docker-compose up -d
 ```
 
+### Chạy lại toàn bộ bằng Docker
+
+```bash
+docker-compose up -d --build
+```
+
 ### Chạy từng service
 
 ```bash

@@ -15,6 +15,7 @@ import (
 )
 
 type ReportHandler struct {
+
 	svc *service.ReportService
 }
 
@@ -33,10 +34,28 @@ func (h *ReportHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	interviewID := chi.URLParam(r, "interview_id")
 
 	report, err := h.svc.GetOrGenerateReport(r.Context(), interviewID, companyID)
+
+	reportSvc *service.ReportService
+}
+
+func NewReportHandler(reportSvc *service.ReportService) *ReportHandler {
+	return &ReportHandler{
+		reportSvc: reportSvc,
+	}
+}
+
+func (h *ReportHandler) GetReport(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	report, err := h.reportSvc.GetReport(r.Context(), companyID, interviewID)
+
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 
 	pkgresponse.JSON(w, http.StatusOK, report, nil, requestID)
 }
@@ -57,10 +76,54 @@ func (h *ReportHandler) SaveDecision(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := h.svc.UpdateDecision(r.Context(), interviewID, companyID, req.Decision, req.Comment)
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"report": report,
+	}, nil, requestID)
+}
+
+func (h *ReportHandler) OverrideDecision(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var req request.UpdateReportDecisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("invalid json payload", []string{err.Error()}), requestID)
+		return
+	}
+
+	if errs := validator.Validate(&req); errs != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("payload", errs), requestID)
+		return
+	}
+
+	if err := h.reportSvc.OverrideDecision(r.Context(), companyID, interviewID, req.Decision, req.Comment); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{
+		"message": "decision updated",
+	}, nil, requestID)
+}
+
+func (h *ReportHandler) RetryReport(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	report, err := h.reportSvc.RetryReport(r.Context(), companyID, interviewID, userID)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
 	}
 
+
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "decision saved"}, nil, requestID)
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"report": report,
+	}, nil, requestID)
 }

@@ -4,14 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
+	"backend/internal/ai"
 	"backend/internal/dto/request"
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/pagination"
+	"backend/internal/pkg/utils"
 	"backend/internal/repository"
 )
 
@@ -19,16 +22,19 @@ import (
 type CandidateService struct {
 	candidateRepo *repository.CandidateRepository
 	jobRepo       *repository.JobRepository
+	cvAnalyzer    *ai.CVAnalyzer
 }
 
 // NewCandidateService constructs a CandidateService with its required repositories.
 func NewCandidateService(
 	candidateRepo *repository.CandidateRepository,
 	jobRepo *repository.JobRepository,
+	cvAnalyzer *ai.CVAnalyzer,
 ) *CandidateService {
 	return &CandidateService{
 		candidateRepo: candidateRepo,
 		jobRepo:       jobRepo,
+		cvAnalyzer:    cvAnalyzer,
 	}
 }
 
@@ -91,9 +97,14 @@ func (s *CandidateService) Create(
 		Phone:        sql.NullString{String: req.Phone, Valid: req.Phone != ""},
 		Source:       sql.NullString{String: req.Source, Valid: req.Source != ""},
 		Status:       models.CandidateStatus("new"),
+
 		CVFileID:     sql.NullString{String: req.CVFileID, Valid: req.CVFileID != ""},
 		ParsedCVJSON: json.RawMessage("null"),
 		Tags:         json.RawMessage("[]"),
+
+		ParsedCVJSON: models.JSONB("null"),
+		Tags:         models.JSONB("[]"),
+
 		CreatedBy:    sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -111,7 +122,7 @@ func (s *CandidateService) Create(
 			JobID:          req.JobID,
 			CandidateID:    created.ID,
 			PipelineStatus: "new",
-			AIMatchJSON:    json.RawMessage("null"),
+			AIMatchJSON:    models.JSONB("null"),
 			CreatedBy:      sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
 			CreatedAt:      now,
 			UpdatedAt:      now,
@@ -156,7 +167,7 @@ func (s *CandidateService) Update(
 		if err != nil {
 			return nil, errors.NewInternal("failed to marshal tags")
 		}
-		patch["tags"] = json.RawMessage(tagsJSON)
+		patch["tags"] = models.JSONB(tagsJSON)
 	}
 	if req.CVFileID != nil {
 		patch["cv_file_id"] = sql.NullString{String: *req.CVFileID, Valid: *req.CVFileID != ""}
@@ -217,7 +228,7 @@ func (s *CandidateService) AssignToJob(
 		JobID:          jobID,
 		CandidateID:    candidateID,
 		PipelineStatus: req.PipelineStatus,
-		AIMatchJSON:    json.RawMessage("null"),
+		AIMatchJSON:    models.JSONB("null"),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -253,11 +264,43 @@ func (s *CandidateService) ListByJob(
 	return records, total, nil
 }
 
+// UpdateCVParseResult directly updates CV parsing JSON (used for backwards compatibility or manual updates)
 func (s *CandidateService) UpdateCVParseResult(ctx context.Context, companyID, candidateID, parsedJSON, summary string) error {
 	patch := map[string]any{
-		"parsed_cv_json": json.RawMessage(parsedJSON),
+		"parsed_cv_json": models.JSONB(parsedJSON),
 		"ai_cv_summary":  sql.NullString{String: summary, Valid: true},
 	}
 	_, err := s.candidateRepo.Update(ctx, companyID, candidateID, patch)
 	return err
+}
+
+// ParseCV calls the CV Analyzer and updates the candidate's CV metadata.
+func (s *CandidateService) ParseCV(ctx context.Context, companyID, candidateID, cvText, jobContext string) error {
+	_, err := s.GetByID(ctx, companyID, candidateID)
+	if err != nil {
+		return err
+	}
+
+	// Truncate long CVs to prevent Resource Exhaustion (DoS)
+	safeCVText := utils.TruncateText(cvText, 20000)
+
+	result, err := s.cvAnalyzer.AnalyzeCV(ctx, safeCVText, jobContext, companyID)
+	if err != nil {
+		return errors.NewInternal(fmt.Sprintf("failed to analyze CV with AI: %v", err))
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return errors.NewInternal(fmt.Sprintf("failed to marshal CV analysis result: %v", err))
+	}
+
+	patch := map[string]any{
+		"ai_cv_summary":  sql.NullString{String: result.Summary, Valid: true},
+		"parsed_cv_json": models.JSONB(resultBytes),
+	}
+	if _, err := s.candidateRepo.Update(ctx, companyID, candidateID, patch); err != nil {
+		return errors.NewInternal("failed to save CV analysis to candidate")
+	}
+
+	return nil
 }
