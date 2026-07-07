@@ -13,7 +13,7 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
-const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
+const entryToast = ref(history.state?.message ? { type: history.state.type || 'success', message: history.state.message } : null)
 
 onMounted(() => {
   if (history.state?.message) {
@@ -62,8 +62,8 @@ const handleLogin = async (e) => {
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
     
     <div style="display: flex; flex-direction: column; gap: 32px; width: 100%; max-width: 400px">
-      <div style="text-align: center">
-        <h1 class="text-h1" style="margin-bottom: 8px; color: var(--primary)">Interview AI</h1>
+      <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <img src="/images/logo.png" alt="Logo" style="height: 80px; object-fit: contain; margin-bottom: 12px;" />
         <p class="text-body" style="color: var(--text-secondary)">Đăng nhập vào hệ thống tuyển dụng</p>
       </div>
       

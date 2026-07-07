@@ -10,6 +10,8 @@ import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Spark
 import { useLiveKit } from '../../composables/useLiveKit'
 import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
+import { useWebSocket } from '../../composables/useWebSocket'
+import { useRoom } from '../../composables/useRoom'
 
 const router = useRouter()
 const route = useRoute()
@@ -21,9 +23,22 @@ const {
 } = useLiveKit()
 
 const activeTab = ref('assistant')
-const transcript = ref([
-  { speaker: 'Candidate', text: 'Vâng, em đã sử dụng React khoảng 3 năm trong các dự án thực tế.', time: '14:02' }
-])
+const transcript = ref([])
+
+// WS and Room
+const { connect, disconnect: wsDisconnect, on, off } = useWebSocket()
+
+const handleTranscriptFinal = (env) => {
+  transcript.value.push({
+    speaker: env.payload.speaker || 'Unknown',
+    text: env.payload.text,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  })
+}
+
+const handleAISuggestion = (env) => {
+  transcript.value.push({ speaker: 'AI', text: env.payload.suggestion, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), isAi: true })
+}
 
 const showEndModal = ref(false)
 const isEnding = ref(false)
@@ -37,7 +52,7 @@ onMounted(async () => {
     window.history.replaceState({ interviewId: history.state.interviewId }, document.title)
   }
   
-  // Logic kết nối LiveKit
+  // Logic kết nối LiveKit & WebSocket
   if (interviewId) {
     try {
       const companyId = authStore.user?.companies?.[0]?.id
@@ -47,22 +62,28 @@ onMounted(async () => {
         if (token) {
           const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
           await connectToRoom(livekitUrl, token)
+          
+          // Connect WebSocket Realtime
+          connect(token)
+          // The useRoom composable could be used here if we had roomId,
+          // but we can just rely on the token.
+          
+          // Listen to events
+          on('transcript:final', handleTranscriptFinal)
+          on('ai:suggestion', handleAISuggestion)
         }
       }
     } catch (err) {
       console.error('Không thể lấy room token', err)
     }
   }
-
-  // Giả lập AI chạy
-  timer = setTimeout(() => {
-    transcript.value.push({ speaker: 'AI', text: '[AI Phân tích] Câu trả lời khá tự tin, tuy nhiên chưa nêu rõ dự án cụ thể.', time: '14:03', isAi: true })
-  }, 4000)
 })
 
 onUnmounted(() => {
-  if (timer) clearTimeout(timer)
   disconnect()
+  wsDisconnect()
+  off('transcript:final', handleTranscriptFinal)
+  off('ai:suggestion', handleAISuggestion)
 })
 
 const handleEndCall = () => {

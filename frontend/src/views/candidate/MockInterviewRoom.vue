@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
@@ -23,24 +23,35 @@ const messages = ref([])
 
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 
+// Lấy câu hỏi hiện tại (message AI cuối chưa có câu trả lời)
+const currentQuestion = computed(() => {
+  const aiMsgs = messages.value.filter(m => m.sender_type === 'ai' && !m.is_feedback)
+  return aiMsgs.length > 0 ? aiMsgs[aiMsgs.length - 1] : null
+})
+
 const loadMessages = async () => {
   if (!mockId) return
-  const msgs = await mockService.getMessages(mockId)
-  messages.value = msgs || []
-  // Lấy câu hỏi cuối cùng của AI để hiển thị
-  const aiMsgs = messages.value.filter(m => m.sender_type === 'ai')
-  if (aiMsgs.length > 0) {
-    const lastAI = aiMsgs[aiMsgs.length - 1]
-    if (lastAI.score_json) {
-      const parsed = JSON.parse(lastAI.score_json)
-      feedback.value = {
-        score: `${parsed.score}/10`,
-        message: 'AI đã đánh giá câu trả lời của bạn.',
-        improvement: ''
-      }
+  try {
+    const msgs = await mockService.getMessages(mockId)
+    messages.value = Array.isArray(msgs) ? msgs : []
+    // Parse feedback từ message AI có score_json
+    const feedbackMsg = [...messages.value].reverse().find(m => m.sender_type === 'ai' && m.score_json)
+    if (feedbackMsg) {
+      try {
+        const parsed = typeof feedbackMsg.score_json === 'string'
+          ? JSON.parse(feedbackMsg.score_json)
+          : feedbackMsg.score_json
+        feedback.value = {
+          score: `${parsed.score ?? '?'}/10`,
+          message: feedbackMsg.content || 'AI đã đánh giá câu trả lời của bạn.',
+          improvement: parsed.improvements ? parsed.improvements.join(', ') : ''
+        }
+      } catch { feedback.value = null }
     } else {
       feedback.value = null
     }
+  } catch (err) {
+    console.error('Lỗi tải tin nhắn', err)
   }
 }
 
@@ -66,32 +77,41 @@ const handleSendText = async () => {
   if (!textAnswer.value && !recording.value) return
   analyzing.value = true
   feedback.value = null
-  const contentToSend = textAnswer.value || 'Đây là câu trả lời ghi âm mẫu (chức năng ghi âm chưa tích hợp whisper)'
-  
+  const answerText = textAnswer.value || 'Câu trả lời ghi âm (chức năng voice chưa tích hợp)'
+  // Lấy question_id từ câu hỏi hiện tại
+  const questionId = currentQuestion.value?.id || currentQuestion.value?.question_id || null
+
   try {
-    const msgs = await mockService.sendMessage(mockId, contentToSend)
-    messages.value = msgs || []
+    // API_SPEC §11.3 — POST /mock-interviews/:id/answer
+    const result = await mockService.submitAnswer(mockId, {
+      question_id: questionId,
+      answer_text: answerText
+    })
     textAnswer.value = ''
     questionIndex.value++
-    
-    const lastAI = messages.value[messages.value.length - 1]
-    if (lastAI && lastAI.score_json) {
-      const parsed = JSON.parse(lastAI.score_json)
+
+    // Reload messages để có câu hỏi tiếp theo + feedback
+    await loadMessages()
+
+    // Parse feedback từ response trực tiếp
+    if (result?.feedback) {
+      const fb = result.feedback
       feedback.value = {
-        score: `${parsed.score}/10`,
-        message: 'AI đã đánh giá câu trả lời của bạn.',
-        improvement: ''
+        score: `${fb.score ?? '?'}/10`,
+        message: Array.isArray(fb.strengths) ? fb.strengths.join('. ') : 'AI đã đánh giá.',
+        improvement: Array.isArray(fb.improvements) ? fb.improvements.join('. ') : ''
       }
     }
   } catch (error) {
-    console.error(error)
+    console.error('Lỗi gửi câu trả lời', error)
   } finally {
     analyzing.value = false
   }
 }
 
 const handleNext = async () => {
-  await mockService.finishMockInterview(mockId)
+  // API_SPEC §11.4 — POST /mock-interviews/:id/end
+  await mockService.endMockInterview(mockId)
   router.push({ path: '/mock-results', query: { mock_id: mockId } })
 }
 </script>

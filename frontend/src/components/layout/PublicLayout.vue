@@ -7,9 +7,8 @@ const router = useRouter()
   <div class="public-layout" style="min-height: 100vh; display: flex; flex-direction: column; background-color: var(--background);">
     <!-- Simple Header -->
     <header style="padding: 16px 32px; border-bottom: 1px solid var(--border); background-color: var(--surface); display: flex; justify-content: space-between; align-items: center;">
-      <div style="cursor: pointer; display: flex; flex-direction: column;" @click="router.push('/login')">
-        <span style="font-size: 20px; font-weight: 700; color: var(--primary); letter-spacing: -0.5px;">Interview AI</span>
-        <span style="font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Career Portal</span>
+      <div style="cursor: pointer; display: flex; align-items: center;" @click="router.push('/login')">
+        <img src="/images/logo.png" alt="Logo" style="height: 56px; object-fit: contain;" />
       </div>
       <div>
         <button class="btn btn-ghost" @click="router.push('/login')">Đăng nhập</button>

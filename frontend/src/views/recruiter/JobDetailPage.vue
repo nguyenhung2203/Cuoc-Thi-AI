@@ -6,7 +6,7 @@ import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users } from 'lucide-vue-next'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
 
@@ -95,134 +95,226 @@ const handleSave = async (e) => {
   }
 }
 
-const handleAiAnalyze = () => {
+const aiResult = ref(null)
+
+const handleAiAnalyze = async () => {
   aiAnalyzing.value = true
-  setTimeout(() => {
+  aiResult.value = null
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    // API_SPEC §4.6 — POST /companies/:company_id/jobs/:job_id/analyze
+    const result = await jobService.analyzeJD(companyId, id, false)
+    aiResult.value = result
+    rubric.value = (result?.suggested_rubric || []).map(r => ({
+      criterion: r.name,
+      weight: `${r.weight}%`
+    }))
+    localToast.value = { type: 'success', message: 'AI đã phân tích JD thành công!' }
+  } catch (err) {
+    localToast.value = { type: 'info', message: 'Tính năng AI phân tích đang chờ Backend của Khôi.' }
+  } finally {
     aiAnalyzing.value = false
-    rubric.value = [
-      { criterion: 'Technical Skills', weight: '40%' },
-      { criterion: 'Communication', weight: '30%' },
-      { criterion: 'Problem Solving', weight: '30%' }
-    ]
-  }, 1500)
+  }
 }
 </script>
 
 <template>
-  <div v-if="loading">Đang tải...</div>
-  <div v-else>
-    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px">
-      <Button variant="ghost" @click="router.push('/jobs')" style="padding: 8px">
+  <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
+    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+    <span class="font-medium">Đang tải chi tiết công việc...</span>
+  </div>
+  <div v-else class="animate-fade-in space-y-6">
+    <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <button @click="router.push('/jobs')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
         <ArrowLeft size="20" />
-      </Button>
+      </button>
       <div>
-        <div style="display: flex; align-items: center; gap: 12px">
-          <h1 class="text-h1">{{ isNew ? 'Tạo Job Mới' : job.title }}</h1>
-          <Badge v-if="!isNew" :type="job.status === 'Open' ? 'success' : 'neutral'">{{ job.status }}</Badge>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{{ isNew ? 'Tạo Job Mới' : job.title }}</h1>
+          <span v-if="!isNew" class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border" :class="job.status === 'Open' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'">
+            {{ job.status }}
+          </span>
         </div>
-        <p class="text-helper" style="margin-top: 4px">Jobs > {{ isNew ? 'New' : job.title }}</p>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Jobs > {{ isNew ? 'New' : job.title }}</p>
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px">
-      <div style="display: flex; flex-direction: column; gap: 24px">
-        <Card title="Thông tin chung">
-          <form @submit="handleSave">
-            <Input 
-              label="Tiêu đề công việc" 
-              v-model="job.title" 
-              required 
-              minlength="2"
-            />
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Main Form Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin chung</h2>
+          <form @submit="handleSave" class="space-y-5">
+            <!-- Job Title -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Tiêu đề công việc</label>
+              <input 
+                v-model="job.title" 
+                required 
+                minlength="2"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                placeholder="Ví dụ: Frontend Developer"
+              />
+            </div>
             
-            <div class="input-group">
-              <label class="input-label">Trạng thái</label>
-              <select class="input-field" v-model="job.status">
+            <!-- Status -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
+              <select 
+                v-model="job.status" 
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+              >
                 <option value="Open">Đang mở (Open)</option>
                 <option value="Closed">Đã đóng (Closed)</option>
               </select>
             </div>
 
-            <div class="input-group">
-              <label class="input-label">Mô tả công việc (JD)</label>
+            <!-- Job Description -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Mô tả công việc (JD)</label>
               <textarea 
-                class="input-field" 
                 rows="6"
                 v-model="job.description"
-                placeholder="Nhập yêu cầu công việc (tối thiểu 10 ký tự)..."
+                placeholder="Nhập mô tả tổng quan về công việc (tối thiểu 10 ký tự)..."
                 required
                 minlength="10"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
-            <div class="input-group">
-              <label class="input-label">Yêu cầu ứng viên (*)</label>
+            <!-- Requirements -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Yêu cầu ứng viên <span class="text-red-500">*</span></label>
               <textarea 
-                class="input-field" 
                 rows="6"
                 v-model="job.requirements"
                 placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
                 required
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
-            <div class="input-group">
-              <label class="input-label">Quyền lợi (*)</label>
+            <!-- Benefits -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Quyền lợi <span class="text-red-500">*</span></label>
               <textarea 
-                class="input-field" 
                 rows="6"
                 v-model="job.benefits"
                 placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
                 required
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; margin-top: 24px; gap: 12px">
-              <Button type="button" variant="ghost" @click="router.push('/jobs')">Hủy</Button>
-              <Button type="submit" :disabled="saving">
-                <Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu thông tin' }}
+            <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
+              <Button type="button" variant="ghost" @click="router.push('/jobs')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
+              <Button type="submit" :disabled="saving" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+                <Save size="16" class="mr-2" v-if="!saving" /> 
+                <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                {{ saving ? 'Đang lưu...' : 'Lưu thông tin' }}
               </Button>
             </div>
           </form>
-        </Card>
+        </div>
         
-        <Card v-if="!isNew" title="Danh sách ứng viên">
-          <div style="text-align: center; color: var(--text-muted); padding: 32px 0">
-            <p class="text-body">Chưa có ứng viên nào nộp đơn.</p>
+        <div v-if="!isNew" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên</h2>
+          <div class="text-center text-slate-500 dark:text-slate-400 py-12">
+            <Users size="48" class="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
+            <p class="font-medium text-sm">Chưa có ứng viên nào nộp đơn.</p>
           </div>
-        </Card>
+        </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 24px">
-        <Card title="AI Gợi ý tối ưu JD" style="border-top: 4px solid var(--accent)">
-          <p class="text-body" style="color: var(--text-muted); margin-bottom: 16px">
-            Hệ thống AI sẽ tự động đọc JD và phân tích ra bộ tiêu chí chấm điểm (Rubric) phù hợp nhất.
+      <!-- Right Column -->
+      <div class="space-y-6">
+        <!-- AI Analysis Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+            <Sparkles size="100" />
+          </div>
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 relative z-10">AI Phân tích JD</h2>
+          
+          <p class="text-sm text-slate-500 dark:text-slate-400 mb-5 relative z-10">
+            AI sẽ phân tích JD và đề xuất kỹ năng, bộ tiêu chí (Rubric) và câu hỏi phù hợp nhất.
           </p>
-          <Button 
-            variant="secondary" 
-            style="width: 100%; border-color: var(--accent); color: var(--accent)" 
+          
+          <button
+            class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all relative z-10 border"
+            :class="[
+              aiAnalyzing || !job.description 
+                ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400'
+            ]"
             @click="handleAiAnalyze"
             :disabled="aiAnalyzing || !job.description"
           >
-            <Sparkles size="16" /> 
-            {{ aiAnalyzing ? 'Đang phân tích...' : 'Bóc tách Rubric bằng AI' }}
-          </Button>
+            <Sparkles size="16" v-if="!aiAnalyzing" />
+            <div v-else class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+            {{ aiAnalyzing ? 'Đang phân tích...' : 'Phân tích JD bằng AI' }}
+          </button>
 
-          <div v-if="rubric" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px">
-              <CheckCircle size="16" color="var(--success)" />
-              <h4 class="text-h2" style="font-size: 14px">Bộ tiêu chí đề xuất</h4>
+          <!-- AI result: Summary -->
+          <div v-if="aiResult" class="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-5 relative z-10 animate-fade-in">
+            <!-- Summary Box -->
+            <div v-if="aiResult.summary" class="bg-indigo-50/50 dark:bg-indigo-500/5 rounded-xl p-4 border border-indigo-100/50 dark:border-indigo-500/10">
+              <p class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">Tóm tắt AI</p>
+              <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ aiResult.summary }}</p>
             </div>
-            <ul class="text-body" style="padding-left: 24px; display: flex; flex-direction: column; gap: 8px">
-              <li v-for="(r, i) in rubric" :key="i">
-                {{ r.criterion }} - <span style="color: var(--primary); font-weight: 600">{{ r.weight }}</span>
-              </li>
-            </ul>
+
+            <!-- Required skills -->
+            <div v-if="aiResult.required_skills?.length">
+              <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Kỹ năng bắt buộc</p>
+              <div class="flex flex-wrap gap-2">
+                <span v-for="s in aiResult.required_skills" :key="s"
+                  class="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-500/20">
+                  {{ s }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Nice-to-have skills -->
+            <div v-if="aiResult.nice_to_have_skills?.length">
+              <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Kỹ năng ưu tiên</p>
+              <div class="flex flex-wrap gap-2">
+                <span v-for="s in aiResult.nice_to_have_skills" :key="s"
+                  class="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold border border-emerald-100 dark:border-emerald-500/20">
+                  {{ s }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Rubric suggestions -->
+            <div v-if="rubric?.length">
+              <div class="flex items-center gap-2 mb-3">
+                <CheckCircle size="14" class="text-emerald-500" />
+                <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tiêu chí đề xuất</p>
+              </div>
+              <div class="space-y-2">
+                <div v-for="(r, i) in rubric" :key="i"
+                  class="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg">
+                  <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.criterion }}</span>
+                  <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded">{{ r.weight }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Suggested questions count -->
+            <div v-if="aiResult.suggested_questions?.length" class="mt-2">
+              <div class="flex justify-between items-center p-3.5 bg-violet-50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 rounded-xl">
+                <p class="text-sm font-semibold text-violet-600 dark:text-violet-400">{{ aiResult.suggested_questions.length }} câu hỏi đã được đề xuất</p>
+                <CheckCircle size="16" class="text-violet-500" />
+              </div>
+            </div>
           </div>
-          <div v-if="!job.description && !rubric" style="margin-top: 16px; display: flex; align-items: center; gap: 8px; color: var(--warning); font-size: 13px">
-            <AlertCircle size="14" /> Cần nhập JD để AI có thể phân tích.
+
+          <div v-if="!job.description && !aiResult" class="mt-5 flex items-center gap-2 text-amber-500 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg border border-amber-100 dark:border-amber-500/20 text-sm relative z-10 font-medium">
+            <AlertCircle size="16" class="shrink-0" /> Cần nhập JD để AI có thể phân tích.
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   </div>

@@ -13,19 +13,31 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const data = await mockService.getHistory()
-    history.value = data
+    // API_SPEC §11.5 — GET /mock-interviews/my
+    const data = await mockService.listMyMockInterviews()
+    // Map API response fields sang format hiển thị
+    history.value = (Array.isArray(data) ? data : []).map(item => ({
+      id: item.id,
+      role: item.target_role || 'Không rõ',
+      level: item.target_level || '—',
+      date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '—',
+      score: item.final_score != null ? Number(item.final_score).toFixed(1) : '—',
+      status: item.status || 'completed'
+    }))
   } catch (err) {
     console.error('Lỗi tải lịch sử mock', err)
+    // Giữ nguyên empty array — Backend chưa sẵn sàng
+    history.value = []
   } finally {
     loading.value = false
   }
 })
 
 const averageScore = computed(() => {
-  if (history.value.length === 0) return 0
-  const sum = history.value.reduce((acc, curr) => acc + curr.score, 0)
-  return (sum / history.value.length).toFixed(1)
+  const scored = history.value.filter(h => h.score !== '—')
+  if (scored.length === 0) return 0
+  const sum = scored.reduce((acc, curr) => acc + Number(curr.score), 0)
+  return (sum / scored.length).toFixed(1)
 })
 
 const columns = [

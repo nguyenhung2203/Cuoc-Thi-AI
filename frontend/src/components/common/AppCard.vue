@@ -1,14 +1,11 @@
 <script setup>
-defineProps({
-  className: {
-    type: String,
-    default: ''
-  }
-})
+// Using inheritAttrs: false so we can manually merge the outer class
+// onto the inner .card div via v-bind="$attrs"
+defineOptions({ inheritAttrs: false })
 </script>
 
 <template>
-  <div :class="['card', className]" v-bind="$attrs">
+  <div class="card" v-bind="$attrs">
     <slot></slot>
   </div>
 </template>
