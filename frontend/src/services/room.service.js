@@ -22,6 +22,6 @@ export const roomService = {
    * @param {Object} data { participant_type } (mặc định "recruiter")
    */
   getRoomToken: (companyId, interviewId, data = { participant_type: 'recruiter' }) => {
-    return apiService.post(`/companies/${companyId}/interviews/${interviewId}/room/token`, data);
+    return apiService.get(`/companies/${companyId}/interviews/${interviewId}/room/access-token`);
   }
 };
