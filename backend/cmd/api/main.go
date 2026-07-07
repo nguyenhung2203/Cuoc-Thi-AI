@@ -151,6 +151,16 @@ func main() {
 			// File routes — user accesses own files directly (not company-scoped)
 			fileHandler.Routes(r)
 
+			// Notifications (user scoped)
+			r.Route("/notifications", func(r chi.Router) {
+				notificationHandler.ProtectedRoutes(r)
+			})
+
+			// Mock Interviews (candidate scoped)
+			r.Route("/mock-interviews", func(r chi.Router) {
+				mockHandler.ProtectedRoutes(r)
+			})
+
 			// Company management routes
 			r.Route("/companies", func(r chi.Router) {
 				companyHandler.Routes(r)
@@ -172,12 +182,6 @@ func main() {
 					r.Route("/{interview_id}/report", func(r chi.Router) {
 						reportHandler.Routes(r)
 					})
-				})
-				r.Route("/notifications", func(r chi.Router) {
-					notificationHandler.ProtectedRoutes(r)
-				})
-				r.Route("/mock-interviews", func(r chi.Router) {
-					mockHandler.ProtectedRoutes(r)
 				})
 			})
 		})

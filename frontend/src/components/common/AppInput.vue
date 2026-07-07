@@ -33,7 +33,8 @@ const emit = defineEmits(['update:modelValue'])
       @input="emit('update:modelValue', $event.target.value)"
       :required="required"
       v-bind="$attrs"
+      :class="{ 'has-error': error }"
     />
-    <span v-if="error" class="error-text" style="font-size: 12px; margin-top: 4px; display: block;">{{ error }}</span>
+    <span v-if="error" class="error-text" style="font-size: 12px; margin-top: 4px; display: block; color: var(--danger);">{{ error }}</span>
   </div>
 </template>

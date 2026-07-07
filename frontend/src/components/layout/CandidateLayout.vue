@@ -31,7 +31,7 @@ const handleLogout = async () => {
 <template>
   <div class="candidate-layout">
     <!-- Top Navbar -->
-    <header class="top-navbar">
+    <header class="top-navbar glass-nav">
       <div class="nav-container">
         <!-- Logo -->
         <div class="nav-brand" style="cursor: pointer;" @click="router.push('/home')">
@@ -135,8 +135,6 @@ const handleLogout = async () => {
 }
 
 .top-navbar {
-  background-color: var(--surface);
-  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 40;
@@ -198,9 +196,10 @@ const handleLogout = async () => {
 }
 
 .nav-link.active {
-  background-color: rgba(37, 99, 235, 0.1);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.15));
   color: var(--primary);
   font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--primary);
 }
 
 .nav-actions {
