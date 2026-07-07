@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"backend/internal/pkg/utils"
 )
 
 type CVAnalyzer struct {
@@ -26,7 +28,8 @@ func (a *CVAnalyzer) AnalyzeCV(ctx context.Context, cvText, jobContext, companyI
 	}
 
 	var result CVAnalysisResult
-	if err := json.Unmarshal(dataBytes, &result); err != nil {
+	cleanJSON := utils.CleanJSON(string(dataBytes))
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal CV analysis result: %w", err)
 	}
 

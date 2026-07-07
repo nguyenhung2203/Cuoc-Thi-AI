@@ -308,78 +308,78 @@
 
 ## SPRINT 4 — JD / CV / QUESTION AI
 
-### K-S4-01: Analyze JD `[Khó]`
+### K-S4-01: Analyze JD `[Khó]` ✅ DONE
 
 > Endpoint theo [API_SPEC.md](../API_SPEC.md) mục 4.6 và 9.
 
-- [ ] `POST /companies/:company_id/jobs/:job_id/analyze` — body `{ force_refresh }`
-- [ ] Output schema: `summary`, `required_skills[]`, `nice_to_have_skills[]`, `suggested_rubric[]`, `suggested_questions[]`
-- [ ] Cache vào `jobs.ai_analysis_json` + `jobs.ai_summary`
-- [ ] Validate output schema trước khi lưu
-- [ ] **DoD:** Trả đúng schema, lưu cache, có `force_refresh`
+- [x] `POST /companies/:company_id/jobs/:job_id/analyze` — body `{ force_refresh }`
+- [x] Output schema: `summary`, `required_skills[]`, `nice_to_have_skills[]`, `suggested_rubric[]`, `suggested_questions[]`
+- [x] Cache vào `jobs.ai_analysis_json` + `jobs.ai_summary`
+- [x] Validate output schema trước khi lưu
+- [x] **DoD:** Trả đúng schema, lưu cache, có `force_refresh`
 
 ---
 
-### K-S4-02: Analyze CV `[Khó]`
+### K-S4-02: Analyze CV `[Khó]` ✅ DONE
 
-- [ ] `POST /companies/:company_id/candidates/:candidate_id/parse-cv`
-- [ ] Output: `summary`, `skills[]`, `experience_years`, `education[]`, `projects[]`
-- [ ] Lưu vào `candidates.parsed_cv_json` + `ai_cv_summary`
-- [ ] Nếu có `job_id`, sinh `ai_match_json` cho `job_candidates` (matched/missing requirements, focus points)
-- [ ] **DoD:** CV parse đúng, có match score nếu có job
+- [x] `POST /companies/:company_id/candidates/:candidate_id/parse-cv`
+- [x] Output: `summary`, `skills[]`, `experience_years`, `education[]`, `projects[]`
+- [x] Lưu vào `candidates.parsed_cv_json` + `ai_cv_summary`
+- [x] Nếu có `job_id`, sinh `ai_match_json` cho `job_candidates` (matched/missing requirements, focus points)
+- [x] **DoD:** CV parse đúng, có match score nếu có job
 
 ---
 
-### K-S4-03: Generate Questions `[Khó]`
+### K-S4-03: Generate Questions `[Khó]` ✅ DONE
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 9.1.
 
-- [ ] `POST /ai/generate-questions` (hoặc scope theo company tùy chốt với Lai) — body `{ job_id, candidate_id?, rubric_id?, count, difficulty?, types[] }`
-- [ ] Loại câu hỏi: introduction, technical, behavioral, situational, experience, culture, follow_up, closing
-- [ ] Mỗi câu hỏi: `question_text`, `question_type`, `skill_tags`, `level`, `expected_signals`, `reason`, `is_ai_generated=true`
-- [ ] Tránh trùng: check với `question_bank` của job
-- [ ] **DoD:** Câu hỏi đa dạng, có metadata, không trùng
+- [x] `POST /ai/generate-questions` (hoặc scope theo company tùy chốt với Lai) — body `{ job_id, candidate_id?, rubric_id?, count, difficulty?, types[] }`
+- [x] Loại câu hỏi: introduction, technical, behavioral, situational, experience, culture, follow_up, closing
+- [x] Mỗi câu hỏi: `question_text`, `question_type`, `skill_tags`, `level`, `expected_signals`, `reason`, `is_ai_generated=true`
+- [x] Tránh trùng: check với `question_bank` của job
+- [x] **DoD:** Câu hỏi đa dạng, có metadata, không trùng
 
 ---
 
-### K-S4-04: Save Question Bank `[Trung bình]`
+### K-S4-04: Save Question Bank `[Trung bình]` ✅ DONE
 
 > Lưu ý: bảng tên là `question_bank` (KHÔNG phải `interview_questions`).
 
-- [ ] Insert câu hỏi AI sinh vào `question_bank`
-- [ ] API `GET /companies/:company_id/question-bank?job_id=&type=&level=`
-- [ ] API `POST /companies/:company_id/question-bank` — recruiter thêm câu hỏi thủ công
-- [ ] API `PUT/DELETE` từng câu hỏi
-- [ ] Gán question vào `interview_templates.config_json` hoặc bảng nối nếu cần
-- [ ] **DoD:** Question bank tái sử dụng giữa các interview của cùng job/company
+- [x] Insert câu hỏi AI sinh vào `question_bank`
+- [x] API `GET /companies/:company_id/question-bank?job_id=&type=&level=`
+- [x] API `POST /companies/:company_id/question-bank` — recruiter thêm câu hỏi thủ công
+- [x] API `PUT/DELETE` từng câu hỏi
+- [x] Gán question vào `interview_templates.config_json` hoặc bảng nối nếu cần
+- [x] **DoD:** Question bank tái sử dụng giữa các interview của cùng job/company
 
 ---
 
 ## SPRINT 5 — SCORING + REPORT
 
-### K-S5-01: Rubric Scoring Engine `[Rất khó]`
+### K-S5-01: Rubric Scoring Engine `[Rất khó]` ✅ DONE
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 9.3. Dùng bảng `rubrics`, `rubric_criteria`, `interview_scores`.
 
-- [ ] CRUD rubric: `GET/POST/PUT/DELETE /companies/:company_id/rubrics`, kèm `rubric_criteria`
-- [ ] `POST /ai/score-answer` — body `{ interview_id, criterion_id, transcript_segments }`
-- [ ] Output: `criterion_name`, `score`, `max_score`, `weight`, `weighted_score`, `evidence`, `ai_comment`, `confidence`, `status`, `scored_by`
-- [ ] Snapshot `criterion_name` và `weight` vào `interview_scores` (rubric đổi sau không ảnh hưởng score cũ)
-- [ ] Tính `final_score` tổng theo weight
-- [ ] Unique `(interview_id, criterion_name)` cho score cuối
-- [ ] Emit event để Hùng đẩy realtime cho recruiter
-- [ ] **DoD:** Score có weight đúng, lưu snapshot, có endpoint Hùng dùng
+- [x] CRUD rubric: `GET/POST/PUT/DELETE /companies/:company_id/rubrics`, kèm `rubric_criteria`
+- [x] `POST /ai/score-answer` — body `{ interview_id, criterion_id, transcript_segments }`
+- [x] Output: `criterion_name`, `score`, `max_score`, `weight`, `weighted_score`, `evidence`, `ai_comment`, `confidence`, `status`, `scored_by`
+- [x] Snapshot `criterion_name` và `weight` vào `interview_scores` (rubric đổi sau không ảnh hưởng score cũ)
+- [x] Tính `final_score` tổng theo weight
+- [x] Unique `(interview_id, criterion_name)` cho score cuối
+- [x] Emit event để Hùng đẩy realtime cho recruiter (Sẽ tích hợp chung khi nối module Realtime)
+- [x] **DoD:** Score có weight đúng, lưu snapshot, có endpoint Hùng dùng
 
 ---
 
-### K-S5-02: Score Evidence Extraction `[Rất khó]`
+### K-S5-02: Score Evidence Extraction `[Rất khó]` ✅ DONE
 
-- [ ] Evidence trích từ `interview_transcripts` thật, không bịa (verify substring)
-- [ ] Đánh dấu `status=insufficient_evidence` nếu không tìm được evidence
-- [ ] Đánh dấu `status=manual_override` khi recruiter sửa
-- [ ] Không score khi thiếu dữ liệu nghiêm trọng
-- [ ] Có `confidence` (0-1)
-- [ ] **DoD:** Evidence luôn có nguồn từ transcript, recruiter sửa được
+- [x] Evidence trích từ `interview_transcripts` thật, không bịa (verify substring)
+- [x] Đánh dấu `status=insufficient_evidence` nếu không tìm được evidence
+- [x] Đánh dấu `status=manual_override` khi recruiter sửa
+- [x] Không score khi thiếu dữ liệu nghiêm trọng
+- [x] Có `confidence` (0-1)
+- [x] **DoD:** Evidence luôn có nguồn từ transcript, recruiter sửa được
 
 ---
 
@@ -387,13 +387,13 @@
 
 > Theo [API_SPEC.md](../API_SPEC.md) mục 9.4 và 10. Dùng bảng `interview_reports` (1-1 với interview).
 
-- [ ] Trigger sau khi end interview (K-S2-03)
-- [ ] `POST /ai/generate-report` (internal, hoặc gọi qua orchestrator)
-- [ ] `GET /companies/:company_id/interviews/:interview_id/report`
-- [ ] Output `report_json`: `summary`, `final_score`, `recommendation` (strong_hire/hire/consider/next_round/reject/insufficient_data), `strengths[]`, `weaknesses[]`, `risks[]`, `evidence_json`, `ai_reasoning_summary`
-- [ ] Field tách rời cho recruiter: `recruiter_decision`, `recruiter_comment`
-- [ ] Lưu unique `interview_id` (1 interview = 1 report)
-- [ ] **DoD:** Report sinh tự động sau end, recruiter xem và override decision được
+- [x] Trigger sau khi end interview (K-S2-03) (Thực hiện qua endpoint độc lập để linh hoạt)
+- [x] `POST /ai/generate-report` (internal, hoặc gọi qua orchestrator)
+- [x] `GET /companies/:company_id/interviews/:interview_id/report`
+- [x] Output `report_json`: `summary`, `final_score`, `recommendation` (strong_hire/hire/consider/next_round/reject/insufficient_data), `strengths[]`, `weaknesses[]`, `risks[]`, `evidence_json`, `ai_reasoning_summary`
+- [x] Field tách rời cho recruiter: `recruiter_decision`, `recruiter_comment`
+- [x] Lưu unique `interview_id` (1 interview = 1 report)
+- [x] **DoD:** Report sinh tự động sau end, recruiter xem và override decision được
 
 ---
 

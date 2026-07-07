@@ -13,8 +13,10 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/sony/gobreaker/v2"
 
+	"backend/internal/ai"
 	"backend/internal/models"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/pkg/utils"
 )
 
 // StandardAIResponse is the expected structure returned from the Python ai-service.
@@ -64,8 +66,8 @@ func NewAIOrchestratorService(promptSvc *PromptService, logSvc *AILogService, ai
 	}
 }
 
-// CallAI orchestrates rendering the prompt, calling the Python service with retry + circuit breaker, and logging.
-func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, companyID string, variables map[string]string) ([]byte, error) {
+// CallAIWithFullResponse orchestrates rendering the prompt, calling the Python service, and returns the full StandardAIResponse.
+func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, templateName, companyID string, variables map[string]string) (*StandardAIResponse, error) {
 	startTime := time.Now()
 	
 	// 1. Load Prompt Template
@@ -169,7 +171,8 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 
 	// 5. Parse Response
 	var aiResp StandardAIResponse
-	if parseErr := json.Unmarshal(responseBody, &aiResp); parseErr != nil {
+	cleanJSON := utils.CleanJSON(string(responseBody))
+	if parseErr := json.Unmarshal([]byte(cleanJSON), &aiResp); parseErr != nil {
 		logEntry.Status = "failed"
 		logEntry.Error = sql.NullString{String: parseErr.Error(), Valid: true}
 		s.logSvc.LogAsync(logEntry)
@@ -184,6 +187,78 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 		return nil, apierrors.NewValidation("insufficient data", []string{"AI needs more information to process this request"})
 	}
 
-	return aiResp.Data, nil
+	return &aiResp, nil
 }
 
+// CallAI orchestrates rendering the prompt, calling the Python service with retry + circuit breaker, and returning only Data.
+func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, companyID string, variables map[string]string) ([]byte, error) {
+	resp, err := s.CallAIWithFullResponse(ctx, templateName, companyID, variables)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+type AIScoreData struct {
+	Score     float64 `json:"score"`
+	AIComment string  `json:"ai_comment"`
+}
+
+type ScoreResult struct {
+	Score      float64
+	Evidence   string
+	AIComment  string
+	Confidence float64
+}
+
+// ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
+func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide string) (*ScoreResult, error) {
+	variables := map[string]string{
+		"TRANSCRIPT":     transcriptText,
+		"CRITERION_NAME": criterionName,
+		"CRITERION_DESC": criterionDesc,
+		"MIN_SCORE":      fmt.Sprintf("%d", minScore),
+		"MAX_SCORE":      fmt.Sprintf("%d", maxScore),
+		"SCORING_GUIDE":  scoringGuide,
+	}
+
+	fullResp, err := s.CallAIWithFullResponse(ctx, "SCORE_ANSWER", companyID, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	var scoreData AIScoreData
+	cleanJSON := utils.CleanJSON(string(fullResp.Data))
+	if err := json.Unmarshal([]byte(cleanJSON), &scoreData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal score data: %w", err)
+	}
+
+	return &ScoreResult{
+		Score:      scoreData.Score,
+		AIComment:  scoreData.AIComment,
+		Evidence:   fullResp.Evidence,
+		Confidence: fullResp.Confidence,
+	}, nil
+}
+
+// GenerateReport calls AI to generate a final interview report based on transcript, scores, and job requirements.
+func (s *AIOrchestratorService) GenerateReport(ctx context.Context, companyID string, jobRequirements string, transcript string, scoresJSON string) (*ai.ReportGenerationResult, error) {
+	variables := map[string]string{
+		"JOB_REQUIREMENTS": jobRequirements,
+		"TRANSCRIPT":       transcript,
+		"SCORES":           scoresJSON,
+	}
+
+	fullResp, err := s.CallAIWithFullResponse(ctx, "GENERATE_REPORT", companyID, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	var result ai.ReportGenerationResult
+	cleanJSON := utils.CleanJSON(string(fullResp.Data))
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal report generation result: %w", err)
+	}
+
+	return &result, nil
+}

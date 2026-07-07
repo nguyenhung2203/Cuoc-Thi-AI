@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"backend/internal/pkg/utils"
 )
 
 type QuestionGenerator struct {
@@ -30,7 +32,8 @@ func (g *QuestionGenerator) GenerateQuestions(ctx context.Context, job, candidat
 	}
 
 	var result QuestionGenerationResult
-	if err := json.Unmarshal(dataBytes, &result); err != nil {
+	cleanJSON := utils.CleanJSON(string(dataBytes))
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal question generation result: %w", err)
 	}
 

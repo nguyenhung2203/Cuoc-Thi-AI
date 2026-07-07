@@ -61,7 +61,18 @@ type CVProject struct {
 	TechStack   []string `json:"tech_stack"`
 }
 
-// QuestionGenerationResult matches the output JSON of generate_questions template
 type QuestionGenerationResult struct {
 	Questions []SuggestedQuestion `json:"questions"`
+}
+
+// ReportGenerationResult matches the output JSON of generate_report template
+type ReportGenerationResult struct {
+	Summary            string   `json:"summary"`
+	FinalScore         float64  `json:"final_score"`
+	Recommendation     string   `json:"recommendation"` // strong_hire, hire, consider, next_round, reject, insufficient_data
+	Strengths          []string `json:"strengths"`
+	Weaknesses         []string `json:"weaknesses"`
+	Risks              []string `json:"risks"`
+	EvidenceJSON       any      `json:"evidence_json"` // Can be a map mapping criterion to evidence
+	AIReasoningSummary string   `json:"ai_reasoning_summary"`
 }

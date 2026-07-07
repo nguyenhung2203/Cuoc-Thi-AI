@@ -3,7 +3,12 @@ package models
 import "time"
 
 type Notification struct {
-	ID        uint64    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uint64    `db:"id" json:"id"`
+	UserID    string    `db:"user_id" json:"user_id"`
+	Title     string    `db:"title" json:"title"`
+	Message   string    `db:"message" json:"message"`
+	Type      string    `db:"type" json:"type"`
+	IsRead    bool      `db:"is_read" json:"is_read"`
+	Link      string    `db:"link" json:"link"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }

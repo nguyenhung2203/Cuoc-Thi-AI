@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"backend/internal/pkg/utils"
 )
 
 // Orchestrator interface to avoid circular dependency
@@ -33,7 +35,8 @@ func (a *JDAnalyzer) AnalyzeJD(ctx context.Context, jobDescription, jobTitle, jo
 	}
 
 	var result JDAnalysisResult
-	if err := json.Unmarshal(dataBytes, &result); err != nil {
+	cleanJSON := utils.CleanJSON(string(dataBytes))
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JD analysis result: %w", err)
 	}
 
