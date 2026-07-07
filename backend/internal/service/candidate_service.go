@@ -242,6 +242,18 @@ func (s *CandidateService) UpdatePipelineStatus(
 	return nil
 }
 
+// UnassignFromJob removes a candidate from a job (delete job_candidates row).
+func (s *CandidateService) UnassignFromJob(ctx context.Context, companyID, jobID, candidateID string) error {
+	if _, err := s.candidateRepo.GetJobCandidate(ctx, jobID, candidateID); err != nil {
+		return errors.NewNotFound("assignment not found")
+	}
+
+	if err := s.candidateRepo.DeleteJobCandidate(ctx, companyID, jobID, candidateID); err != nil {
+		return errors.NewInternal("failed to unassign candidate from job")
+	}
+	return nil
+}
+
 // ListByJob returns a paginated list of job-candidate records for a specific job.
 func (s *CandidateService) ListByJob(
 	ctx context.Context,

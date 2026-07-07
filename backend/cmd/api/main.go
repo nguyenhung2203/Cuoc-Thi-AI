@@ -70,6 +70,8 @@ func main() {
 	qGenerator := ai.NewQuestionGenerator(aiOrchestrator)
 
 	// 4. Services
+	auditRepo := repository.NewAuditRepository(db)
+	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
@@ -82,10 +84,11 @@ func main() {
 	mockRepo := repository.NewMockRepository(db)
 	reportSvc := service.NewReportService(reportRepo, transcriptRepo, scoreRepo, jobRepo, interviewRepo, notifRepo, aiOrchestrator)
 	interviewSvc := service.NewInterviewService(interviewRepo, reportSvc)
+	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
 
 	// 5. Handlers
-	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
+	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)
 	candidateHandler := handler.NewCandidateHandler(candidateSvc)
@@ -95,9 +98,10 @@ func main() {
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
 	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
-	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc)
+	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
 	notifHandler := handler.NewNotificationHandler(notifRepo)
+	auditHandler := handler.NewAuditHandler(auditSvc)
 
 	// In a real app, aiOrchestrator would be injected into handlers that need it (e.g. JobHandler for AnalyzeJD)
 
@@ -136,6 +140,7 @@ func main() {
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+			r.Use(middleware.AuditMiddleware(auditSvc))
 
 			// Admin routes
 
@@ -174,6 +179,8 @@ func main() {
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 
+				r.Get("/audit-logs", auditHandler.ListAuditLogs)
+
 				r.Route("/rubrics", func(r chi.Router) {
 					r.Post("/", rubricHandler.CreateRubric)
 					r.Get("/", rubricHandler.ListCompanyRubrics)
@@ -197,6 +204,7 @@ func main() {
 					r.Route("/{interview_id}/ai", func(r chi.Router) {
 						r.Post("/score-answer", aiHandler.ScoreAnswer)
 						r.Post("/generate-report", aiHandler.GenerateReport)
+						r.Post("/suggest-follow-up", aiHandler.SuggestFollowUp)
 					})
 				})
 			})

@@ -268,6 +268,26 @@ func (r *CandidateRepository) UpdateJobCandidateStatus(ctx context.Context, comp
 	return nil
 }
 
+// DeleteJobCandidate removes a candidate from a job (unassign).
+// Hard-deletes the job_candidates row scoped to company.
+func (r *CandidateRepository) DeleteJobCandidate(ctx context.Context, companyID, jobID, candidateID string) error {
+	const q = `
+		DELETE FROM job_candidates
+		WHERE job_id = $1::uuid
+		  AND candidate_id = $2::uuid
+		  AND company_id = $3::uuid`
+
+	res, err := r.db.ExecContext(ctx, q, jobID, candidateID, companyID)
+	if err != nil {
+		return fmt.Errorf("delete job candidate: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("delete job candidate: row not found or access denied")
+	}
+	return nil
+}
+
 // ListByJobID returns job_candidates rows (with pipeline info) for a given job scoped to companyID.
 func (r *CandidateRepository) ListByJobID(ctx context.Context, companyID, jobID string, p pagination.Params) ([]models.JobCandidate, int, error) {
 	const countQ = `

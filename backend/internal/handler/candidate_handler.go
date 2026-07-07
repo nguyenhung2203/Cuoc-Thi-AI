@@ -35,9 +35,11 @@ func NewCandidateHandler(svc *service.CandidateService) *CandidateHandler {
 //	GET    /candidates/{candidate_id}               → GetByID
 //	PUT    /candidates/{candidate_id}               → Update
 //	DELETE /candidates/{candidate_id}               → Delete
+//	POST   /candidates/{candidate_id}/parse-cv      → ParseCV
 //	GET    /jobs/{job_id}/candidates                → ListByJob
 //	POST   /jobs/{job_id}/candidates/{candidate_id}/assign   → AssignToJob
 //	PUT    /jobs/{job_id}/candidates/{candidate_id}/pipeline → UpdatePipeline
+//	DELETE /jobs/{job_id}/candidates/{candidate_id}/unassign → UnassignFromJob
 func (h *CandidateHandler) Routes(r chi.Router) {
 	r.Route("/candidates", func(r chi.Router) {
 		r.Get("/", h.List)
@@ -54,6 +56,7 @@ func (h *CandidateHandler) Routes(r chi.Router) {
 		r.Get("/", h.ListByJob)
 		r.Post("/{candidate_id}/assign", h.AssignToJob)
 		r.Put("/{candidate_id}/pipeline", h.UpdatePipeline)
+		r.Delete("/{candidate_id}/unassign", h.UnassignFromJob)
 	})
 }
 
@@ -110,6 +113,14 @@ func (h *CandidateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log candidate creation
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:create", "candidate", candidate.ID, companyID, nil, map[string]interface{}{
+			"full_name": candidate.FullName,
+			"email":     candidate.Email,
+		})
+	}
+
 	pkgresponse.JSON(w, http.StatusCreated, toCandidateDetail(*candidate), nil, requestID)
 }
 
@@ -144,10 +155,18 @@ func (h *CandidateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch old candidate before updating (for audit diff)
+	oldCandidate, _ := h.svc.GetByID(r.Context(), companyID, candidateID)
+
 	candidate, err := h.svc.Update(r.Context(), companyID, candidateID, &req)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log candidate update
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:update", "candidate", candidateID, companyID, oldCandidate, candidate)
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, toCandidateDetail(*candidate), nil, requestID)
@@ -162,6 +181,11 @@ func (h *CandidateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), companyID, candidateID); err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log candidate deletion
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:delete", "candidate", candidateID, companyID, map[string]string{"candidate_id": candidateID}, nil)
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "candidate deleted"}, nil, requestID)
@@ -217,6 +241,14 @@ func (h *CandidateHandler) AssignToJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log candidate assign to job
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:assign", "job_candidate", jc.ID, companyID, nil, map[string]string{
+			"job_id":       jobID,
+			"candidate_id": candidateID,
+		})
+	}
+
 	pkgresponse.JSON(w, http.StatusCreated, toJobCandidateItem(*jc), nil, requestID)
 }
 
@@ -244,7 +276,37 @@ func (h *CandidateHandler) UpdatePipeline(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Audit log pipeline status change
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:pipeline_update", "job_candidate", candidateID, companyID, nil, map[string]string{
+			"job_id":          jobID,
+			"pipeline_status": body.PipelineStatus,
+		})
+	}
+
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "pipeline status updated"}, nil, requestID)
+}
+
+// UnassignFromJob handles DELETE /companies/{company_id}/jobs/{job_id}/candidates/{candidate_id}/unassign
+func (h *CandidateHandler) UnassignFromJob(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	jobID := chi.URLParam(r, "job_id")
+	candidateID := chi.URLParam(r, "candidate_id")
+
+	if err := h.svc.UnassignFromJob(r.Context(), companyID, jobID, candidateID); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	// Audit log unassign
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:unassign", "job_candidate", candidateID, companyID, nil, map[string]string{
+			"job_id": jobID,
+		})
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "candidate unassigned from job"}, nil, requestID)
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +378,13 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log CV parse
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("candidate:parse_cv", "candidate", candidateID, companyID, nil, map[string]string{
+			"job_context": req.JobContext,
+		})
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "CV parsed successfully"}, nil, requestID)

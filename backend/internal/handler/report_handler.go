@@ -35,6 +35,11 @@ func (h *ReportHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log report view
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("report:view", "report", interviewID, companyID, nil, nil)
+	}
+
 	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
 		"report": report,
 	}, nil, requestID)
@@ -59,6 +64,13 @@ func (h *ReportHandler) OverrideDecision(w http.ResponseWriter, r *http.Request)
 	if err := h.reportSvc.OverrideDecision(r.Context(), companyID, interviewID, req.Decision, req.Comment); err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log decision override
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("report:decision_override", "report", interviewID, companyID, nil, map[string]string{
+			"decision": req.Decision,
+		})
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{
