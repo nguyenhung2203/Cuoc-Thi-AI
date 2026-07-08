@@ -302,12 +302,12 @@ Interview Transcript:
 		Summary:        parsed.Summary,
 		FinalScore:     sql.NullFloat64{Float64: parsed.FinalScore, Valid: true},
 		Recommendation: parsed.Recommendation,
-		Strengths:      sql.NullString{String: string(strengthsJSON), Valid: true},
-		Weaknesses:     sql.NullString{String: string(weaknessesJSON), Valid: true},
-		Risks:          sql.NullString{String: string(risksJSON), Valid: true},
-		EvidenceJSON:   sql.NullString{String: string(evidenceJSON), Valid: true},
+		Strengths:      models.JSONB(strengthsJSON),
+		Weaknesses:     models.JSONB(weaknessesJSON),
+		Risks:          models.JSONB(risksJSON),
+		EvidenceJSON:   models.JSONB(evidenceJSON),
 		AIReasoningSummary: sql.NullString{String: parsed.AIReasoningSummary, Valid: true},
-		ReportJSON:     cleanJSON,
+		ReportJSON:     models.JSONB(cleanJSON),
 		GeneratedBy:    "Gemini 2.5 Flash",
 	}
 

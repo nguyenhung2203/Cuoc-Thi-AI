@@ -43,6 +43,7 @@ func (h *JobHandler) Routes(r chi.Router) {
 			r.Get("/", h.GetByID)
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
+			r.Post("/analyze", h.Analyze)
 		})
 	})
 }
@@ -161,6 +162,20 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "job deleted"}, nil, requestID)
+}
+
+// Analyze handles POST /companies/{company_id}/jobs/{job_id}/analyze
+func (h *JobHandler) Analyze(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	jobID := chi.URLParam(r, "job_id")
+
+	if err := h.svc.Analyze(r.Context(), companyID, jobID); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "job analyzed successfully"}, nil, requestID)
 }
 
 // ---------------------------------------------------------------------------

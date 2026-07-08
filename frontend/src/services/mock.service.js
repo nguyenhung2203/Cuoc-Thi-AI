@@ -30,7 +30,8 @@ export const mockService = {
    * @param {Object} data { question_id, answer_text }
    */
   submitAnswer: (mockId, data) => {
-    return apiService.post(`/mock-interviews/${mockId}/answer`, data);
+    // API_SPEC §11.3 — POST /mock-interviews/:mock_interview_id/messages
+    return apiService.post(`/mock-interviews/${mockId}/messages`, { content: data.answer_text });
   },
 
   /**
@@ -49,7 +50,8 @@ export const mockService = {
    */
   listMyMockInterviews: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return apiService.get(`/mock-interviews/my${query ? `?${query}` : ''}`);
+    // Backend API uses /mock-interviews/me instead of /my
+    return apiService.get(`/mock-interviews/me${query ? `?${query}` : ''}`);
   },
 
   /**
@@ -58,6 +60,15 @@ export const mockService = {
    */
   getMockInterview: (mockId) => {
     return apiService.get(`/mock-interviews/${mockId}`);
+  },
+
+  /**
+   * Lấy báo cáo kết quả Mock Interview
+   * API_SPEC §11.7 — GET /mock-interviews/:mock_interview_id/report
+   * @param {String} mockId
+   */
+  getReport: (mockId) => {
+    return apiService.get(`/mock-interviews/${mockId}/report`);
   },
 
   /**

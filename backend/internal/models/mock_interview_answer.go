@@ -1,9 +1,5 @@
 package models
 
-import "time"
-
-type MockInterviewAnswer struct {
-	ID        uint64    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
+// File kept for compatibility — MockInterviewMessage is used instead.
+// Bảng đúng là mock_interview_messages (KHÔNG phải mock_interview_answers).
+// Xem checklist K-S6-02.

@@ -15,11 +15,15 @@ import (
 )
 
 type InterviewService struct {
-	repo *repository.InterviewRepository
+	repo      *repository.InterviewRepository
+	reportSvc *ReportService
 }
 
-func NewInterviewService(repo *repository.InterviewRepository) *InterviewService {
-	return &InterviewService{repo: repo}
+func NewInterviewService(repo *repository.InterviewRepository, reportSvc *ReportService) *InterviewService {
+	return &InterviewService{
+		repo:      repo,
+		reportSvc: reportSvc,
+	}
 }
 
 type CreateInterviewRequest struct {
@@ -189,6 +193,16 @@ func (s *InterviewService) EndInterview(ctx context.Context, interviewID, compan
 		_ = s.repo.UpdateRoomStatus(ctx, i.RoomID.String, "closed")
 	}
 
-	// Stub: Trigger report generation task here
+	// Trigger report generation async
+	if s.reportSvc != nil && i.JobID.Valid && i.ConsentAI {
+		generatedBy := "system"
+		if i.RecruiterID.Valid {
+			generatedBy = i.RecruiterID.String
+		}
+		go func() {
+			_, _ = s.reportSvc.GenerateReport(context.Background(), companyID, interviewID, i.JobID.String, generatedBy)
+		}()
+	}
+
 	return nil
 }

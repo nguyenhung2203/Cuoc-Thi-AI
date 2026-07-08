@@ -54,6 +54,12 @@ onMounted(async () => {
             education: data.education || ''
           }
         }
+        if (data.cv_file?.id) {
+          const res = await candidateService.getCVUrl(data.cv_file.id, companyId)
+          if (res && res.url) {
+            cvPreviewUrl.value = res.url
+          }
+        }
       }
     } catch (error) {
       localToast.value = { type: 'error', message: 'Không thể tải chi tiết ứng viên' }
@@ -223,7 +229,26 @@ const handleViewCV = async () => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
+      <!-- Loading Overlay -->
+      <div v-if="uploading || isAiParsing" class="absolute inset-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center border border-indigo-100 dark:border-indigo-900 shadow-2xl">
+        <div class="w-16 h-16 mb-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shadow-lg relative animate-bounce">
+           <Sparkles size="32" class="text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <h3 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+          {{ uploading ? 'Đang tải CV lên hệ thống...' : 'AI đang đọc và phân tích CV...' }}
+        </h3>
+        <p class="text-slate-500 dark:text-slate-400 font-medium max-w-sm text-center">
+          Vui lòng đợi trong giây lát. Hệ thống đang trích xuất thông tin kỹ năng và kinh nghiệm từ CV của ứng viên.
+        </p>
+        <div v-if="uploading" class="w-64 mt-6">
+          <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div class="h-full bg-indigo-600 transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
+          </div>
+          <p class="text-center text-sm font-bold text-indigo-600 mt-2">{{ uploadProgress }}%</p>
+        </div>
+      </div>
+
       <!-- Form Section -->
       <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 self-start">
         <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin cá nhân</h2>
@@ -305,21 +330,12 @@ const handleViewCV = async () => {
               </Button>
             </div>
             
-            <div v-if="cvPreviewUrl" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mt-4">
+            <div v-if="cvPreviewUrl" class="w-full border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mt-4 bg-slate-100 dark:bg-slate-900 flex items-center justify-center min-h-[400px]">
               <img v-if="selectedFile && selectedFile.type.startsWith('image/')" :src="cvPreviewUrl" class="max-w-full max-h-[400px] object-contain mx-auto block" />
               <iframe v-else-if="selectedFile && selectedFile.type === 'application/pdf'" :src="cvPreviewUrl" width="100%" height="400px" class="border-none block"></iframe>
+              <iframe v-else-if="!selectedFile && cvPreviewUrl" :src="cvPreviewUrl" width="100%" height="400px" class="border-none block"></iframe>
             </div>
             
-            <div v-if="uploading" class="mt-4">
-              <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Đang tải lên... {{ uploadProgress }}%</p>
-              <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div class="h-full bg-indigo-600 transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
-              </div>
-            </div>
-            <div v-else-if="isAiParsing" class="mt-4 text-center py-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-              <Sparkles size="24" class="text-indigo-500 mx-auto mb-2 animate-pulse" />
-              <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">AI đang phân tích CV...</p>
-            </div>
           </div>
           <div v-else 
             class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-10 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
