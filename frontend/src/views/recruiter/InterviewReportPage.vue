@@ -8,6 +8,7 @@ import Toast from '../../components/common/AppToast.vue'
 import { ArrowLeft, Download, Share2, CheckCircle, AlertTriangle, FileText } from 'lucide-vue-next'
 import { authStore } from '../../stores/auth.store'
 import { reportService } from '../../services/report.service'
+import { transcriptService } from '../../services/transcript.service'
 
 const router = useRouter()
 const route = useRoute()
@@ -16,6 +17,11 @@ const note = ref('')
 const toast = ref(null)
 const loading = ref(true)
 const report = ref(null)
+
+const showTranscriptModal = ref(false)
+const fullTranscripts = ref([])
+const loadingTranscripts = ref(false)
+const retryingReport = ref(false)
 
 onMounted(async () => {
   try {
@@ -50,6 +56,39 @@ const handleSaveDecision = async () => {
   const interviewId = route.params.id
   await reportService.saveDecision(companyId, interviewId, { decision: decision.value, comment: note.value })
   toast.value = { type: 'success', message: 'Đã lưu quyết định tuyển dụng thành công!' }
+}
+
+const handleViewTranscripts = async () => {
+  showTranscriptModal.value = true
+  if (fullTranscripts.value.length === 0) {
+    loadingTranscripts.value = true
+    try {
+      const companyId = authStore.user?.companies?.[0]?.id
+      const interviewId = route.params.id
+      const data = await transcriptService.getTranscripts(companyId, interviewId)
+      fullTranscripts.value = data || []
+    } catch (err) {
+      toast.value = { type: 'error', message: 'Lỗi tải transcript' }
+    } finally {
+      loadingTranscripts.value = false
+    }
+  }
+}
+
+const handleRetryReport = async () => {
+  retryingReport.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const interviewId = route.params.id
+    await reportService.retryReport(companyId, interviewId)
+    toast.value = { type: 'success', message: 'Đang gửi yêu cầu tạo lại báo cáo, vui lòng đợi lát...' }
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Không thể tạo lại báo cáo.' }
+    retryingReport.value = false
+  }
 }
 </script>
 
@@ -87,7 +126,11 @@ const handleSaveDecision = async () => {
     <!-- Error State -->
     <div v-else-if="!report" class="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl p-8 text-center text-rose-600 dark:text-rose-400 font-medium flex flex-col items-center justify-center gap-2">
       <AlertTriangle size="32" />
-      <span>Không thể tải báo cáo.</span>
+      <span>Không thể tải báo cáo hoặc AI gặp lỗi khi phân tích.</span>
+      <Button @click="handleRetryReport" :disabled="retryingReport" class="mt-4 bg-rose-600 hover:bg-rose-700 text-white border-none shadow-md shadow-rose-500/20">
+        <div v-if="retryingReport" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+        {{ retryingReport ? 'Đang gửi...' : 'Thử tạo lại báo cáo bằng AI' }}
+      </Button>
     </div>
     
     <div v-else class="space-y-6">
@@ -226,11 +269,48 @@ const handleSaveDecision = async () => {
               </div>
             </div>
             
-            <Button variant="ghost" class="w-full mt-6 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border-none font-semibold transition-colors">
+            <Button @click="handleViewTranscripts" variant="ghost" class="w-full mt-6 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border-none font-semibold transition-colors">
               <FileText size="16" class="mr-1.5" /> Xem toàn bộ Transcript
             </Button>
           </div>
 
+        </div>
+      </div>
+    </div>
+    
+    <!-- Transcripts Modal -->
+    <div v-if="showTranscriptModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+        <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+          <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <FileText size="18" class="text-indigo-500" /> Toàn bộ Transcript
+          </h3>
+          <button @click="showTranscriptModal = false" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+        <div class="p-4 flex-1 overflow-y-auto space-y-4 bg-slate-50 dark:bg-slate-900/20">
+          <div v-if="loadingTranscripts" class="text-center text-slate-500 py-10 flex flex-col items-center gap-3">
+             <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+             Đang tải lịch sử trò chuyện...
+          </div>
+          <div v-else-if="!fullTranscripts.length" class="text-center text-slate-500 py-10">
+             Chưa có dữ liệu transcript nào.
+          </div>
+          <div v-else v-for="t in fullTranscripts" :key="t.id" class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
+            <div class="flex items-center justify-between mb-2">
+               <span class="font-bold text-sm" :class="t.speaker_type === 'recruiter' ? 'text-indigo-600' : 'text-emerald-600'">
+                 {{ t.speaker_name }}
+               </span>
+               <span class="text-xs font-semibold text-slate-400">
+                 {{ new Date(t.created_at).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit', second:'2-digit'}) }}
+               </span>
+            </div>
+            <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{{ t.content }}</p>
+          </div>
+        </div>
+        <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end">
+          <Button @click="showTranscriptModal = false" variant="ghost" class="text-slate-600 dark:text-slate-300">Đóng</Button>
         </div>
       </div>
     </div>

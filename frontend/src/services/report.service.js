@@ -19,5 +19,12 @@ export const reportService = {
    */
   saveDecision: async (companyId, interviewId, data) => {
     return apiService.put(`/companies/${companyId}/interviews/${interviewId}/report/decision`, data);
+  },
+
+  /**
+   * Yêu cầu AI phân tích lại báo cáo (khi bị lỗi hoặc thiếu dữ liệu)
+   */
+  retryReport: async (companyId, interviewId) => {
+    return apiService.post(`/companies/${companyId}/interviews/${interviewId}/report/retry`);
   }
 };

@@ -1,13 +1,69 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
 import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe } from 'lucide-vue-next'
+
+import { notificationService } from '../../services/notification.service'
 
 const router = useRouter()
 const route = useRoute()
 const showNotifications = ref(false)
 const showProfileMenu = ref(false)
+const notifications = ref([])
+
+onMounted(async () => {
+  try {
+    if (authStore.user) {
+      const data = await notificationService.getNotifications()
+      if (data && data.notifications) {
+        notifications.value = data.notifications
+      } else if (Array.isArray(data)) {
+        notifications.value = data
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load notifications:', error)
+  }
+})
+
+const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+
+const handleMarkAllAsRead = async (e) => {
+  e.stopPropagation()
+  try {
+    if (authStore.user) {
+      await notificationService.markAllAsRead()
+      notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+const handleMarkAsRead = async (e, id) => {
+  e.stopPropagation()
+  try {
+    if (authStore.user) {
+      await notificationService.markAsRead(id)
+      const notif = notifications.value.find(n => n.id === id)
+      if (notif) notif.is_read = true
+    }
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+const formatTimeAgo = (isoStr) => {
+  if (!isoStr) return ''
+  const diff = new Date() - new Date(isoStr)
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'Vừa xong'
+  if (minutes < 60) return `${minutes} phút trước`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} giờ trước`
+  return `${Math.floor(hours / 24)} ngày trước`
+}
 
 const candidateMenu = [
   { path: '/', name: 'Giới thiệu', icon: Globe },
@@ -59,22 +115,37 @@ const handleLogout = async () => {
             <div style="position: relative; cursor: pointer; margin-right: 16px" @click="showNotifications = !showNotifications; showProfileMenu = false">
               <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s" class="hover-circle">
                 <Bell size="20" color="var(--text-secondary)" />
-                <div style="position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background-color: var(--danger); border-radius: 50%; border: 2px solid var(--surface)"></div>
+                <div v-if="unreadCount > 0" style="position: absolute; top: 0px; right: 0px; background-color: var(--danger); color: white; border-radius: 50%; border: 2px solid var(--surface); font-size: 10px; font-weight: bold; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;">
+                  {{ unreadCount }}
+                </div>
               </div>
               
               <!-- Notifications Dropdown -->
               <div v-if="showNotifications" class="dropdown-menu">
                 <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center">
                   <span style="font-weight: 600; color: var(--text-main)">Thông báo</span>
-                  <span style="font-size: 12px; color: var(--primary); font-weight: 500">Đánh dấu đã đọc</span>
+                  <span style="font-size: 12px; color: var(--primary); font-weight: 500; cursor: pointer;" @click="handleMarkAllAsRead">Đánh dấu đã đọc</span>
                 </div>
-                <div style="padding: 16px; border-bottom: 1px solid var(--border); background-color: rgba(37, 99, 235, 0.05); transition: background-color 0.2s" class="hover-bg">
-                  <div class="text-body" style="font-weight: 600; margin-bottom: 6px; color: var(--text-main)">Lịch phỏng vấn mới! 🎉</div>
-                  <div class="text-helper" style="color: var(--text-secondary); line-height: 1.5">
-                    Nhà tuyển dụng vừa lên lịch phỏng vấn với bạn cho vị trí <strong>Frontend Developer</strong> vào 10:00 sáng ngày mai. Hãy kiểm tra mục "Phỏng vấn của tôi".
+                
+                <div style="max-height: 400px; overflow-y: auto;">
+                  <div v-if="notifications.length === 0" style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 14px;">
+                    Chưa có thông báo nào.
                   </div>
-                  <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px">Vừa xong</div>
+                  <div v-for="n in notifications" :key="n.id" 
+                       style="padding: 16px; border-bottom: 1px solid var(--border); transition: background-color 0.2s" 
+                       :style="{ backgroundColor: n.is_read ? 'transparent' : 'rgba(37, 99, 235, 0.05)' }"
+                       class="hover-bg">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                      <div class="text-body" style="font-weight: 600; color: var(--text-main)">{{ n.title }}</div>
+                      <div v-if="!n.is_read" @click="handleMarkAsRead($event, n.id)" style="width: 8px; height: 8px; background-color: var(--primary); border-radius: 50%; cursor: pointer; flex-shrink: 0;" title="Đánh dấu đã đọc"></div>
+                    </div>
+                    <div class="text-helper" style="color: var(--text-secondary); line-height: 1.5">
+                      {{ n.content || n.message }}
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px">{{ formatTimeAgo(n.created_at) }}</div>
+                  </div>
                 </div>
+
                 <div style="padding: 12px; text-align: center; color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; background-color: var(--surface-soft)">
                   Xem tất cả thông báo
                 </div>

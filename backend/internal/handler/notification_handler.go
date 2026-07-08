@@ -1,75 +1,14 @@
 package handler
 
 import (
-	"net/http"
 	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
+
 	"github.com/go-chi/chi/v5"
+
 	"backend/internal/middleware"
-	"backend/internal/pkg/response"
-	"backend/internal/service"
-)
-
-type NotificationHandler struct {
-	svc *service.NotificationService
-}
-
-func NewNotificationHandler(svc *service.NotificationService) *NotificationHandler {
-	return &NotificationHandler{svc: svc}
-}
-
-func (h *NotificationHandler) ProtectedRoutes(r chi.Router) {
-	r.Get("/", h.ListNotifications)
-	r.Put("/read-all", h.MarkAllAsRead)
-	r.Put("/{notification_id}/read", h.MarkAsRead)
-}
-
-func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
-	if !ok {
-		userID = "" // should not happen if under ProtectedRoutes, but just in case
-	}
-	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
-
-	items, err := h.svc.ListByUser(r.Context(), userID, 50, 0)
-	if err != nil {
-		writeServiceError(w, err, requestID)
-		return
-	}
-
-	response.JSON(w, http.StatusOK, items, nil, requestID)
-}
-
-func (h *NotificationHandler) MarkAsRead(w http.ResponseWriter, r *http.Request) {
-	notificationID := chi.URLParam(r, "notification_id")
-	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
-
-	err := h.svc.MarkAsRead(r.Context(), notificationID)
-	if err != nil {
-		writeServiceError(w, err, requestID)
-		return
-	}
-
-	response.JSON(w, http.StatusOK, map[string]string{"message": "marked as read"}, nil, requestID)
-}
-
-func (h *NotificationHandler) MarkAllAsRead(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
-	if !ok {
-		userID = ""
-	}
-	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
-
-	err := h.svc.MarkAllAsRead(r.Context(), userID)
-	if err != nil {
-		writeServiceError(w, err, requestID)
-		return
-	}
-
-	response.JSON(w, http.StatusOK, map[string]string{"message": "all marked as read"}, nil, requestID)
-
 	"backend/internal/models"
 	apierrors "backend/internal/pkg/errors"
 	pkgresponse "backend/internal/pkg/response"
@@ -82,6 +21,12 @@ type NotificationHandler struct {
 
 func NewNotificationHandler(notifRepo *repository.NotificationRepository) *NotificationHandler {
 	return &NotificationHandler{notifRepo: notifRepo}
+}
+
+func (h *NotificationHandler) ProtectedRoutes(r chi.Router) {
+	r.Get("/", h.ListNotifications)
+	r.Put("/read-all", h.MarkAllNotificationsRead)
+	r.Put("/{notification_id}/read", h.MarkNotificationRead)
 }
 
 func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +43,7 @@ func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.R
 	}
 	offset := (page - 1) * pageSize
 
-	items, err := h.notifRepo.GetByUserID(r.Context(), userID, pageSize, offset)
+	items, err := h.notifRepo.ListByUser(r.Context(), userID, pageSize, offset)
 	if err != nil {
 		pkgresponse.Error(w, apierrors.NewInternal(err.Error()), requestID)
 		return
@@ -142,5 +87,19 @@ func (h *NotificationHandler) MarkNotificationRead(w http.ResponseWriter, r *htt
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{
 		"message": "notification marked as read",
+	}, nil, requestID)
+}
+
+func (h *NotificationHandler) MarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	if err := h.notifRepo.MarkAllAsRead(r.Context(), userID); err != nil {
+		pkgresponse.Error(w, apierrors.NewInternal(err.Error()), requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{
+		"message": "all notifications marked as read",
 	}, nil, requestID)
 }

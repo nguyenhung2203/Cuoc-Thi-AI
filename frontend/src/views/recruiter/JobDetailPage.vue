@@ -49,6 +49,15 @@ onMounted(async () => {
           requirements: unwrap(rawJob.requirements),
           benefits: unwrap(rawJob.benefits)
         }
+        
+        if (rawJob.ai_analysis_json) {
+          let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
+          aiResult.value = result
+          rubric.value = (result?.suggested_rubric || []).map(r => ({
+            criterion: r.name,
+            weight: `${r.weight}%`
+          }))
+        }
       }
     } catch (error) {
       localToast.value = { type: 'error', message: 'Không thể tải chi tiết công việc' }
@@ -103,12 +112,21 @@ const handleAiAnalyze = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     // API_SPEC §4.6 — POST /companies/:company_id/jobs/:job_id/analyze
-    const result = await jobService.analyzeJD(companyId, id, false)
-    aiResult.value = result
-    rubric.value = (result?.suggested_rubric || []).map(r => ({
-      criterion: r.name,
-      weight: `${r.weight}%`
-    }))
+    await jobService.analyzeJD(companyId, id, false)
+    
+    // AIAnalysis is saved to the database, we need to fetch the job again
+    const jobData = await jobService.getJob(companyId, id)
+    const rawJob = jobData.data || jobData
+    
+    if (rawJob.ai_analysis_json) {
+      let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
+      aiResult.value = result
+      rubric.value = (result?.suggested_rubric || []).map(r => ({
+        criterion: r.name,
+        weight: `${r.weight}%`
+      }))
+    }
+    
     localToast.value = { type: 'success', message: 'AI đã phân tích JD thành công!' }
   } catch (err) {
     localToast.value = { type: 'info', message: 'Tính năng AI phân tích đang chờ Backend của Khôi.' }

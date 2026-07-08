@@ -99,9 +99,6 @@ func (s *CandidateService) Create(
 		Status:       models.CandidateStatus("new"),
 
 		CVFileID:     sql.NullString{String: req.CVFileID, Valid: req.CVFileID != ""},
-		ParsedCVJSON: json.RawMessage("null"),
-		Tags:         json.RawMessage("[]"),
-
 		ParsedCVJSON: models.JSONB("null"),
 		Tags:         models.JSONB("[]"),
 

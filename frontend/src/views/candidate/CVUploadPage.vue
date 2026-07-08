@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { UploadCloud, FileText, CheckCircle, ArrowLeft, Loader2, Search } from 'lucide-vue-next'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
+import { candidatePortalService } from '../../services/candidate-portal.service'
 
 const router = useRouter()
 const isDragging = ref(false)
@@ -48,14 +49,17 @@ const processFile = async (selectedFile) => {
   uploadStatus.value = 'uploading'
   uploadProgress.value = 0
   
-  // Fake upload progress
-  const interval = setInterval(() => {
-    uploadProgress.value += 10
-    if (uploadProgress.value >= 100) {
-      clearInterval(interval)
-      startParsing()
+  try {
+    const res = await candidatePortalService.uploadCv(selectedFile)
+    uploadProgress.value = 100
+    if (res && res.cv_url) {
+       startParsing()
+    } else {
+       uploadStatus.value = 'error'
     }
-  }, 200)
+  } catch (error) {
+    uploadStatus.value = 'error'
+  }
 }
 
 const startParsing = async () => {
