@@ -68,6 +68,11 @@ func (h *CompanyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log company creation
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("company:create", "company", company.ID, company.ID, nil, company)
+	}
+
 	response.JSON(w, http.StatusCreated, company, nil, "")
 }
 
@@ -94,6 +99,11 @@ func (h *CompanyHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response.Error(w, errors.NewInternal("failed to update company"), "")
 		return
+	}
+
+	// Audit log company update
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("company:update", "company", companyID, companyID, nil, company)
 	}
 
 	response.JSON(w, http.StatusOK, company, nil, "")
