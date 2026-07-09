@@ -114,3 +114,21 @@ func (r *InterviewRepository) GetByInviteTokenHash(ctx context.Context, hash str
 	}
 	return &i, nil
 }
+
+func (r *InterviewRepository) UpdateReportStatus(ctx context.Context, id, status string) error {
+	q := `UPDATE interviews SET report_status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, q, status, id)
+	return err
+}
+
+// UpdateReportStatusIf atomically updates report_status only when current status equals expected.
+// Returns true if a row was updated, false if no row matched the condition.
+func (r *InterviewRepository) UpdateReportStatusIf(ctx context.Context, id, status, expectedCurrentStatus string) (bool, error) {
+	q := `UPDATE interviews SET report_status = $1, updated_at = NOW() WHERE id = $2 AND report_status = $3`
+	res, err := r.db.ExecContext(ctx, q, status, id, expectedCurrentStatus)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}

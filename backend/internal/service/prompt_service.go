@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"backend/internal/models"
@@ -38,13 +39,15 @@ func (s *PromptService) LoadTemplate(ctx context.Context, name, companyID string
 	return tmpl, nil
 }
 
-// Render replaces variables in the format {{key}} with their corresponding values.
-// This is a basic implementation. For complex rendering, text/template could be used.
+// Render replaces variables safely by wrapping user input in delimiter tags.
 func (s *PromptService) Render(content string, variables map[string]string) string {
 	rendered := content
 	for k, v := range variables {
-		// Replace {{key}} with the value
-		rendered = strings.ReplaceAll(rendered, "{{"+k+"}}", v)
+		// Neutralise delimiter-breaking sequences from untrusted input.
+		safe := strings.ReplaceAll(v, "```", "ʼʼʼ")
+		safe = strings.ReplaceAll(safe, "<<<END_USER_DATA>>>", "") // Extra safety to prevent breakout
+		wrapped := fmt.Sprintf("\n<<<USER_DATA:%s>>>\n%s\n<<<END_USER_DATA>>>\n", k, safe)
+		rendered = strings.ReplaceAll(rendered, "{{"+k+"}}", wrapped)
 	}
 	return rendered
 }

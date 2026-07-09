@@ -11,7 +11,8 @@ import (
 func CorsMiddleware() func(http.Handler) http.Handler {
 	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "*"
+		// KHÔNG dùng "*" khi AllowCredentials=true (vi phạm CORS spec, trình duyệt sẽ block Cookie)
+		allowedOrigins = "http://localhost:3000,http://localhost:5173,http://localhost:13000"
 	}
 	origins := strings.Split(allowedOrigins, ",")
 

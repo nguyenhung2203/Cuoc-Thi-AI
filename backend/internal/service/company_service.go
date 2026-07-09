@@ -50,6 +50,7 @@ func (s *CompanyService) GetCompany(ctx context.Context, id string) (*models.Com
 func (s *CompanyService) ListCompanies(ctx context.Context, userID string) ([]models.Company, error) {
 	companies, err := s.companyRepo.ListByUserID(ctx, userID)
 	if err != nil {
+		println("ListByUserID error:", err.Error())
 		return nil, errors.NewInternal("failed to list companies")
 	}
 	return companies, nil

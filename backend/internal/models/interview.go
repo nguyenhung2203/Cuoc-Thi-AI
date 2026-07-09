@@ -19,12 +19,13 @@ type Interview struct {
 	StartedAt        sql.NullTime   `json:"started_at" db:"started_at"`
 	EndedAt          sql.NullTime   `json:"ended_at" db:"ended_at"`
 	Status           string         `json:"status" db:"status"` // scheduled, waiting, active, paused, completed, cancelled, expired
-	RoomID           sql.NullString `json:"room_id" db:"room_id"`
-	InviteTokenHash  sql.NullString `json:"-" db:"invite_token_hash"` // Do not leak in JSON
-	InviteExpiresAt  sql.NullTime   `json:"invite_expires_at" db:"invite_expires_at"`
-	ConsentRecording bool           `json:"consent_recording" db:"consent_recording"`
-	ConsentAI        bool           `json:"consent_ai" db:"consent_ai"`
-	CreatedBy        sql.NullString `json:"created_by" db:"created_by"`
-	CreatedAt        time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at" db:"updated_at"`
+	RoomID           sql.NullString `db:"room_id" json:"room_id"`
+	InviteTokenHash  sql.NullString `db:"invite_token_hash" json:"-"`
+	InviteExpiresAt  sql.NullTime   `db:"invite_expires_at" json:"invite_expires_at"`
+	ConsentRecording bool           `db:"consent_recording" json:"consent_recording"`
+	ConsentAI        bool           `db:"consent_ai" json:"consent_ai"`
+	ReportStatus     string         `db:"report_status" json:"report_status"`
+	CreatedBy        sql.NullString `db:"created_by" json:"created_by"`
+	CreatedAt        time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time      `db:"updated_at" json:"updated_at"`
 }

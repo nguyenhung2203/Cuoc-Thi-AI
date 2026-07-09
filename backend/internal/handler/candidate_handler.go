@@ -19,13 +19,14 @@ import (
 
 // CandidateHandler wires the CandidateService to HTTP endpoints.
 type CandidateHandler struct {
-	svc   *service.CandidateService
-	aiSvc *service.AIService
+	svc     *service.CandidateService
+	aiSvc   *service.AIService
+	fileSvc *service.FileService
 }
 
 // NewCandidateHandler constructs a CandidateHandler.
-func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService) *CandidateHandler {
-	return &CandidateHandler{svc: svc, aiSvc: aiSvc}
+func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService, fileSvc *service.FileService) *CandidateHandler {
+	return &CandidateHandler{svc: svc, aiSvc: aiSvc, fileSvc: fileSvc}
 }
 
 // Routes registers all candidate endpoints on r.
@@ -45,6 +46,7 @@ func (h *CandidateHandler) Routes(r chi.Router) {
 		r.Post("/", h.Create)
 		r.Route("/{candidate_id}", func(r chi.Router) {
 			r.Get("/", h.GetByID)
+			r.Post("/cv", h.UploadCV)
 			r.Post("/parse-cv", h.ParseCV)
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
@@ -351,4 +353,52 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "CV parsed successfully"}, nil, requestID)
+}
+
+// UploadCV handles POST /companies/{company_id}/candidates/{candidate_id}/cv
+func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	candidateID := chi.URLParam(r, "candidate_id")
+
+	// Parse multipart form
+	err := r.ParseMultipartForm(10 << 20) // 10 MB
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewBadRequest("failed to parse form data"), requestID)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewBadRequest("file is required"), requestID)
+		return
+	}
+	defer file.Close()
+
+	// 1. Process upload using file service (using candidate_id as userID since it's recruiter uploading for candidate)
+	// We use "cv" as folder
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	fileRecord, err := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, companyID, "cv")
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewInternal("failed to process file upload"), requestID)
+		return
+	}
+
+	// 2. Update candidate with file ID if candidate_id is not "new"
+	if candidateID != "new" {
+		updateReq := &request.UpdateCandidateRequest{
+			CVFileID: &fileRecord.ID,
+		}
+		_, err = h.svc.Update(r.Context(), companyID, candidateID, updateReq)
+		if err != nil {
+			writeServiceError(w, err, requestID)
+			return
+		}
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "CV uploaded successfully",
+		"id":      fileRecord.ID,
+		"url":     "/api/v1/files/" + fileRecord.ID + "/signed-url",
+	}, nil, requestID)
 }

@@ -260,7 +260,7 @@ Chức năng:
 - Register.
 - Login.
 - Logout.
-- Refresh token.
+- Refresh token (HttpOnly Cookie + Token Family Rotation).
 - Forgot password.
 - Get current user.
 - Role cơ bản: admin, recruiter, candidate.
@@ -544,7 +544,7 @@ MVP đạt khi:
 | Database | PostgreSQL |
 | Cache/Queue | Redis |
 | File Storage | S3-compatible |
-| Auth | JWT + Refresh Token |
+| Auth | JWT Access Token + HttpOnly Refresh Token (Token Family) |
 
 AI IDE không được tự ý đổi sang framework/ngôn ngữ khác.
 

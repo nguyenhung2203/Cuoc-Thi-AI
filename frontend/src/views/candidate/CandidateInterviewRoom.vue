@@ -6,6 +6,9 @@ import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, CheckCircle, FileText } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
+import { useWebSocket } from '../../composables/useWebSocket'
+import { useRoom } from '../../composables/useRoom'
+import { useChat } from '../../composables/useChat'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,17 +27,48 @@ const isLeaving = ref(false)
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 const interviewInfo = ref(history.state?.interviewInfo || null)
 
+// Parse JWT to extract room_id and interview_id
+const parseJwt = (token) => {
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return {};
+  }
+}
+
+const token = route.query.token || ''
+const tokenClaims = parseJwt(token)
+const roomId = tokenClaims.room_id || (tokenClaims.video && tokenClaims.video.room) || ''
+const interviewId = tokenClaims.interview_id || ''
+
+const { connect, disconnect: wsDisconnect } = useWebSocket()
+const { joinRoom, participants, isJoined } = useRoom(roomId, interviewId)
+const { messages, sendChatMessage } = useChat(roomId, interviewId)
+
+const chatInput = ref('')
+
+const handleSendMessage = () => {
+  if (!chatInput.value.trim()) return
+  sendChatMessage(chatInput.value.trim(), 'room')
+  chatInput.value = ''
+}
+
 onMounted(async () => {
   if (history.state?.message) {
     window.history.replaceState({ interviewInfo: history.state.interviewInfo }, document.title)
   }
   
-  // Logic kết nối LiveKit
-  const token = route.query.token
+  // Logic kết nối LiveKit & WebSocket
   if (token) {
     try {
       const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
       await connectToRoom(livekitUrl, token)
+      
+      // Connect WebSocket Realtime
+      connect(token)
+      setTimeout(() => {
+        joinRoom()
+      }, 500) // Delay slight to ensure connection opens
     } catch (err) {
       console.error('Không thể vào phòng', err)
     }
@@ -43,6 +77,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnect()
+  wsDisconnect()
 })
 
 const handleLeave = () => {
@@ -211,19 +246,37 @@ const confirmLeave = () => {
           <!-- Tab: Chat -->
           <div v-show="activeTab === 'chat'" class="absolute inset-0 flex flex-col bg-slate-800/30">
             <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              <!-- Example message -->
-              <div class="flex flex-col gap-1 items-start">
-                <span class="text-xs text-slate-500 font-medium ml-1">Nhà Tuyển Dụng - 10:05</span>
-                <div class="bg-slate-700 text-slate-200 px-4 py-2.5 rounded-2xl rounded-tl-none text-sm max-w-[85%] shadow-sm">
-                  Chào bạn, bạn nghe rõ không ạ?
+              <div v-for="msg in messages" :key="msg.id" class="flex flex-col gap-1" :class="msg.sender_role === 'candidate' ? 'items-end' : 'items-start'">
+                <span class="text-xs text-slate-500 font-medium px-1">
+                  {{ msg.sender_role === 'candidate' ? 'Bạn' : (msg.sender_name || 'Hệ thống') }} - 
+                  {{ new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
+                </span>
+                <div 
+                  class="px-4 py-2.5 rounded-2xl text-sm max-w-[85%] shadow-sm"
+                  :class="msg.sender_role === 'candidate' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-200 rounded-tl-none'"
+                >
+                  {{ msg.content }}
                 </div>
+              </div>
+              
+              <div v-if="messages.length === 0" class="text-center text-slate-500 text-sm mt-4">
+                Chưa có tin nhắn nào.
               </div>
             </div>
             
             <div class="p-4 bg-slate-800/80 border-t border-slate-700/50 shrink-0">
               <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700 rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
-                <input type="text" class="flex-1 bg-transparent border-none text-sm text-white px-3 outline-none placeholder-slate-500" placeholder="Nhập tin nhắn..." />
-                <button class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shrink-0">
+                <input 
+                  type="text" 
+                  v-model="chatInput" 
+                  @keyup.enter="handleSendMessage"
+                  class="flex-1 bg-transparent border-none text-sm text-white px-3 outline-none placeholder-slate-500" 
+                  placeholder="Nhập tin nhắn..." 
+                />
+                <button 
+                  @click="handleSendMessage"
+                  class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shrink-0"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-90" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
                 </button>
               </div>

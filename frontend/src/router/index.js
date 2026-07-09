@@ -1,7 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/', redirect: '/login' },
+  {
+    path: '/',
+    component: () => import('../components/layout/CandidateLayout.vue'),
+    children: [
+      { path: '', component: () => import('../views/public/LandingPage.vue') }
+    ]
+  },
   { path: '/login', component: () => import('../views/auth/LoginPage.vue') },
   { path: '/register', component: () => import('../views/auth/RegisterPage.vue') },
   { path: '/forgot-password', component: () => import('../views/auth/ForgotPasswordPage.vue') },
@@ -20,9 +26,11 @@ const routes = [
       { path: 'interviews', component: () => import('../views/recruiter/InterviewListPage.vue') },
       { path: 'interviews/new', component: () => import('../views/recruiter/InterviewSchedulePage.vue') },
       { path: 'interviews/:id', component: () => import('../views/recruiter/InterviewDetailPage.vue') },
+      { path: 'interviews/:id/report', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'recruiter-room', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
       { path: 'reports', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'question-bank', component: () => import('../views/recruiter/QuestionBankPage.vue') },
+      { path: 'rubrics', component: () => import('../views/recruiter/RubricPage.vue') },
       { path: 'templates', component: () => import('../views/recruiter/TemplatePage.vue') },
       { path: 'settings', component: () => import('../views/recruiter/SettingsPage.vue') }
     ]
@@ -40,7 +48,7 @@ const routes = [
       { path: 'mock-results', component: () => import('../views/candidate/PracticeHistoryPage.vue') },
       { path: 'mock-results/:id', component: () => import('../views/candidate/MockResultPage.vue') },
       { path: 'profile', component: () => import('../views/candidate/ProfilePage.vue') },
-      { path: 'cv', component: () => import('../views/candidate/MyCvPage.vue') }
+      { path: 'candidate-settings', component: () => import('../views/candidate/CandidateSettingsPage.vue') }
     ]
   },
   {
@@ -67,12 +75,12 @@ const router = createRouter({
 // Simple auth guard
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
-  const publicPages = ['/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired']
+  const publicPages = ['/', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired']
   const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers')
   const authRequired = !isPublicPage
 
   if (authRequired && !token) {
-    return next('/login')
+    return next({ path: '/login', state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } })
   }
 
   // Prevent logged in users from visiting login page

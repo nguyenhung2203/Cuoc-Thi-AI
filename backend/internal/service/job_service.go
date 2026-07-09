@@ -4,25 +4,45 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
+	"backend/internal/ai"
 	"backend/internal/dto/request"
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/pagination"
+	"backend/internal/pkg/utils"
 	"backend/internal/repository"
+	"strings"
 )
 
 // JobService implements business logic for Job CRUD and analysis.
 type JobService struct {
-	jobRepo *repository.JobRepository
+	jobRepo      *repository.JobRepository
+	jdAnalyzer   *ai.JDAnalyzer
+	qGenerator   *ai.QuestionGenerator
+	rubricRepo   repository.RubricRepository
+	questionRepo repository.QuestionRepository
 }
 
-// NewJobService constructs a JobService with its required repository.
-func NewJobService(jobRepo *repository.JobRepository) *JobService {
-	return &JobService{jobRepo: jobRepo}
+// NewJobService constructs a JobService with its required repositories and AI clients.
+func NewJobService(
+	jobRepo *repository.JobRepository,
+	jdAnalyzer *ai.JDAnalyzer,
+	qGenerator *ai.QuestionGenerator,
+	rubricRepo repository.RubricRepository,
+	questionRepo repository.QuestionRepository,
+) *JobService {
+	return &JobService{
+		jobRepo:      jobRepo,
+		jdAnalyzer:   jdAnalyzer,
+		qGenerator:   qGenerator,
+		rubricRepo:   rubricRepo,
+		questionRepo: questionRepo,
+	}
 }
 
 // List returns a paginated list of jobs scoped to companyID.
@@ -81,7 +101,7 @@ func (s *JobService) Create(
 		Requirements:   sql.NullString{String: req.Requirements, Valid: req.Requirements != ""},
 		Benefits:       sql.NullString{String: req.Benefits, Valid: req.Benefits != ""},
 		Status:         models.JobStatus(req.Status),
-		AIAnalysisJSON: json.RawMessage("null"),
+		AIAnalysisJSON: models.JSONB("null"),
 		CreatedBy:      createdByUserID,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -176,7 +196,6 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 }
 
 // GetStats returns the candidate and interview counts for a job.
-// Counts are fetched sequentially; the first error short-circuits.
 func (s *JobService) GetStats(ctx context.Context, jobID string) (candidateCount, interviewCount int, err error) {
 	candidateCount, err = s.jobRepo.CountCandidates(ctx, jobID)
 	if err != nil {
@@ -187,4 +206,90 @@ func (s *JobService) GetStats(ctx context.Context, jobID string) (candidateCount
 		return 0, 0, errors.NewInternal("failed to count interviews")
 	}
 	return candidateCount, interviewCount, nil
+}
+
+// Analyze triggers AI analysis for a job.
+func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error {
+	job, err := s.GetByID(ctx, companyID, jobID)
+	if err != nil {
+		return err
+	}
+
+	// 1. Prevent duplicate analysis
+	if job.AIAnalysisJSON != nil && string(job.AIAnalysisJSON) != "null" {
+		return errors.NewConflict("job has already been analyzed")
+	}
+
+	// 2. Truncate long descriptions to prevent Resource Exhaustion (DoS)
+	safeDescription := utils.TruncateText(job.Description, 15000)
+
+	result, err := s.jdAnalyzer.AnalyzeJD(ctx, safeDescription, job.Title, job.Level.String, job.Department.String, companyID)
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return errors.NewInternal(fmt.Sprintf("failed to marshal AI analysis result: %v", err))
+	}
+
+	// Prepare Rubric & Criteria
+	var rubric *models.Rubric
+	var criteria []models.RubricCriteria
+
+	if len(result.SuggestedRubric) > 0 {
+		rubric = &models.Rubric{
+			ID:          uuid.NewString(),
+			CompanyID:   companyID,
+			JobID:       sql.NullString{String: jobID, Valid: true},
+			Name:        fmt.Sprintf("Rubric for %s", job.Title),
+			TotalWeight: 100,
+			CreatedBy:   job.CreatedBy,
+		}
+		
+		for i, c := range result.SuggestedRubric {
+			criteria = append(criteria, models.RubricCriteria{
+				ID:          uuid.NewString(),
+				RubricID:    rubric.ID,
+				Name:        c.Name,
+				Description: sql.NullString{String: c.Description, Valid: true},
+				Weight:      float64(c.Weight),
+				MinScore:    1,
+				MaxScore:    5,
+				OrderIndex:  i,
+			})
+		}
+	}
+
+	// Prepare Questions
+	var questions []models.QuestionBank
+	if len(result.SuggestedQuestions) > 0 {
+		for _, sq := range result.SuggestedQuestions {
+			tagsBytes, err := json.Marshal([]string{sq.TargetSkill})
+			if err != nil {
+				return errors.NewInternal(fmt.Sprintf("failed to marshal target skill tags: %v", err))
+			}
+			signalsBytes, err := json.Marshal(sq.ExpectedSignals)
+			if err != nil {
+				return errors.NewInternal(fmt.Sprintf("failed to marshal expected signals: %v", err))
+			}
+			questions = append(questions, models.QuestionBank{
+				CompanyID:       sql.NullString{String: companyID, Valid: true},
+				JobID:           sql.NullString{String: jobID, Valid: true},
+				CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
+				QuestionText:    sq.QuestionText,
+				QuestionType:    sq.QuestionType,
+				SkillTags:       models.JSONB(tagsBytes),
+				Level:           sql.NullString{String: sq.Difficulty, Valid: true},
+				ExpectedSignals: models.JSONB(signalsBytes),
+				IsAIGenerated:   true,
+			})
+		}
+	}
+
+	// 3. Save all results transactionally
+	if err := s.jobRepo.SaveAIAnalysisWithTx(ctx, companyID, jobID, result.Summary, resultBytes, rubric, criteria, questions); err != nil {
+		if strings.Contains(err.Error(), "CONFLICT") {
+			return errors.NewConflict("job has already been analyzed")
+		}
+		return errors.NewInternal(fmt.Sprintf("failed to save AI analysis results: %v", err))
+	}
+
+	return nil
 }

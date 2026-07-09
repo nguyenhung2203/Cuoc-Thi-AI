@@ -28,3 +28,8 @@ type ListCandidatesQuery struct {
 type AssignCandidateRequest struct {
 	PipelineStatus string `json:"pipeline_status" validate:"required,oneof=new screening invited interviewing completed passed rejected talent_pool"`
 }
+
+type ParseCVRequest struct {
+	CVText     string `json:"cv_text"     validate:"required"`
+	JobContext string `json:"job_context" validate:"omitempty"`
+}

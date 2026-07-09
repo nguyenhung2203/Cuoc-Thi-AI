@@ -3,11 +3,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
+import Toast from '../../components/common/AppToast.vue'
 import { Play, FileText, Sparkles } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
 
 const router = useRouter()
 const loading = ref(false)
+const toast = ref(null)
 
 const setup = ref({
   jobRole: 'frontend',
@@ -21,14 +23,19 @@ const handleStart = async (e) => {
   e.preventDefault()
   loading.value = true
   try {
-    const session = await mockService.startMockInterview({
+    // Bước 1: Tạo session mới (status=draft) — API_SPEC §11.1
+    const session = await mockService.createMockInterview({
       target_role: setup.value.jobRole,
       target_level: setup.value.level,
-      cv_file_id: setup.value.useCurrentCv ? 'my_cv_id_here' : ''
+      cv_file_id: setup.value.useCurrentCv ? 'my_cv_id_here' : undefined
     })
+    // Bước 2: Bắt đầu session → nhận câu hỏi đầu tiên — API_SPEC §11.2
+    await mockService.startMockInterview(session.id)
+    // Chuyển vào phòng phỏng vấn mock
     router.push({ path: '/mock-room', query: { mock_id: session.id } })
   } catch (error) {
     console.error(error)
+    toast.value = { type: 'error', message: 'Không thể khởi động phỏng vấn. Backend đang được kết nối.' }
   } finally {
     loading.value = false
   }

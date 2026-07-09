@@ -67,7 +67,7 @@ Mục tiêu chính:
 ### Chức năng
 
 - Đăng ký/đăng nhập.
-- JWT/refresh token.
+- JWT Access Token + HttpOnly Refresh Token (Token Family Rotation).
 - Phân biệt role:
   - Admin
   - Recruiter Owner
@@ -92,6 +92,7 @@ Mục tiêu chính:
 ### Bảng lõi Khôi cần thiết kế
 
 - users
+- refresh_tokens
 - companies
 - company_members
 - jobs
