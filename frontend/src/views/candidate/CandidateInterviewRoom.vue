@@ -1,26 +1,30 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, CheckCircle, FileText } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
-import { useWebSocket } from '../../composables/useWebSocket'
-import { useRoom } from '../../composables/useRoom'
-import { useChat } from '../../composables/useChat'
+
+// Import Stores
+import { useRoomStore } from '../../stores/room.store'
+import { useChatStore } from '../../stores/chat.store'
 
 const router = useRouter()
 const route = useRoute()
 
+// Stores
+const roomStore = useRoomStore()
+const chatStore = useChatStore()
+
 const {
-  isConnected, error, isMicOn, isCameraOn,
+  isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn,
   localVideoEl, remoteVideoEl,
-  connectToRoom, toggleMic, toggleCamera, disconnect
+  connectToRoom, toggleMic, toggleCamera, disconnect: liveKitDisconnect
 } = useLiveKit()
 
 const activeTab = ref('info')
-
 const showLeaveModal = ref(false)
 const isLeaving = ref(false)
 
@@ -41,15 +45,11 @@ const tokenClaims = parseJwt(token)
 const roomId = tokenClaims.room_id || (tokenClaims.video && tokenClaims.video.room) || ''
 const interviewId = tokenClaims.interview_id || ''
 
-const { connect, disconnect: wsDisconnect } = useWebSocket()
-const { joinRoom, participants, isJoined } = useRoom(roomId, interviewId)
-const { messages, sendChatMessage } = useChat(roomId, interviewId)
-
 const chatInput = ref('')
 
 const handleSendMessage = () => {
   if (!chatInput.value.trim()) return
-  sendChatMessage(chatInput.value.trim(), 'room')
+  chatStore.sendChat(chatInput.value.trim(), 'room', roomId, interviewId)
   chatInput.value = ''
 }
 
@@ -58,17 +58,21 @@ onMounted(async () => {
     window.history.replaceState({ interviewInfo: history.state.interviewInfo }, document.title)
   }
   
+  // Khởi tạo Listeners cho Store
+  chatStore.setupListeners()
+  
   // Logic kết nối LiveKit & WebSocket
   if (token) {
     try {
-      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
-      await connectToRoom(livekitUrl, token)
-      
       // Connect WebSocket Realtime
-      connect(token)
-      setTimeout(() => {
-        joinRoom()
-      }, 500) // Delay slight to ensure connection opens
+      roomStore.connectRoom(token, roomId, interviewId)
+      
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+      try {
+        await connectToRoom(livekitUrl, token)
+      } catch(e) {
+        console.warn("LiveKit connection failed, fallback to Websocket only", e)
+      }
     } catch (err) {
       console.error('Không thể vào phòng', err)
     }
@@ -76,8 +80,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  disconnect()
-  wsDisconnect()
+  liveKitDisconnect()
+  roomStore.disconnectRoom()
+  chatStore.cleanupListeners()
 })
 
 const handleLeave = () => {
@@ -87,10 +92,60 @@ const handleLeave = () => {
 const confirmLeave = () => {
   showLeaveModal.value = false
   isLeaving.value = true
+  // Candidate không có quyền gọi interview:end, chỉ disconnect WebSocket
+  roomStore.disconnectRoom()
+  liveKitDisconnect()
   setTimeout(() => {
     router.push({ path: '/home', state: { message: 'Rời phòng phỏng vấn thành công' } })
   }, 1500)
 }
+
+// [FIX] Watch status expired/cancelled/completed → redirect candidate
+watch(() => roomStore.status, (newStatus) => {
+  if (newStatus === 'expired') {
+    setTimeout(() => {
+      router.push({ path: '/home', state: { message: 'Phòng phỏng vấn đã hết hạn.' } })
+    }, 2000)
+  }
+  if (newStatus === 'cancelled') {
+    setTimeout(() => {
+      router.push({ path: '/home', state: { message: 'Buổi phỏng vấn đã bị hủy.' } })
+    }, 2000)
+  }
+  if (newStatus === 'completed') {
+    setTimeout(() => {
+      router.push({ path: '/home', state: { message: 'Buổi phỏng vấn đã kết thúc. Cảm ơn bạn!' } })
+    }, 3000)
+  }
+})
+
+// [FIX] Live elapsed timer from startedAt
+const elapsedSeconds = ref(0)
+let timerInterval = null
+
+watch(() => roomStore.startedAt, (val) => {
+  if (val) {
+    if (timerInterval) clearInterval(timerInterval)
+    timerInterval = setInterval(() => {
+      elapsedSeconds.value = Math.floor((Date.now() - new Date(val).getTime()) / 1000)
+    }, 1000)
+  }
+})
+
+const elapsedFormatted = computed(() => {
+  const h = Math.floor(elapsedSeconds.value / 3600)
+  const m = Math.floor((elapsedSeconds.value % 3600) / 60)
+  const s = elapsedSeconds.value % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+})
+
+onUnmounted(() => { if (timerInterval) clearInterval(timerInterval) })
+
+// Helpers for UI
+const recruiterParticipant = computed(() => {
+  return roomStore.participants.find(p => p.participant_type === 'recruiter') || null
+})
+
 </script>
 
 <template>
@@ -110,11 +165,22 @@ const confirmLeave = () => {
       </div>
       <div class="flex items-center gap-4 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-700">
         <span class="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="hidden sm:inline">Đường truyền tốt</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400" :class="{ 'animate-pulse': roomStore.isConnected }"></span>
+          <span class="hidden sm:inline">{{ roomStore.isConnected ? 'Đường truyền tốt' : 'Mất kết nối' }}</span>
         </span>
         <span class="w-px h-4 bg-slate-700"></span>
-        <span class="text-sm font-mono font-bold text-white tracking-wider">00:15:32</span>
+        <span class="text-sm font-mono font-bold text-white tracking-wider flex items-center gap-2">
+          <span v-if="roomStore.status === 'active'" class="text-rose-500 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            Đang Live
+          </span>
+          <span v-else-if="roomStore.status === 'waiting'" class="text-amber-500">Đang chờ</span>
+          <span v-else-if="roomStore.status === 'paused'" class="text-amber-500">⏸️ Tạm dừng</span>
+          <span v-else-if="roomStore.status === 'completed'" class="text-emerald-500">✅ Đã kết thúc</span>
+          <span v-else>{{ roomStore.status }}</span>
+          
+          <span v-if="roomStore.startedAt" class="text-indigo-400 font-mono ml-2">{{ elapsedFormatted }}</span>
+        </span>
       </div>
     </header>
 
@@ -141,17 +207,17 @@ const confirmLeave = () => {
             <video ref="remoteVideoEl" autoplay playsinline class="w-full h-full object-cover"></video>
             
             <!-- Fallback if no video -->
-            <div class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 z-0">
+            <div v-if="!recruiterParticipant || recruiterParticipant.connection_state === 'offline'" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 z-0">
               <div class="w-24 h-24 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center mb-4 text-4xl font-bold text-slate-500 shadow-inner">
                 R
               </div>
-              <p class="text-slate-400 font-medium animate-pulse">Đang chờ nhà tuyển dụng kết nối camera...</p>
+              <p class="text-slate-400 font-medium animate-pulse">Đang chờ nhà tuyển dụng kết nối...</p>
             </div>
             
             <!-- Recruiter Name Badge -->
-            <div class="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10 z-10 shadow-lg flex items-center gap-2">
+            <div v-if="recruiterParticipant" class="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10 z-10 shadow-lg flex items-center gap-2">
               <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
-              Nhà Tuyển Dụng
+              {{ recruiterParticipant.display_name }} (Nhà Tuyển Dụng)
             </div>
           </div>
           
@@ -174,12 +240,12 @@ const confirmLeave = () => {
 
         <!-- Floating Control Bar -->
         <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl border border-slate-600/50 p-2 rounded-2xl shadow-2xl flex items-center gap-2 z-30 transition-transform hover:-translate-y-1 duration-300">
-          <button @click="toggleMic" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isMicOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
+          <button @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isMicOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
             <Mic v-if="isMicOn" class="w-5 h-5" />
             <MicOff v-else class="w-5 h-5" />
           </button>
           
-          <button @click="toggleCamera" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isCameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
+          <button @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isCameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
             <Video v-if="isCameraOn" class="w-5 h-5" />
             <VideoOff v-else class="w-5 h-5" />
           </button>
@@ -201,7 +267,7 @@ const confirmLeave = () => {
           </button>
           <button @click="activeTab = 'chat'" class="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors border-b-2 relative" :class="activeTab === 'chat' ? 'text-indigo-400 border-indigo-400 bg-indigo-500/5' : 'text-slate-400 border-transparent hover:bg-slate-800 hover:text-slate-200'">
             <MessageSquare class="w-4 h-4" /> Chat
-            <span class="absolute top-3 right-8 w-2 h-2 rounded-full bg-rose-500 border-2 border-slate-800"></span>
+            <span v-if="chatStore.messages.length > 0" class="absolute top-3 right-8 w-2 h-2 rounded-full bg-rose-500 border-2 border-slate-800"></span>
           </button>
         </div>
 
@@ -218,15 +284,7 @@ const confirmLeave = () => {
               <ul class="space-y-3">
                 <li class="flex items-start gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
                   <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0"></span>
-                  <span class="text-sm text-slate-300 leading-relaxed">Phát triển các tính năng Frontend sử dụng ReactJS.</span>
-                </li>
-                <li class="flex items-start gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0"></span>
-                  <span class="text-sm text-slate-300 leading-relaxed">Tối ưu hóa hiệu suất ứng dụng web.</span>
-                </li>
-                <li class="flex items-start gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0"></span>
-                  <span class="text-sm text-slate-300 leading-relaxed">Phối hợp với UI/UX designer và Backend developer.</span>
+                  <span class="text-sm text-slate-300 leading-relaxed">Phát triển các tính năng theo yêu cầu.</span>
                 </li>
               </ul>
             </div>
@@ -246,20 +304,19 @@ const confirmLeave = () => {
           <!-- Tab: Chat -->
           <div v-show="activeTab === 'chat'" class="absolute inset-0 flex flex-col bg-slate-800/30">
             <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              <div v-for="msg in messages" :key="msg.id" class="flex flex-col gap-1" :class="msg.sender_role === 'candidate' ? 'items-end' : 'items-start'">
+              <div v-for="msg in chatStore.messages" :key="msg.message_id" class="flex flex-col gap-1" :class="msg.sender_type === 'candidate' ? 'items-end' : 'items-start'">
                 <span class="text-xs text-slate-500 font-medium px-1">
-                  {{ msg.sender_role === 'candidate' ? 'Bạn' : (msg.sender_name || 'Hệ thống') }} - 
-                  {{ new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
+                  {{ msg.sender_type === 'candidate' ? 'Bạn' : (msg.sender_name || 'Hệ thống') }}
                 </span>
                 <div 
                   class="px-4 py-2.5 rounded-2xl text-sm max-w-[85%] shadow-sm"
-                  :class="msg.sender_role === 'candidate' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-200 rounded-tl-none'"
+                  :class="msg.sender_type === 'candidate' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-200 rounded-tl-none'"
                 >
-                  {{ msg.content }}
+                  {{ msg.message }}
                 </div>
               </div>
               
-              <div v-if="messages.length === 0" class="text-center text-slate-500 text-sm mt-4">
+              <div v-if="chatStore.messages.length === 0" class="text-center text-slate-500 text-sm mt-4">
                 Chưa có tin nhắn nào.
               </div>
             </div>
