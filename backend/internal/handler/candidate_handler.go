@@ -413,15 +413,8 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, apierrors.NewInternal(err.Error()), requestID)
 		return
 	}
-
-	// Audit log CV parse
-	if ah := middleware.GetAuditHelper(r); ah != nil {
-		ah.Log("candidate:parse_cv", "candidate", candidateID, companyID, nil, map[string]string{
-			"job_context": req.JobContext,
-		})
-	}
-
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "CV parsed successfully"}, nil, requestID)
+	
+pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "CV parsed successfully"}, nil, requestID)
 }
 
 // UploadCV handles POST /companies/{company_id}/candidates/{candidate_id}/cv
