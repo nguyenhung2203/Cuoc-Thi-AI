@@ -293,3 +293,51 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 
 	return nil
 }
+
+// GenerateQuestions uses AI to generate interview questions for a job.
+func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID string, req *request.GenerateQuestionsRequest) ([]models.QuestionBank, error) {
+	job, err := s.GetByID(ctx, companyID, jobID)
+	if err != nil {
+		return nil, err
+	}
+
+	count := req.Count
+	if count <= 0 {
+		count = 10
+	}
+	questionTypes := "behavioral,technical"
+	if len(req.QuestionTypes) > 0 {
+		questionTypes = strings.Join(req.QuestionTypes, ",")
+	}
+
+	safeDescription := utils.TruncateText(job.Description, 15000)
+
+	result, err := s.qGenerator.GenerateQuestions(ctx, safeDescription, "", "", req.Level, fmt.Sprintf("%d", count), questionTypes, companyID)
+	if err != nil {
+		return nil, errors.NewInternal(fmt.Sprintf("AI question generation failed: %v", err))
+	}
+
+	var questions []models.QuestionBank
+	for _, sq := range result.Questions {
+		tagsBytes, _ := json.Marshal([]string{sq.TargetSkill})
+		signalsBytes, _ := json.Marshal(sq.ExpectedSignals)
+		questions = append(questions, models.QuestionBank{
+			ID:              uuid.NewString(),
+			CompanyID:       sql.NullString{String: companyID, Valid: true},
+			JobID:           sql.NullString{String: jobID, Valid: true},
+			CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
+			QuestionText:    sq.QuestionText,
+			QuestionType:    sq.QuestionType,
+			SkillTags:       models.JSONB(tagsBytes),
+			Level:           sql.NullString{String: sq.Difficulty, Valid: true},
+			ExpectedSignals: models.JSONB(signalsBytes),
+			IsAIGenerated:   true,
+		})
+	}
+
+	if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
+		return nil, errors.NewInternal("failed to save generated questions")
+	}
+
+	return questions, nil
+}

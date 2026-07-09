@@ -44,6 +44,9 @@ func (h *JobHandler) Routes(r chi.Router) {
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
 			r.Post("/analyze", h.Analyze)
+			r.Route("/ai", func(r chi.Router) {
+				r.Post("/generate-questions", h.GenerateQuestions)
+			})
 		})
 	})
 }
@@ -194,6 +197,30 @@ func (h *JobHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "job analyzed successfully"}, nil, requestID)
+}
+
+// GenerateQuestions handles POST /companies/{company_id}/jobs/{job_id}/ai/generate-questions
+func (h *JobHandler) GenerateQuestions(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	jobID := chi.URLParam(r, "job_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var req request.GenerateQuestionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+
+	questions, err := h.svc.GenerateQuestions(r.Context(), companyID, jobID, &req)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"questions": questions,
+		"count":     len(questions),
+	}, nil, requestID)
 }
 
 // ---------------------------------------------------------------------------

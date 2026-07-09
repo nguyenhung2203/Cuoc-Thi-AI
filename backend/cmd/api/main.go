@@ -104,6 +104,9 @@ func main() {
 	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
 
+	questionBankSvc := service.NewQuestionBankService(questionRepo)
+	questionBankHandler := handler.NewQuestionBankHandler(questionBankSvc)
+
 	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
 
@@ -190,6 +193,7 @@ func main() {
 					r.Get("/{rubric_id}", rubricHandler.GetRubric)
 					r.Delete("/{rubric_id}", rubricHandler.DeleteRubric)
 				})
+					questionBankHandler.Routes(r)
 
 				r.Route("/interviews", func(r chi.Router) {
 					interviewHandler.ProtectedRoutes(r)
