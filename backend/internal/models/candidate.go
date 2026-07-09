@@ -36,4 +36,7 @@ type Candidate struct {
 	CreatedAt     time.Time       `db:"created_at"      json:"created_at"`
 	UpdatedAt     time.Time       `db:"updated_at"      json:"updated_at"`
 	DeletedAt     sql.NullTime    `db:"deleted_at"      json:"-"`
+	LatestJobID   sql.NullString  `db:"latest_job_id"   json:"-"`
+	LatestJobTitle sql.NullString `db:"latest_job_title" json:"-"`
+	CVOriginalName sql.NullString `db:"cv_original_name" json:"-"`
 }

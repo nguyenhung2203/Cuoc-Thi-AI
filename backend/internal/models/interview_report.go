@@ -6,6 +6,9 @@ import (
 )
 
 type InterviewReport struct {
+
+
+
 	ID                   string         `db:"id" json:"id"`
 	InterviewID          string         `db:"interview_id" json:"interview_id"`
 	Summary              string         `db:"summary" json:"summary"`
@@ -23,4 +26,5 @@ type InterviewReport struct {
 	GeneratedAt          time.Time      `db:"generated_at" json:"generated_at"`
 	CreatedAt            time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt            time.Time      `db:"updated_at" json:"updated_at"`
+
 }

@@ -78,6 +78,7 @@ func (r *reportRepository) UpdateRecruiterDecision(ctx context.Context, intervie
 		SET recruiter_decision = $1, recruiter_comment = $2, updated_at = NOW()
 		WHERE interview_id = $3
 	`
+
 	res, err := r.db.ExecContext(ctx, q, decision, comment, interviewID)
 	if err != nil {
 		return err

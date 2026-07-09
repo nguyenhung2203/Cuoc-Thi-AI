@@ -5,8 +5,11 @@ import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { mockApi } from '../../utils/mockData'
-import { ArrowLeft, Video, Copy, Calendar, Clock, User, Briefcase, Mail } from 'lucide-vue-next'
+import { ArrowLeft, Video, Copy, Calendar, Clock, User, Briefcase, Mail, FileText } from 'lucide-vue-next'
+import { interviewService } from '../../services/interview.service'
+import { jobService } from '../../services/job.service'
+import { candidateService } from '../../services/candidate.service'
+import { authStore } from '../../stores/auth.store'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,9 +21,36 @@ const copied = ref(false)
 const toast = ref(null)
 
 onMounted(async () => {
-  const data = await mockApi.interviews.getById(id)
-  interview.value = data || null
-  loading.value = false
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (companyId) {
+      const [data, jobs, candidates] = await Promise.all([
+        interviewService.getInterview(companyId, id),
+        jobService.getJobs(companyId),
+        candidateService.getCandidates(companyId)
+      ])
+      
+      const jobMap = jobs.reduce((acc, j) => { acc[j.id] = j; return acc; }, {})
+      const candidateMap = candidates.reduce((acc, c) => { acc[c.id] = c; return acc; }, {})
+      
+      const candidate = data.candidate || candidateMap[data.candidate_id] || {}
+      const job = data.job || jobMap[data.job_id?.String || data.job_id] || {}
+      const dt = typeof data.scheduled_at === 'object' && data.scheduled_at !== null ? data.scheduled_at.Time : data.scheduled_at
+
+      interview.value = {
+        ...data,
+        candidateName: candidate.full_name || candidate.name || 'Không rõ ứng viên',
+        jobTitle: job.title || 'Không rõ vị trí',
+        datetime: dt,
+        status: data.status === 'scheduled' ? 'Scheduled' : data.status,
+        link: data.invite_url || ''
+      }
+    }
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Không thể tải thông tin phỏng vấn' }
+  } finally {
+    loading.value = false
+  }
 })
 
 const copyLink = () => {
@@ -35,7 +65,11 @@ const handleSaveNotes = () => {
   toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
 }
 
-const dateObj = computed(() => interview.value ? new Date(interview.value.datetime) : null)
+const dateObj = computed(() => {
+  if (!interview.value || !interview.value.datetime) return null;
+  const d = new Date(interview.value.datetime);
+  return isNaN(d.getTime()) ? null : d;
+})
 </script>
 
 <template>
@@ -86,8 +120,11 @@ const dateObj = computed(() => interview.value ? new Date(interview.value.dateti
             <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border)">
               <p class="text-helper" style="margin-bottom: 12px; font-weight: 500; color: var(--text-main)">Hành động</p>
               <div style="display: flex; gap: 12px">
-                <Button @click="router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!' } })">
+                <Button v-if="interview.status !== 'Completed'" @click="router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!', interviewId: interview.id } })">
                   <Video size="16" /> Vào phòng phỏng vấn
+                </Button>
+                <Button v-if="interview.status === 'Completed'" @click="router.push(`/interviews/${interview.id}/report`)" variant="primary" style="background-color: var(--accent); border-color: var(--accent); color: white">
+                  <FileText size="16" /> Xem Báo cáo AI
                 </Button>
                 <Button variant="secondary" @click="copyLink">
                   <Copy size="16" /> Copy Link Invite

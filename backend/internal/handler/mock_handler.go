@@ -40,6 +40,7 @@ func (h *MockHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 	pkgresponse.JSON(w, http.StatusCreated, m, nil, requestID)
 }
 
@@ -61,6 +62,7 @@ func (h *MockHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 	pkgresponse.JSON(w, http.StatusOK, items, nil, requestID)
 }
 
@@ -74,6 +76,7 @@ func (h *MockHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 	pkgresponse.JSON(w, http.StatusOK, m, nil, requestID)
 }
 
@@ -123,6 +126,7 @@ func (h *MockHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
 		"user_message": userMsg,
 		"ai_message":   aiMsg,
@@ -139,5 +143,20 @@ func (h *MockHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err, requestID)
 		return
 	}
+
 	pkgresponse.JSON(w, http.StatusOK, report, nil, requestID)
+}
+
+func (h *MockHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+	id := chi.URLParam(r, "id")
+
+	messages, err := h.mockSvc.GetMessages(r.Context(), id, userID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, messages, nil, requestID)
 }

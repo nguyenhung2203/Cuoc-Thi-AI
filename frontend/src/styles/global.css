@@ -1,5 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   /* Primary Colors */
   --primary: #2563EB;
@@ -324,7 +328,7 @@ textarea.input-field {
 /* Table Styles */
 .table-container {
   overflow-x: auto;
-  margin: 0 -24px;
+  margin: 0;
 }
 
 .table {
@@ -348,6 +352,16 @@ textarea.input-field {
   height: 64px;
   font-size: 14px;
   border-bottom: 1px solid var(--border);
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: 24px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 24px;
 }
 
 /* Page Header */

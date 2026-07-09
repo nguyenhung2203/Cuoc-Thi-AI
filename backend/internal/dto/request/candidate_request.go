@@ -6,6 +6,7 @@ type CreateCandidateRequest struct {
 	Phone    string `json:"phone"`
 	Source   string `json:"source"    validate:"omitempty,oneof=linkedin referral import manual"`
 	JobID    string `json:"job_id"`   // optional — if provided, create job_candidates record
+	CVFileID string `json:"cv_file_id"` // optional
 }
 
 type UpdateCandidateRequest struct {
@@ -15,6 +16,7 @@ type UpdateCandidateRequest struct {
 	Source   *string  `json:"source"    validate:"omitempty,oneof=linkedin referral import manual"`
 	Status   *string  `json:"status"    validate:"omitempty,oneof=new screening invited interviewing completed passed rejected talent_pool"`
 	Tags     []string `json:"tags"`
+	CVFileID *string  `json:"cv_file_id"`
 }
 
 type ListCandidatesQuery struct {

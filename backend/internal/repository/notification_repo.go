@@ -3,9 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
-
 	"github.com/jmoiron/sqlx"
-
 	"backend/internal/models"
 )
 
@@ -32,7 +30,7 @@ func (r *NotificationRepository) Create(ctx context.Context, notif *models.Notif
 	return stmt.QueryRowContext(ctx, notif).Scan(&notif.ID, &notif.CreatedAt)
 }
 
-func (r *NotificationRepository) GetByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Notification, error) {
+func (r *NotificationRepository) ListByUser(ctx context.Context, userID string, limit, offset int) ([]models.Notification, error) {
 	q := `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	var items []models.Notification
 	err := r.db.SelectContext(ctx, &items, q, userID, limit, offset)
@@ -53,6 +51,18 @@ func (r *NotificationRepository) MarkRead(ctx context.Context, id uint64, userID
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *NotificationRepository) MarkAsRead(ctx context.Context, id string) error {
+	q := `UPDATE notifications SET is_read = true WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, q, id)
+	return err
+}
+
+func (r *NotificationRepository) MarkAllAsRead(ctx context.Context, userID string) error {
+	q := `UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false`
+	_, err := r.db.ExecContext(ctx, q, userID)
+	return err
 }
 
 func (r *NotificationRepository) CountUnreadByUserID(ctx context.Context, userID string) (int, error) {

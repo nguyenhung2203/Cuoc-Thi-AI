@@ -84,12 +84,17 @@ func (s *AuthService) Register(ctx context.Context, req request.RegisterRequest,
 		return nil, "", errors.NewInternal("failed to hash password")
 	}
 
+	role := models.UserRole(req.Role)
+	if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+		role = models.RoleCandidate // default
+	}
+
 	user := &models.User{
 		ID:           uuid.NewString(),
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		FullName:     req.FullName,
-		Role:         models.RoleRecruiter,
+		Role:         role,
 		Status:       models.UserStatusActive,
 	}
 

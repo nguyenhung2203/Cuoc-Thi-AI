@@ -23,6 +23,12 @@ func NewNotificationHandler(notifRepo *repository.NotificationRepository) *Notif
 	return &NotificationHandler{notifRepo: notifRepo}
 }
 
+func (h *NotificationHandler) ProtectedRoutes(r chi.Router) {
+	r.Get("/", h.ListNotifications)
+	r.Put("/read-all", h.MarkAllNotificationsRead)
+	r.Put("/{notification_id}/read", h.MarkNotificationRead)
+}
+
 func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
@@ -37,7 +43,7 @@ func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.R
 	}
 	offset := (page - 1) * pageSize
 
-	items, err := h.notifRepo.GetByUserID(r.Context(), userID, pageSize, offset)
+	items, err := h.notifRepo.ListByUser(r.Context(), userID, pageSize, offset)
 	if err != nil {
 		pkgresponse.Error(w, apierrors.NewInternal(err.Error()), requestID)
 		return
@@ -81,5 +87,19 @@ func (h *NotificationHandler) MarkNotificationRead(w http.ResponseWriter, r *htt
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{
 		"message": "notification marked as read",
+	}, nil, requestID)
+}
+
+func (h *NotificationHandler) MarkAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	if err := h.notifRepo.MarkAllAsRead(r.Context(), userID); err != nil {
+		pkgresponse.Error(w, apierrors.NewInternal(err.Error()), requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{
+		"message": "all notifications marked as read",
 	}, nil, requestID)
 }

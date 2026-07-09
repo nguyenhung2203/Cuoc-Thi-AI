@@ -19,12 +19,14 @@ import (
 
 // CandidateHandler wires the CandidateService to HTTP endpoints.
 type CandidateHandler struct {
-	svc *service.CandidateService
+	svc     *service.CandidateService
+	aiSvc   *service.AIService
+	fileSvc *service.FileService
 }
 
 // NewCandidateHandler constructs a CandidateHandler.
-func NewCandidateHandler(svc *service.CandidateService) *CandidateHandler {
-	return &CandidateHandler{svc: svc}
+func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService, fileSvc *service.FileService) *CandidateHandler {
+	return &CandidateHandler{svc: svc, aiSvc: aiSvc, fileSvc: fileSvc}
 }
 
 // Routes registers all candidate endpoints on r.
@@ -46,6 +48,7 @@ func (h *CandidateHandler) Routes(r chi.Router) {
 		r.Post("/", h.Create)
 		r.Route("/{candidate_id}", func(r chi.Router) {
 			r.Get("/", h.GetByID)
+			r.Post("/cv", h.UploadCV)
 			r.Post("/parse-cv", h.ParseCV)
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
@@ -314,7 +317,7 @@ func (h *CandidateHandler) UnassignFromJob(w http.ResponseWriter, r *http.Reques
 // ---------------------------------------------------------------------------
 
 func toCandidateListItem(c models.Candidate) response.CandidateListItem {
-	return response.CandidateListItem{
+	item := response.CandidateListItem{
 		ID:       c.ID,
 		FullName: c.FullName,
 		Email:    c.Email,
@@ -322,6 +325,13 @@ func toCandidateListItem(c models.Candidate) response.CandidateListItem {
 		Status:   string(c.Status),
 		Source:   c.Source.String,
 	}
+	if c.LatestJobID.Valid && c.LatestJobTitle.Valid {
+		item.LatestJob = &response.JobBasicInfo{
+			ID:    c.LatestJobID.String,
+			Title: c.LatestJobTitle.String,
+		}
+	}
+	return item
 }
 
 func toCandidateDetail(c models.Candidate) response.CandidateDetail {
@@ -329,7 +339,24 @@ func toCandidateDetail(c models.Candidate) response.CandidateDetail {
 	if len(c.Tags) > 0 {
 		_ = json.Unmarshal(c.Tags, &tags)
 	}
-	return response.CandidateDetail{
+	
+	var skills []string
+	var experience string
+	var education string
+	if len(c.ParsedCVJSON) > 0 && string(c.ParsedCVJSON) != "null" {
+		var parsed struct {
+			Skills     []string `json:"skills"`
+			Experience string   `json:"experience"`
+			Education  string   `json:"education"`
+		}
+		if err := json.Unmarshal(c.ParsedCVJSON, &parsed); err == nil {
+			skills = parsed.Skills
+			experience = parsed.Experience
+			education = parsed.Education
+		}
+	}
+
+	detail := response.CandidateDetail{
 		ID:          c.ID,
 		CompanyID:   c.CompanyID,
 		FullName:    c.FullName,
@@ -340,9 +367,26 @@ func toCandidateDetail(c models.Candidate) response.CandidateDetail {
 		Source:      c.Source.String,
 		Tags:        tags,
 		AICVSummary: c.AICVSummary.String,
+		Skills:      skills,
+		Experience:  experience,
+		Education:   education,
 		CreatedAt:   c.CreatedAt,
 		UpdatedAt:   c.UpdatedAt,
 	}
+	if c.CVFileID.Valid {
+		detail.CVFile = &response.CVFile{
+			ID:           c.CVFileID.String,
+			OriginalName: c.CVOriginalName.String,
+			DownloadURL:  "/api/v1/files/" + c.CVFileID.String + "/signed-url",
+		}
+	}
+	if c.LatestJobID.Valid && c.LatestJobTitle.Valid {
+		detail.LatestJob = &response.JobBasicInfo{
+			ID:    c.LatestJobID.String,
+			Title: c.LatestJobTitle.String,
+		}
+	}
+	return detail
 }
 
 func toJobCandidateItem(jc models.JobCandidate) response.JobCandidateItem {
@@ -364,19 +408,9 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
 	candidateID := chi.URLParam(r, "candidate_id")
 
-	var req request.ParseCVRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		pkgresponse.Error(w, apierrors.NewValidation("invalid JSON body", []string{err.Error()}), requestID)
-		return
-	}
-	if msgs := validator.Validate(&req); msgs != nil {
-		pkgresponse.Error(w, apierrors.NewValidation("validation failed", msgs), requestID)
-		return
-	}
-
-	err := h.svc.ParseCV(r.Context(), companyID, candidateID, req.CVText, req.JobContext)
+	err := h.aiSvc.ParseCV(r.Context(), companyID, candidateID)
 	if err != nil {
-		writeServiceError(w, err, requestID)
+		writeServiceError(w, apierrors.NewInternal(err.Error()), requestID)
 		return
 	}
 
@@ -388,4 +422,52 @@ func (h *CandidateHandler) ParseCV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "CV parsed successfully"}, nil, requestID)
+}
+
+// UploadCV handles POST /companies/{company_id}/candidates/{candidate_id}/cv
+func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	candidateID := chi.URLParam(r, "candidate_id")
+
+	// Parse multipart form
+	err := r.ParseMultipartForm(10 << 20) // 10 MB
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewBadRequest("failed to parse form data"), requestID)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewBadRequest("file is required"), requestID)
+		return
+	}
+	defer file.Close()
+
+	// 1. Process upload using file service (using candidate_id as userID since it's recruiter uploading for candidate)
+	// We use "cv" as folder
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	fileRecord, err := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, companyID, "cv")
+	if err != nil {
+		pkgresponse.Error(w, apierrors.NewInternal("failed to process file upload"), requestID)
+		return
+	}
+
+	// 2. Update candidate with file ID if candidate_id is not "new"
+	if candidateID != "new" {
+		updateReq := &request.UpdateCandidateRequest{
+			CVFileID: &fileRecord.ID,
+		}
+		_, err = h.svc.Update(r.Context(), companyID, candidateID, updateReq)
+		if err != nil {
+			writeServiceError(w, err, requestID)
+			return
+		}
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"message": "CV uploaded successfully",
+		"id":      fileRecord.ID,
+		"url":     "/api/v1/files/" + fileRecord.ID + "/signed-url",
+	}, nil, requestID)
 }

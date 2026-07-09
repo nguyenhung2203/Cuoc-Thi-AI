@@ -221,6 +221,14 @@ func (s *MockService) ScoreAnswer(ctx context.Context, mockID, messageID, userID
 	return apierrors.NewValidation("not_implemented", []string{"scoring not yet implemented for mock interviews"})
 }
 
+func (s *MockService) GetMessages(ctx context.Context, id, userID string) ([]models.MockInterviewMessage, error) {
+	_, err := s.getByIDAndCheckOwnership(ctx, id, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.mockRepo.ListMessages(ctx, id)
+}
+
 // K-S6-04: Get report
 func (s *MockService) GetReport(ctx context.Context, id, userID string) (*models.MockInterview, error) {
 	return s.getByIDAndCheckOwnership(ctx, id, userID)

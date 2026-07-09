@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Input from '../../components/common/AppInput.vue'
 import Button from '../../components/common/AppButton.vue'
+import { authStore } from '../../stores/auth.store'
 
 const router = useRouter()
 const name = ref('')
@@ -14,7 +15,7 @@ const role = ref('candidate')
 const error = ref('')
 const loading = ref(false)
 
-const handleRegister = (e) => {
+const handleRegister = async (e) => {
   e.preventDefault()
   if (!name.value || !email.value || !password.value || !confirmPassword.value) {
     error.value = 'Vui lòng nhập đầy đủ thông tin'
@@ -29,18 +30,26 @@ const handleRegister = (e) => {
   error.value = ''
   loading.value = true
 
-  setTimeout(() => {
-    loading.value = false
+  try {
+    await authStore.register(email.value, password.value, name.value, role.value)
     router.push({ path: '/login', state: { message: 'Đăng ký thành công! Vui lòng đăng nhập.' } })
-  }, 1000)
+  } catch (err) {
+    if (err.message === 'email already exists') {
+      error.value = 'Email này đã được đăng ký, vui lòng dùng email khác.'
+    } else {
+      error.value = err.message || 'Đăng ký thất bại, vui lòng thử lại.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
 <template>
   <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--background)">
     <div style="display: flex; flex-direction: column; gap: 32px; width: 100%; max-width: 450px">
-      <div style="text-align: center">
-        <h1 class="text-h1" style="margin-bottom: 8px; color: var(--primary)">Interview AI</h1>
+      <div style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <img src="/images/logo.png" alt="Logo" style="height: 80px; object-fit: contain; margin-bottom: 12px;" />
         <p class="text-body" style="color: var(--text-secondary)">Tạo tài khoản mới</p>
       </div>
       

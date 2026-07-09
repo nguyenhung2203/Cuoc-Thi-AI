@@ -58,6 +58,15 @@ func (s *JobService) List(
 	return result.Jobs, result.Total, nil
 }
 
+// ListAllOpen returns all open jobs across all companies.
+func (s *JobService) ListAllOpen(ctx context.Context, keyword string, p pagination.Params) ([]models.Job, int, error) {
+	result, err := s.jobRepo.ListAllOpen(ctx, keyword, p)
+	if err != nil {
+		return nil, 0, errors.NewInternal("failed to list all open jobs")
+	}
+	return result.Jobs, result.Total, nil
+}
+
 // GetByID returns a single job or a NOT_FOUND error.
 func (s *JobService) GetByID(ctx context.Context, companyID, jobID string) (*models.Job, error) {
 	job, err := s.jobRepo.GetByID(ctx, companyID, jobID)
@@ -170,6 +179,16 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 	if _, err := s.GetByID(ctx, companyID, jobID); err != nil {
 		return err
 	}
+	
+	// Check if there are active candidates
+	count, err := s.jobRepo.CountCandidates(ctx, jobID)
+	if err != nil {
+		return errors.NewInternal("failed to count candidates for job")
+	}
+	if count > 0 {
+		return errors.NewConflict("Không thể xóa công việc này vì đang có ứng viên ứng tuyển.")
+	}
+
 	if err := s.jobRepo.SoftDelete(ctx, companyID, jobID); err != nil {
 		return errors.NewInternal("failed to delete job")
 	}
