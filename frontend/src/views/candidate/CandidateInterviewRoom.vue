@@ -30,7 +30,6 @@ const isLeaving = ref(false)
 
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 const interviewInfo = ref(history.state?.interviewInfo || null)
-
 // Parse JWT to extract room_id and interview_id
 const parseJwt = (token) => {
   try {
@@ -60,19 +59,26 @@ onMounted(async () => {
   
   // Khởi tạo Listeners cho Store
   chatStore.setupListeners()
-  
+
   // Logic kết nối LiveKit & WebSocket
   if (token) {
     try {
       // Connect WebSocket Realtime
       roomStore.connectRoom(token, roomId, interviewId)
-      
-      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
-      try {
-        await connectToRoom(livekitUrl, token)
-      } catch(e) {
-        console.warn("LiveKit connection failed, fallback to Websocket only", e)
+
+      // Gửi room:join (candidate) sau khi WebSocket mở
+      const tryJoinAsCandidate = (retries = 10) => {
+        if (roomStore.isConnected) {
+          roomStore.sendRoomJoin('candidate')
+        } else if (retries > 0) {
+          setTimeout(() => tryJoinAsCandidate(retries - 1), 300)
+        }
       }
+      setTimeout(() => tryJoinAsCandidate(), 500)
+
+      // Connect LiveKit (hoặc native getUserMedia nếu không có server)
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+      await connectToRoom(livekitUrl, token)
     } catch (err) {
       console.error('Không thể vào phòng', err)
     }

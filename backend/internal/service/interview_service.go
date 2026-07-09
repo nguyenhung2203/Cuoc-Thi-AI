@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
 
+	"backend/internal/livekit"
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/repository"
@@ -106,26 +108,76 @@ func (s *InterviewService) CreateInterview(ctx context.Context, req CreateInterv
 	}, nil
 }
 
-func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*models.InterviewRoom, error) {
-	hasher := sha256.New()
-	hasher.Write([]byte(token))
-	hash := hex.EncodeToString(hasher.Sum(nil))
+type CandidateJoinInfo struct {
+	InterviewID              string    `json:"interview_id"`
+	RoomID                   string    `json:"room_id"`
+	CandidateName            string    `json:"candidate_name"`
+	CompanyName              string    `json:"company_name"`
+	JobTitle                 string    `json:"job_title"`
+	ScheduledAt              time.Time `json:"scheduled_at"`
+	RoomAccessToken          string    `json:"room_access_token"`
+	RoomAccessTokenExpiresAt string    `json:"room_access_token_expires_at"`
+}
 
-	interview, err := s.repo.GetByInviteTokenHash(ctx, hash)
-	if err != nil || interview == nil {
+func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*CandidateJoinInfo, error) {
+	var hash string
+	if len(token) == 64 {
+		hash = token
+	} else {
+		hasher := sha256.New()
+		hasher.Write([]byte(token))
+		hash = hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	info, err := s.repo.GetCandidateJoinInfoByInviteTokenHash(ctx, hash)
+	if err != nil || info == nil {
 		return nil, errors.NewNotFound("invalid or expired token")
 	}
 
-	if interview.InviteExpiresAt.Valid && interview.InviteExpiresAt.Time.Before(time.Now()) {
+	if info.InviteExpiresAt.Before(time.Now()) {
 		return nil, errors.NewForbidden("token expired")
 	}
 
-	room, err := s.repo.GetRoomByInterviewID(ctx, interview.ID)
-	if err != nil {
-		return nil, errors.NewInternal("failed to fetch room info")
+	// Generate LiveKit token for candidate
+	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
+	if livekitSecret == "" {
+		livekitSecret = "devsecret"
+	}
+	livekitKey := os.Getenv("LIVEKIT_API_KEY")
+	if livekitKey == "" {
+		livekitKey = "devkey"
 	}
 
-	return room, nil
+	identity := "candidate-" + info.CandidateID
+	if info.UserID != nil {
+		identity = *info.UserID
+	}
+
+	tokenString, err := livekit.GenerateToken(
+		livekitKey,
+		livekitSecret,
+		info.RoomID,
+		identity,
+		info.CandidateName,
+		"candidate",
+		info.InterviewID,
+	)
+	if err != nil {
+		return nil, errors.NewInternal("failed to generate candidate token")
+	}
+
+	expiresAt := time.Now().Add(4 * time.Hour)
+
+	return &CandidateJoinInfo{
+		InterviewID:              info.InterviewID,
+		RoomID:                   info.RoomID,
+		CandidateName:            info.CandidateName,
+		CompanyName:              info.CompanyName,
+		JobTitle:                 info.JobTitle,
+		ScheduledAt:              info.ScheduledAt,
+		RoomAccessToken:          tokenString,
+		RoomAccessTokenExpiresAt: expiresAt.Format(time.RFC3339),
+	}, nil
 }
 
 func (s *InterviewService) ListInterviews(ctx context.Context, companyID string, limit, offset int) ([]models.Interview, error) {

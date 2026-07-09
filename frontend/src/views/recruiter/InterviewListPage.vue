@@ -28,8 +28,8 @@ const openEnterRoomModal = (row) => {
 
 const confirmEnterRoom = () => {
   showEnterRoomModal.value = false
-  // Lưu interviewId vào state để trang Room biết vào phòng nào
-  router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!', interviewId: selectedInterview.value.id } })
+  // Nhúng interviewId vào URL để trang Room đọc ổn định
+  router.push({ path: `/recruiter-room/${selectedInterview.value.id}`, state: { message: 'Vào phòng phỏng vấn thành công!' } })
 }
 
 onMounted(async () => {

@@ -13,6 +13,9 @@ build/
 *.dll
 *.so
 *.dylib
+api_server_linux
+realtime_server
+realtime_server.exe
 
 # Environment
 .env

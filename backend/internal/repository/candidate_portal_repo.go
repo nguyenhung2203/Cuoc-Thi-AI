@@ -20,7 +20,7 @@ func NewCandidatePortalRepository(db *sqlx.DB) *CandidatePortalRepository {
 func (r *CandidatePortalRepository) GetInterviewsByUserID(ctx context.Context, userID string) ([]response.CandidatePortalInterview, error) {
 	q := `
 		SELECT 
-			i.id, i.title, i.mode, i.status, i.scheduled_at, i.invite_token_hash,
+			i.id, i.title, i.mode, i.status, i.scheduled_at, coalesce(i.invite_token_hash, '') as invite_token_hash,
 			i.company_id,
 			coalesce(comp.name, '') as company_name,
 			i.job_id,

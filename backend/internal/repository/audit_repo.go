@@ -17,6 +17,9 @@ func NewAuditRepository(db *sqlx.DB) *AuditRepository {
 }
 
 func (r *AuditRepository) Insert(ctx context.Context, al *models.AuditLog) error {
+	if r.db == nil {
+		return nil
+	}
 	q := `
 		INSERT INTO audit_logs (
 			id, company_id, actor_user_id, actor_role,

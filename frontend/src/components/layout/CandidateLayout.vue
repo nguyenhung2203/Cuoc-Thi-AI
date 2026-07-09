@@ -87,7 +87,7 @@ const handleLogout = async () => {
 <template>
   <div class="candidate-layout">
     <!-- Top Navbar -->
-    <header class="top-navbar">
+    <header v-if="!route.path.includes('/candidate-room')" class="top-navbar">
       <div class="nav-container">
         <!-- Logo -->
         <div class="nav-brand flex items-center" style="cursor: pointer;" @click="router.push('/home')">
@@ -197,7 +197,7 @@ const handleLogout = async () => {
     </header>
 
     <!-- Page Content -->
-    <main class="page-content" :class="{ 'container-bounded': route.path !== '/' }">
+    <main class="page-content" :class="{ 'container-bounded': route.path !== '/' && !route.path.includes('/candidate-room'), 'room-fullscreen': route.path.includes('/candidate-room') }">
       <router-view />
     </main>
   </div>
@@ -225,6 +225,14 @@ const handleLogout = async () => {
 
 .page-content {
   padding-top: 72px;
+}
+
+.page-content.room-fullscreen {
+  padding-top: 0 !important;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .container-bounded {

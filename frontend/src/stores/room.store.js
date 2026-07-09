@@ -234,6 +234,15 @@ export const useRoomStore = defineStore('room', () => {
     sendMessage('question:mark_asked', { question_id: questionId, asked_at_ms: askedAtMs }, roomId.value, interviewId.value);
   };
 
+  // Gửi room:join cho phía client (cả recruiter & candidate)
+  const sendRoomJoin = (participantType = 'recruiter') => {
+    sendMessage('room:join', {
+      participant_type: participantType,
+      consent_recording: true,
+      consent_ai: true
+    }, roomId.value, interviewId.value);
+  };
+
   return {
     roomId,
     interviewId,
@@ -248,6 +257,7 @@ export const useRoomStore = defineStore('room', () => {
     connectionError,
     connectRoom,
     disconnectRoom,
+    sendRoomJoin,
     startInterview,
     endInterview,
     pauseInterview,

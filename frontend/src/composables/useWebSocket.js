@@ -38,7 +38,7 @@ export function useWebSocket() {
     // TODO: Determine backend WS URL properly. 
     // Assuming backend runs on port 8080 locally for now, 
     // or proxy via Vite if configured (e.g. wss://domain.com/ws/interview-room)
-    const host = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host
+    const host = window.location.hostname === 'localhost' ? 'localhost:8081' : window.location.host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${protocol}//${host}/ws/interview-room?token=${token}`
 

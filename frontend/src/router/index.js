@@ -27,6 +27,7 @@ const routes = [
       { path: 'interviews/new', component: () => import('../views/recruiter/InterviewSchedulePage.vue') },
       { path: 'interviews/:id', component: () => import('../views/recruiter/InterviewDetailPage.vue') },
       { path: 'interviews/:id/report', component: () => import('../views/recruiter/InterviewReportPage.vue') },
+      { path: 'recruiter-room/:interviewId', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
       { path: 'recruiter-room', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
       { path: 'reports', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'question-bank', component: () => import('../views/recruiter/QuestionBankPage.vue') },
@@ -73,23 +74,21 @@ const router = createRouter({
 })
 
 // Simple auth guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
   const token = localStorage.getItem('access_token')
   const publicPages = ['/', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired']
-  const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers')
+  const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers') || to.path.startsWith('/interview-consent')
   const authRequired = !isPublicPage
 
   if (authRequired && !token) {
-    return next({ path: '/login', state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } })
+    return { path: '/login', state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } }
   }
 
   // Prevent logged in users from visiting login page
   if (!authRequired && token && (to.path === '/login' || to.path === '/register')) {
-    const userString = localStorage.getItem('user_role')
-    return next(userString === 'recruiter' ? '/dashboard' : '/home')
+    const userRole = localStorage.getItem('user_role')
+    return userRole === 'recruiter' ? '/dashboard' : '/home'
   }
-
-  next()
 })
 
 export default router

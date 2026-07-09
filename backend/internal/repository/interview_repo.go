@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -131,4 +132,42 @@ func (r *InterviewRepository) UpdateReportStatusIf(ctx context.Context, id, stat
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+type CandidateJoinRepoInfo struct {
+	InterviewID     string          `db:"interview_id"`
+	RoomID          string          `db:"room_id"`
+	CandidateID     string          `db:"candidate_id"`
+	UserID          *string         `db:"user_id"`
+	CandidateName   string          `db:"candidate_name"`
+	CompanyName     string          `db:"company_name"`
+	JobTitle        string          `db:"job_title"`
+	ScheduledAt     time.Time       `db:"scheduled_at"`
+	InviteExpiresAt time.Time       `db:"invite_expires_at"`
+}
+
+func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.Context, hash string) (*CandidateJoinRepoInfo, error) {
+	q := `
+		SELECT 
+			i.id as interview_id,
+			coalesce(i.room_id::text, '') as room_id,
+			i.candidate_id as candidate_id,
+			c.user_id as user_id,
+			c.full_name as candidate_name,
+			coalesce(comp.name, '') as company_name,
+			coalesce(j.title, '') as job_title,
+			coalesce(i.scheduled_at, NOW()) as scheduled_at,
+			coalesce(i.invite_expires_at, NOW()) as invite_expires_at
+		FROM interviews i
+		JOIN candidates c ON i.candidate_id = c.id
+		LEFT JOIN companies comp ON i.company_id = comp.id
+		LEFT JOIN jobs j ON i.job_id = j.id
+		WHERE i.invite_token_hash = $1 AND i.status != 'cancelled' AND i.status != 'completed'
+	`
+	var info CandidateJoinRepoInfo
+	err := r.db.GetContext(ctx, &info, q, hash)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
 }

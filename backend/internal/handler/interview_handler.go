@@ -3,9 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/go-chi/chi/v5"
 
+	"backend/internal/livekit"
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
 	"backend/internal/pkg/response"
@@ -33,6 +35,7 @@ func (h *InterviewHandler) ProtectedRoutes(r chi.Router) {
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/start", h.StartInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/end", h.EndInterview)
 	r.Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
+	r.Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
 }
 
 func (h *InterviewHandler) ListInterviews(w http.ResponseWriter, r *http.Request) {
@@ -162,4 +165,41 @@ func (h *InterviewHandler) GetRoomAccessToken(w http.ResponseWriter, r *http.Req
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"access_token": token}, nil, requestID)
+}
+
+func (h *InterviewHandler) GetRecruiterRoomToken(w http.ResponseWriter, r *http.Request) {
+	interviewID := chi.URLParam(r, "interview_id")
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	roomID := "room-" + interviewID
+
+	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
+	if livekitSecret == "" {
+		livekitSecret = "devsecret"
+	}
+	livekitKey := os.Getenv("LIVEKIT_API_KEY")
+	if livekitKey == "" {
+		livekitKey = "devkey"
+	}
+
+	tokenString, err := livekit.GenerateToken(
+		livekitKey,
+		livekitSecret,
+		roomID,
+		userID,
+		"Recruiter",
+		"recruiter",
+		interviewID,
+	)
+	if err != nil {
+		response.Error(w, apierrors.NewInternal("Failed to generate token"), requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"token":             tokenString,
+		"livekit_token":     tokenString,
+		"room_access_token": tokenString,
+	}, nil, requestID)
 }

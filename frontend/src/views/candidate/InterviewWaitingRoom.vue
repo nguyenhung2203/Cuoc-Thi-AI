@@ -37,7 +37,7 @@ const handleJoin = () => {
   // Pass token and details to candidate room
   router.push({ 
     path: '/candidate-room', 
-    query: { token: inviteToken.value },
+    query: { token: interviewInfo.value.room_access_token },
     state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value } 
   })
 }

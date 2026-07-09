@@ -12,9 +12,14 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting AI Interview Platform Realtime Gateway on :8080...")
+	port := os.Getenv("REALTIME_PORT")
+	if port == "" {
+		port = "8081"
+	}
+	addr := ":" + port
+	fmt.Printf("Starting AI Interview Platform Realtime Gateway on %s...\n", addr)
 
-	srv := realtime.NewServer(":8080")
+	srv := realtime.NewServer(addr)
 	
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

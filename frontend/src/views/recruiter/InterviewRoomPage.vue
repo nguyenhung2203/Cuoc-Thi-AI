@@ -6,7 +6,7 @@ import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText } from 'lucide-vue-next'
+import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
 import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
@@ -33,12 +33,13 @@ const {
 } = useLiveKit()
 
 const activeTab = ref('assistant')
+const isPanelExpanded = ref(true)
 
 const showEndModal = ref(false)
 const isEnding = ref(false)
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 const activeToast = ref(null)
-const interviewId = history.state?.interviewId || route.params.id || null
+const interviewId = route.params.interviewId || history.state?.interviewId || route.params.id || null
 
 watch(() => aiStore.aiError, (err) => {
   if (err) {
@@ -78,20 +79,26 @@ onMounted(async () => {
       const companyId = authStore.user?.companies?.[0]?.id
       if (companyId) {
         const response = await roomService.getRoomToken(companyId, interviewId)
-        const token = response.token || response.livekit_token
+        const token = response.token || response.livekit_token || response.room_access_token
         
         if (token) {
           // Connect WebSocket Realtime (Store)
-          const roomId = response.room_id || 'unknown'
+          const roomId = response.room_id || `room-${interviewId}`
           roomStore.connectRoom(token, roomId, interviewId)
-          
-          // Connect LiveKit
-          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
-          try {
-            await connectToRoom(livekitUrl, token)
-          } catch(e) {
-            console.warn("LiveKit connection failed, fallback to Websocket only", e)
+
+          // Gửi room:join sau khi WebSocket mở
+          const tryJoinAsRecruiter = (retries = 10) => {
+            if (roomStore.isConnected) {
+              roomStore.sendRoomJoin('recruiter')
+            } else if (retries > 0) {
+              setTimeout(() => tryJoinAsRecruiter(retries - 1), 300)
+            }
           }
+          setTimeout(() => tryJoinAsRecruiter(), 500)
+
+          // Connect LiveKit (hoặc native getUserMedia nếu không có server)
+          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+          await connectToRoom(livekitUrl, token)
         }
       }
     } catch (err) {
@@ -256,86 +263,103 @@ const formatTime = (ms) => {
         </Badge>
         <Button v-if="roomStore.status === 'waiting'" variant="primary" @click="handleStartCall">Bắt đầu Phỏng vấn</Button>
         <Button v-if="roomStore.status === 'active'" variant="secondary" @click="handlePauseCall">Tạm dừng</Button>
-        <Button variant="secondary" @click="router.push('/dashboard')">Rời tạm thời</Button>
+        <Button variant="secondary" @click="router.push('/interviews')">Rời tạm thời</Button>
       </div>
     </div>
 
     <!-- Main Content -->
     <div style="display: flex; flex: 1; overflow: hidden">
       
-      <!-- Left: Video Area (70%) -->
-      <div style="flex: 7; display: flex; flex-direction: column; padding: 24px; gap: 16px">
+      <!-- Left: Video Area -->
+      <div style="flex: 1; display: flex; flex-direction: column; padding: 12px; position: relative; overflow: hidden;">
         <!-- Video Grid -->
-        <div style="flex: 1; display: flex; gap: 16px; position: relative">
-          <!-- Candidate Video (Large) -->
-          <div style="flex: 1; background-color: #1E293B; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden">
+        <div style="flex: 1; display: flex; position: relative; width: 100%; height: 100%;">
+          <!-- Candidate Video (Main Full Area) -->
+          <div style="flex: 1; background-color: #0F172A; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.08);">
             <!-- Thẻ video thật cho LiveKit -->
             <video ref="remoteVideoEl" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;"></video>
             
             <div v-if="!candidateParticipant || candidateParticipant.connection_state === 'offline'" style="text-align: center; color: white; position: relative; z-index: 1;">
-              <div style="width: 80px; height: 80px; border-radius: 50%; background-color: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; font-weight: bold">N</div>
-              <div style="font-size: 16px">Đang chờ ứng viên...</div>
+              <div style="width: 88px; height: 88px; border-radius: 50%; background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05)); border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; font-weight: bold; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">N</div>
+              <div style="font-size: 16px; font-weight: 500; color: #E2E8F0;">Đang chờ ứng viên tham gia...</div>
+              <div style="font-size: 13px; color: #94A3B8; margin-top: 4px;">Video của ứng viên sẽ hiển thị ở trung tâm màn hình này</div>
             </div>
             
-            <div v-if="candidateParticipant" style="position: absolute; bottom: 16px; left: 16px; background-color: rgba(0,0,0,0.6); color: white; padding: 4px 12px; border-radius: var(--radius); font-size: 13px; z-index: 2">
-              {{ candidateParticipant.display_name }} (Ứng viên) - {{ candidateParticipant.connection_state }}
+            <div v-if="candidateParticipant" style="position: absolute; top: 16px; left: 16px; background-color: rgba(15,23,42,0.75); backdrop-filter: blur(8px); color: white; padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; z-index: 5; border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; gap: 6px;">
+              <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #22C55E;"></div>
+              {{ candidateParticipant.display_name }} (Ứng viên)
+            </div>
+
+            <!-- Floating Control Bar (Center Bottom of Video) -->
+            <div style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 16px; border-radius: 9999px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6); display: flex; align-items: center; gap: 12px; z-index: 20;">
+              <button :title="isMicOn ? 'Tắt micro' : 'Bật micro'" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: isMicOn ? 'rgba(51, 65, 85, 0.8)' : '#EF4444', color: 'white' }">
+                <Mic v-if="isMicOn" size="20" />
+                <MicOff v-else size="20" />
+              </button>
+              
+              <button :title="isCameraOn ? 'Tắt camera' : 'Bật camera'" @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: isCameraOn ? 'rgba(51, 65, 85, 0.8)' : '#EF4444', color: 'white' }">
+                <Video v-if="isCameraOn" size="20" />
+                <VideoOff v-else size="20" />
+              </button>
+              
+              <button title="Chia sẻ màn hình" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: 'rgba(51, 65, 85, 0.8)', color: 'white' }">
+                <MonitorUp size="20" />
+              </button>
+              
+              <button title="Mở khung Chat" @click="activeTab = 'chat'; isPanelExpanded = true" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: activeTab === 'chat' && isPanelExpanded ? '#3B82F6' : 'rgba(51, 65, 85, 0.8)', color: 'white' }">
+                <MessageSquare size="20" />
+              </button>
+              
+              <div style="width: 1px; height: 28px; background-color: rgba(255, 255, 255, 0.2); margin: 0 4px;"></div>
+              
+              <button title="Kết thúc cuộc gọi" @click="handleEndCall" style="background-color: #EF4444; color: white; border: none; height: 44px; padding: 0 20px; border-radius: 9999px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background-color 0.2s; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
+                <PhoneOff size="18" /> <span style="white-space: nowrap;">Kết thúc</span>
+              </button>
             </div>
           </div>
           
-          <!-- Recruiter Video (Small/PiP or Side) -->
-          <div style="width: 240px; background-color: #334155; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: absolute; top: 16px; right: 16px; height: 160px; box-shadow: var(--shadow-md); border: 2px solid rgba(255,255,255,0.1); overflow: hidden; z-index: 10">
-             <!-- Thẻ video thật cho LiveKit -->
+          <!-- Recruiter Video (PiP top right) -->
+          <div style="width: 220px; height: 140px; background-color: #1E293B; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; position: absolute; top: 16px; right: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.15); overflow: hidden; z-index: 10; transition: all 0.3s ease;">
              <video ref="localVideoEl" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; transform: scaleX(-1);"></video>
-             <div style="color: white; font-size: 12px; position: relative; z-index: 1">Your Camera</div>
+             <div v-if="!isCameraOn" style="color: #94A3B8; font-size: 12px; font-weight: 500; position: relative; z-index: 1;">Camera của bạn đang tắt</div>
+             <div style="position: absolute; bottom: 6px; left: 8px; background-color: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; z-index: 2;">Bạn (Nhà tuyển dụng)</div>
           </div>
-        </div>
-
-        <!-- Control Bar -->
-        <div style="height: 72px; background-color: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 16px">
-          <Button :variant="isMicOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }">
-            <Mic v-if="isMicOn" size="20" />
-            <MicOff v-else size="20" />
-          </Button>
-          <Button :variant="isCameraOn ? 'secondary' : 'primary'" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }">
-            <Video v-if="isCameraOn" size="20" />
-            <VideoOff v-else size="20" />
-          </Button>
-          <Button variant="secondary" style="width: 48px; height: 48px; border-radius: 50%; padding: 0">
-            <MonitorUp size="20" />
-          </Button>
-          <Button variant="secondary" style="width: 48px; height: 48px; border-radius: 50%; padding: 0" @click="activeTab = 'chat'">
-            <MessageSquare size="20" />
-          </Button>
-          <div style="width: 1px; height: 32px; background-color: var(--border); margin: 0 8px"></div>
-          <Button style="background-color: var(--danger); color: white; border: none; height: 48px; padding: 0 24px; border-radius: 24px" @click="handleEndCall">
-            <PhoneOff size="20" /> Kết thúc
-          </Button>
         </div>
       </div>
 
-      <!-- Right: AI Panel (30%) -->
-      <div v-if="aiStore.aiError?.severity !== 'critical'" style="flex: 3; background-color: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column">
+      <!-- Right: AI Panel -->
+      <div v-if="aiStore.aiError?.severity !== 'critical'" :style="{ width: isPanelExpanded ? '420px' : '64px', minWidth: isPanelExpanded ? '420px' : '64px', maxWidth: isPanelExpanded ? '420px' : '64px', flexShrink: 0, backgroundColor: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', transition: 'width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease' }">
+        
+        <!-- Toggle Button & Header -->
+        <div :style="{ display: 'flex', alignItems: 'center', justifyContent: isPanelExpanded ? 'space-between' : 'center', padding: '12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }">
+          <span v-if="isPanelExpanded" style="font-weight: 600; font-size: 14px; color: var(--text-main)">Công cụ Hỗ trợ</span>
+          <Button variant="ghost" style="padding: 4px; height: auto;" @click="isPanelExpanded = !isPanelExpanded">
+            <ChevronRight v-if="isPanelExpanded" size="20" />
+            <ChevronLeft v-else size="20" />
+          </Button>
+        </div>
+
         <!-- Tabs -->
-        <div style="display: flex; border-bottom: 1px solid var(--border)">
-          <div :class="['nav-item', activeTab === 'assistant' ? 'active' : '']" style="flex: 1; justify-content: center; cursor: pointer; padding: 16px 0" @click="activeTab = 'assistant'">
-            <Sparkles size="16" /> AI Assistant
+        <div class="tabs-container" :style="{ display: 'flex', flexDirection: isPanelExpanded ? 'row' : 'column', borderBottom: isPanelExpanded ? '1px solid var(--border)' : 'none', overflowX: isPanelExpanded ? 'auto' : 'hidden', overflowY: 'hidden', flexShrink: 0 }">
+          <div :class="['nav-item', activeTab === 'assistant' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'assistant'; isPanelExpanded = true" title="AI Assistant">
+            <Sparkles size="16" /> <span v-if="isPanelExpanded">AI Assistant</span>
           </div>
-          <div :class="['nav-item', activeTab === 'rubric' ? 'active' : '']" style="flex: 1; justify-content: center; cursor: pointer; padding: 16px 0" @click="activeTab = 'rubric'">
-            <CheckCircle size="16" /> Tiêu chí
+          <div :class="['nav-item', activeTab === 'rubric' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'rubric'; isPanelExpanded = true" title="Tiêu chí">
+            <CheckCircle size="16" /> <span v-if="isPanelExpanded">Tiêu chí</span>
           </div>
-          <div :class="['nav-item', activeTab === 'transcript' ? 'active' : '']" style="flex: 1; justify-content: center; cursor: pointer; padding: 16px 0" @click="activeTab = 'transcript'">
-            <MessageSquare size="16" /> Transcript
+          <div :class="['nav-item', activeTab === 'transcript' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'transcript'; isPanelExpanded = true" title="Transcript">
+            <MessageSquare size="16" /> <span v-if="isPanelExpanded">Transcript</span>
           </div>
-          <div :class="['nav-item', activeTab === 'chat' ? 'active' : '']" style="flex: 1; justify-content: center; cursor: pointer; padding: 16px 0" @click="activeTab = 'chat'">
-            Chat
+          <div :class="['nav-item', activeTab === 'chat' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'chat'; isPanelExpanded = true" title="Chat">
+             <MessageSquare size="16" /> <span v-if="isPanelExpanded">Chat</span>
           </div>
-          <div :class="['nav-item', activeTab === 'notes' ? 'active' : '']" style="flex: 1; justify-content: center; cursor: pointer; padding: 16px 0" @click="activeTab = 'notes'">
-            <FileText size="16" /> Ghi chú
+          <div :class="['nav-item', activeTab === 'notes' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'notes'; isPanelExpanded = true" title="Ghi chú">
+            <FileText size="16" /> <span v-if="isPanelExpanded">Ghi chú</span>
           </div>
         </div>
 
         <!-- Tab Content -->
-        <div style="flex: 1; overflow-y: auto; padding: 24px">
+        <div v-show="isPanelExpanded" style="flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px;">
           
           <!-- AI Error Degraded Indicator -->
           <div v-if="aiStore.aiError && aiStore.aiError.severity === 'degraded'" style="margin-bottom: 16px; font-size: 12px; color: var(--warning);">
@@ -478,6 +502,13 @@ const formatTime = (ms) => {
   </div>
 </template>
 <style scoped>
+.tabs-container::-webkit-scrollbar {
+  display: none;
+}
+.tabs-container {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .nav-item {
   display: flex;
   align-items: center;
@@ -485,6 +516,8 @@ const formatTime = (ms) => {
   color: var(--text-muted);
   font-weight: 500;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  font-size: 13px;
 }
 .nav-item:hover {
   color: var(--text-main);
