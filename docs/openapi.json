@@ -1,0 +1,1566 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AI Interview Platform API",
+    "version": "1.0.0",
+    "description": "API for AI-powered interview platform. Base URL: `/api/v1`.\n\nAuthentication: Bearer JWT (access_token). Refresh token via HttpOnly Cookie.\n\nStandard response envelope:\n- Success: `{ success: true, data, meta, request_id }`\n- Error: `{ success: false, error: { code, message, details }, request_id }`",
+    "contact": {
+      "name": "Khôi - Backend Core",
+      "email": "khoi@example.com"
+    }
+  },
+  "servers": [
+    { "url": "/api/v1", "description": "API v1" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register new account",
+        "description": "Creates a recruiter account. Returns access_token and sets refresh_token as HttpOnly Cookie.",
+        "operationId": "authRegister",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "full_name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email", "example": "recruiter@example.com" },
+                  "password": { "type": "string", "minLength": 8, "example": "Password123!" },
+                  "full_name": { "type": "string", "example": "Nguyễn Văn A" },
+                  "role": { "type": "string", "enum": ["recruiter", "candidate"], "default": "recruiter" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/AuthResponse" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "operationId": "authLogin",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/AuthResponse" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current user profile",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "authMe",
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/UserMe" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Refresh access token",
+        "description": "Reads refresh_token from HttpOnly Cookie. Returns new access_token and rotates refresh_token via Set-Cookie.",
+        "operationId": "authRefresh",
+        "responses": {
+          "200": {
+            "description": "New tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "access_token": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout (revoke current refresh token family)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "authLogout",
+        "responses": {
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout all sessions",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "authLogoutAll",
+        "responses": {
+          "200": {
+            "description": "All sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": { "type": "string" },
+                        "revoked_sessions": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies": {
+      "get": {
+        "tags": ["Company"],
+        "summary": "List companies of current user",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "companyList",
+        "responses": {
+          "200": {
+            "description": "Company list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Company" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Company"],
+        "summary": "Create a company (user becomes owner)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "companyCreate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "ABC Company" },
+                  "website": { "type": "string", "format": "uri" },
+                  "industry": { "type": "string" },
+                  "size": { "type": "string", "enum": ["1-10", "11-50", "51-200", "201-1000", "1000+"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Company created" }
+        }
+      }
+    },
+    "/companies/{company_id}": {
+      "get": {
+        "tags": ["Company"],
+        "summary": "Get company detail",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "companyGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" }
+        ],
+        "responses": {
+          "200": { "description": "Company detail" }
+        }
+      },
+      "put": {
+        "tags": ["Company"],
+        "summary": "Update company (owner/admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "companyUpdate",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "website": { "type": "string" },
+                  "industry": { "type": "string" },
+                  "size": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Company updated" }
+        }
+      }
+    },
+    "/companies/{company_id}/jobs": {
+      "get": {
+        "tags": ["Job"],
+        "summary": "List jobs",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "open", "paused", "closed"] } },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated job list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/JobListItem" }
+                    },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Job"],
+        "summary": "Create job",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "description"],
+                "properties": {
+                  "title": { "type": "string", "example": "Frontend Developer" },
+                  "department": { "type": "string" },
+                  "level": { "type": "string", "enum": ["junior", "middle", "senior", "lead"] },
+                  "location": { "type": "string" },
+                  "employment_type": { "type": "string", "enum": ["full_time", "part_time", "contract", "internship"] },
+                  "description": { "type": "string" },
+                  "requirements": { "type": "string" },
+                  "benefits": { "type": "string" },
+                  "status": { "type": "string", "enum": ["draft", "open", "paused", "closed"], "default": "draft" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Job created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/JobDetail" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/jobs/{job_id}": {
+      "get": {
+        "tags": ["Job"],
+        "summary": "Get job detail",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "$ref": "#/components/schemas/JobDetail" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Job"],
+        "summary": "Update job",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobUpdate",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "department": { "type": "string" },
+                  "level": { "type": "string" },
+                  "location": { "type": "string" },
+                  "employment_type": { "type": "string" },
+                  "description": { "type": "string" },
+                  "requirements": { "type": "string" },
+                  "benefits": { "type": "string" },
+                  "status": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Job updated" } }
+      },
+      "delete": {
+        "tags": ["Job"],
+        "summary": "Soft delete job",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobDelete",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" }
+        ],
+        "responses": { "200": { "description": "Job deleted" } }
+      }
+    },
+    "/companies/{company_id}/jobs/{job_id}/analyze": {
+      "post": {
+        "tags": ["Job", "AI"],
+        "summary": "Analyze job description with AI",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "jobAnalyze",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force_refresh": { "type": "boolean", "default": false }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JD analyzed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/JDAnalysisResult" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/candidates": {
+      "get": {
+        "tags": ["Candidate"],
+        "summary": "List candidates",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "name": "job_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "keyword", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated candidate list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/CandidateListItem" }
+                    },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Candidate"],
+        "summary": "Create candidate",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["full_name", "email"],
+                "properties": {
+                  "full_name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "source": { "type": "string", "enum": ["linkedin", "referral", "import", "manual"] },
+                  "job_id": { "type": "string", "format": "uuid", "description": "Optional: auto-assign to job" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Candidate created" } }
+      }
+    },
+    "/companies/{company_id}/candidates/{candidate_id}": {
+      "get": {
+        "tags": ["Candidate"],
+        "summary": "Get candidate detail",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "responses": { "200": { "description": "Candidate detail" } }
+      },
+      "put": {
+        "tags": ["Candidate"],
+        "summary": "Update candidate",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateUpdate",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "responses": { "200": { "description": "Candidate updated" } }
+      },
+      "delete": {
+        "tags": ["Candidate"],
+        "summary": "Soft delete candidate",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateDelete",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "responses": { "200": { "description": "Candidate deleted" } }
+      }
+    },
+    "/companies/{company_id}/candidates/{candidate_id}/parse-cv": {
+      "post": {
+        "tags": ["Candidate", "AI"],
+        "summary": "Parse CV with AI",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateParseCV",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cv_text": { "type": "string", "description": "Extracted text from CV file" },
+                  "job_context": { "type": "string", "description": "Optional job description for match scoring" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "CV parsed" } }
+      }
+    },
+    "/companies/{company_id}/candidates/{candidate_id}/cv": {
+      "post": {
+        "tags": ["Candidate", "File"],
+        "summary": "Upload CV file",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateUploadCV",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "CV uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file_id": { "type": "string" },
+                    "original_name": { "type": "string" },
+                    "size_bytes": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/jobs/{job_id}/candidates": {
+      "get": {
+        "tags": ["Candidate", "Job"],
+        "summary": "List candidates assigned to a job",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateListByJob",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/JobCandidateItem" }
+                    },
+                    "meta": { "$ref": "#/components/schemas/PaginationMeta" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/jobs/{job_id}/candidates/{candidate_id}/assign": {
+      "post": {
+        "tags": ["Candidate", "Job"],
+        "summary": "Assign candidate to job",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidateAssign",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pipeline_status": { "type": "string", "default": "new" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Candidate assigned" } }
+      }
+    },
+    "/companies/{company_id}/jobs/{job_id}/candidates/{candidate_id}/pipeline": {
+      "put": {
+        "tags": ["Candidate", "Job"],
+        "summary": "Update pipeline status",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "candidatePipelineUpdate",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/JobID" },
+          { "$ref": "#/components/parameters/CandidateID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pipeline_status": {
+                    "type": "string",
+                    "enum": ["new", "screening", "invited", "interviewing", "completed", "passed", "rejected", "talent_pool"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Pipeline status updated" } }
+      }
+    },
+    "/companies/{company_id}/interviews": {
+      "get": {
+        "tags": ["Interview"],
+        "summary": "List interviews",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "interviewList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "date", "in": "query", "schema": { "type": "string", "format": "date" } },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": { "200": { "description": "Interview list" } }
+      },
+      "post": {
+        "tags": ["Interview"],
+        "summary": "Create interview (scheduling)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "interviewCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["job_id", "candidate_id", "scheduled_at"],
+                "properties": {
+                  "job_id": { "type": "string", "format": "uuid" },
+                  "candidate_id": { "type": "string", "format": "uuid" },
+                  "recruiter_id": { "type": "string", "format": "uuid" },
+                  "template_id": { "type": "string", "format": "uuid" },
+                  "rubric_id": { "type": "string", "format": "uuid" },
+                  "scheduled_at": { "type": "string", "format": "date-time" },
+                  "duration_minutes": { "type": "integer", "default": 60 },
+                  "mode": { "type": "string", "enum": ["real", "mock"], "default": "real" },
+                  "send_invite": { "type": "boolean", "default": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Interview created" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}": {
+      "get": {
+        "tags": ["Interview"],
+        "summary": "Get interview detail",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "interviewGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": { "200": { "description": "Interview detail" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/start": {
+      "post": {
+        "tags": ["Interview"],
+        "summary": "Start interview (scheduled → active)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "interviewStart",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": { "200": { "description": "Interview started" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/end": {
+      "post": {
+        "tags": ["Interview"],
+        "summary": "End interview (active → completed, triggers report)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "interviewEnd",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": { "200": { "description": "Interview ended" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/transcripts": {
+      "get": {
+        "tags": ["Transcript"],
+        "summary": "List transcripts",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "transcriptList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" },
+          { "name": "since", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100 } }
+        ],
+        "responses": { "200": { "description": "Transcript list" } }
+      },
+      "post": {
+        "tags": ["Transcript"],
+        "summary": "Push transcript segment",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "transcriptCreate",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "speaker_type": { "type": "string", "enum": ["recruiter", "candidate", "ai", "system"] },
+                  "speaker_name": { "type": "string" },
+                  "content": { "type": "string" },
+                  "source": { "type": "string", "enum": ["audio", "manual"], "default": "manual" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Transcript created" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/transcripts/{transcript_id}": {
+      "put": {
+        "tags": ["Transcript"],
+        "summary": "Edit transcript",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "transcriptEdit",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" },
+          { "name": "transcript_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "edited_content": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Transcript updated" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/ai/score-answer": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Score answer(s) against rubric criteria",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "aiScoreAnswer",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["transcript_ids", "criterion_ids"],
+                "properties": {
+                  "transcript_ids": { "type": "array", "items": { "type": "string", "format": "uuid" }, "minItems": 1 },
+                  "criterion_ids": { "type": "array", "items": { "type": "string", "format": "uuid" }, "minItems": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scores",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scores": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/InterviewScoreItem" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/ai/suggest-follow-up": {
+      "post": {
+        "tags": ["AI"],
+        "summary": "Suggest AI follow-up question",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "aiSuggestFollowUp",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "last_transcript_id": { "type": "string", "format": "uuid" },
+                  "focus": { "type": "string", "description": "e.g. technical_depth, behavioral_fit" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Follow-up suggestion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggested_question": { "type": "string" },
+                    "reason": { "type": "string" },
+                    "target_skill": { "type": "string" },
+                    "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+                    "confidence": { "type": "number", "format": "float" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/ai/generate-report": {
+      "post": {
+        "tags": ["AI", "Report"],
+        "summary": "Trigger report generation",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "aiGenerateReport",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": {
+          "202": { "description": "Report generation started" }
+        }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/report": {
+      "get": {
+        "tags": ["Report"],
+        "summary": "Get interview report",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "reportGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": { "200": { "description": "Report" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/report/decision": {
+      "put": {
+        "tags": ["Report"],
+        "summary": "Override recruiter decision",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "reportOverrideDecision",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": { "type": "string", "enum": ["strong_hire", "hire", "consider", "next_round", "reject", "insufficient_data"] },
+                  "comment": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Decision updated" } }
+      }
+    },
+    "/companies/{company_id}/interviews/{interview_id}/report/retry": {
+      "post": {
+        "tags": ["Report"],
+        "summary": "Retry failed report generation",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "reportRetry",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "$ref": "#/components/parameters/InterviewID" }
+        ],
+        "responses": { "200": { "description": "Report retry triggered" } }
+      }
+    },
+    "/companies/{company_id}/rubrics": {
+      "get": {
+        "tags": ["Rubric"],
+        "summary": "List rubrics",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "rubricList",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "responses": { "200": { "description": "Rubric list" } }
+      },
+      "post": {
+        "tags": ["Rubric"],
+        "summary": "Create rubric",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "rubricCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "responses": { "201": { "description": "Rubric created" } }
+      }
+    },
+    "/companies/{company_id}/rubrics/{rubric_id}": {
+      "get": {
+        "tags": ["Rubric"],
+        "summary": "Get rubric detail with criteria",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "rubricGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "name": "rubric_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Rubric detail" } }
+      }
+    },
+    "/companies/{company_id}/question-bank": {
+      "get": {
+        "tags": ["Question"],
+        "summary": "List question bank",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "questionList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "name": "job_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "level", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Question list" } }
+      },
+      "post": {
+        "tags": ["Question"],
+        "summary": "Add question manually",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "questionCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "responses": { "201": { "description": "Question created" } }
+      }
+    },
+    "/mock-interviews": {
+      "post": {
+        "tags": ["Mock"],
+        "summary": "Create mock interview session",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target_role": { "type": "string" },
+                  "target_level": { "type": "string" },
+                  "cv_file_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Mock session created" } }
+      }
+    },
+    "/mock-interviews/me": {
+      "get": {
+        "tags": ["Mock"],
+        "summary": "List my mock interviews",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockListMine",
+        "parameters": [
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": { "200": { "description": "Mock list" } }
+      }
+    },
+    "/mock-interviews/{id}": {
+      "get": {
+        "tags": ["Mock"],
+        "summary": "Get mock interview detail",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockGet",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Mock detail" } }
+      }
+    },
+    "/mock-interviews/{id}/start": {
+      "post": {
+        "tags": ["Mock"],
+        "summary": "Start mock interview",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockStart",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Mock started" } }
+      }
+    },
+    "/mock-interviews/{id}/end": {
+      "post": {
+        "tags": ["Mock"],
+        "summary": "End mock interview",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockEnd",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Mock ended" } }
+      }
+    },
+    "/mock-interviews/{id}/messages": {
+      "post": {
+        "tags": ["Mock"],
+        "summary": "Send answer, get next AI question",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockSendMessage",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Message sent, AI responded" } }
+      }
+    },
+    "/mock-interviews/{id}/report": {
+      "get": {
+        "tags": ["Mock"],
+        "summary": "Get mock interview report",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "mockReport",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Mock report" } }
+      }
+    },
+    "/files": {
+      "post": {
+        "tags": ["File"],
+        "summary": "Upload generic file (multipart)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "fileUpload",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" },
+                  "file_type": { "type": "string" },
+                  "company_id": { "type": "string", "format": "uuid" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "File uploaded" } }
+      }
+    },
+    "/files/{file_id}/signed-url": {
+      "get": {
+        "tags": ["File"],
+        "summary": "Get signed download URL",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "fileSignedUrl",
+        "parameters": [
+          { "name": "file_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "company_id", "in": "query", "schema": { "type": "string", "format": "uuid" }, "description": "Required for recruiters" }
+        ],
+        "responses": { "200": { "description": "Signed URL" } }
+      }
+    },
+    "/interviews/join/{invite_token}": {
+      "get": {
+        "tags": ["Interview"],
+        "summary": "Join interview by invite token (public, no auth)",
+        "operationId": "interviewJoinByToken",
+        "parameters": [
+          { "name": "invite_token", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Room info for candidate" } }
+      }
+    },
+    "/notifications": {
+      "get": {
+        "tags": ["Notification"],
+        "summary": "List notifications + unread count",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "notificationList",
+        "responses": { "200": { "description": "Notification list" } }
+      }
+    },
+    "/notifications/{notification_id}/read": {
+      "put": {
+        "tags": ["Notification"],
+        "summary": "Mark notification as read",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "notificationMarkRead",
+        "parameters": [
+          { "name": "notification_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "Marked read" } }
+      }
+    },
+    "/companies/{company_id}/audit-logs": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "List audit logs (owner/admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "auditLogList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "name": "resource_type", "in": "query", "schema": { "type": "string" } },
+          { "name": "actor_user_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "$ref": "#/components/parameters/Page" },
+          { "$ref": "#/components/parameters/PageSize" }
+        ],
+        "responses": { "200": { "description": "Audit log list" } }
+      }
+    },
+    "/companies/{company_id}/question-bank": {
+      "get": {
+        "tags": ["Question"],
+        "summary": "List question bank",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "questionBankList",
+        "parameters": [
+          { "$ref": "#/components/parameters/CompanyID" },
+          { "name": "job_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "level", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Question bank" } }
+      },
+      "post": {
+        "tags": ["Question"],
+        "summary": "Add question manually",
+        "security": [{ "BearerAuth": [] }],
+        "operationId": "questionBankCreate",
+        "parameters": [{ "$ref": "#/components/parameters/CompanyID" }],
+        "responses": { "201": { "description": "Question created" } }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["System"],
+        "summary": "Health check",
+        "operationId": "healthCheck",
+        "responses": { "200": { "description": "Service healthy" } }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "CompanyID": { "name": "company_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "JobID": { "name": "job_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "CandidateID": { "name": "candidate_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "InterviewID": { "name": "interview_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+      "Page": { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+      "PageSize": { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+    },
+    "schemas": {
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" },
+          "total": { "type": "integer" },
+          "total_pages": { "type": "integer" }
+        }
+      },
+      "UserMe": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": "string" },
+          "full_name": { "type": "string" },
+          "role": { "type": "string" },
+          "avatar_url": { "type": "string", "nullable": true },
+          "companies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "role": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "Company": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "role": { "type": "string" },
+          "logo_url": { "type": "string", "nullable": true }
+        }
+      },
+      "JobListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "department": { "type": "string" },
+          "level": { "type": "string" },
+          "status": { "type": "string" },
+          "candidate_count": { "type": "integer" },
+          "interview_count": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "JobDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "company_id": { "type": "string" },
+          "title": { "type": "string" },
+          "department": { "type": "string" },
+          "level": { "type": "string" },
+          "location": { "type": "string" },
+          "employment_type": { "type": "string" },
+          "description": { "type": "string" },
+          "requirements": { "type": "string" },
+          "benefits": { "type": "string" },
+          "status": { "type": "string" },
+          "ai_summary": { "type": "string", "nullable": true },
+          "ai_analysis_json": { "type": "object", "nullable": true },
+          "stats": { "$ref": "#/components/schemas/JobStats" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "JobStats": {
+        "type": "object",
+        "properties": {
+          "candidate_count": { "type": "integer" },
+          "interview_count": { "type": "integer" }
+        }
+      },
+      "JDAnalysisResult": {
+        "type": "object",
+        "properties": {
+          "summary": { "type": "string" },
+          "required_skills": { "type": "array", "items": { "type": "string" } },
+          "nice_to_have_skills": { "type": "array", "items": { "type": "string" } },
+          "suggested_rubric": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "weight": { "type": "integer" },
+                "description": { "type": "string" }
+              }
+            }
+          },
+          "suggested_questions": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "CandidateListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "full_name": { "type": "string" },
+          "email": { "type": "string" },
+          "phone": { "type": "string" },
+          "status": { "type": "string" },
+          "source": { "type": "string" }
+        }
+      },
+      "JobCandidateItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "candidate_id": { "type": "string" },
+          "pipeline_status": { "type": "string" },
+          "fit_score": { "type": "number" },
+          "applied_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "InterviewScoreItem": {
+        "type": "object",
+        "properties": {
+          "criterion_name": { "type": "string" },
+          "score": { "type": "number", "nullable": true },
+          "max_score": { "type": "number" },
+          "weight": { "type": "number" },
+          "evidence": { "type": "string" },
+          "ai_comment": { "type": "string" },
+          "confidence": { "type": "number" },
+          "status": { "type": "string", "enum": ["scored", "insufficient_evidence", "error"] },
+          "scored_by": { "type": "string" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "responses": {
+      "AuthResponse": {
+        "description": "Auth tokens + user info",
+        "headers": {
+          "Set-Cookie": {
+            "description": "HttpOnly refresh_token cookie",
+            "schema": { "type": "string" }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean" },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string" },
+                        "email": { "type": "string" },
+                        "full_name": { "type": "string" },
+                        "role": { "type": "string" },
+                        "status": { "type": "string" }
+                      }
+                    },
+                    "access_token": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Invalid or missing credentials",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "enum": [false] },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string", "enum": ["UNAUTHORIZED"] },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Insufficient permissions",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "enum": [false] },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string", "enum": ["FORBIDDEN"] },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "enum": [false] },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string", "enum": ["NOT_FOUND"] },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Resource conflict (duplicate)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": { "type": "boolean", "enum": [false] },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": { "type": "string", "enum": ["CONFLICT"] },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Auth", "description": "Authentication & account management" },
+    { "name": "Company", "description": "Company/workspace CRUD" },
+    { "name": "Job", "description": "Job posting CRUD & AI analysis" },
+    { "name": "Candidate", "description": "Candidate CRM & pipeline" },
+    { "name": "Interview", "description": "Interview scheduling & lifecycle" },
+    { "name": "Transcript", "description": "Interview transcript management" },
+    { "name": "AI", "description": "AI-powered scoring, suggestion, report" },
+    { "name": "Report", "description": "Interview report & recruiter decision" },
+    { "name": "Mock", "description": "Mock interview for candidates" },
+    { "name": "File", "description": "File upload & download" },
+    { "name": "Rubric", "description": "Rubric & scoring criteria" },
+    { "name": "Question", "description": "Question bank management" },
+    { "name": "Notification", "description": "In-app notifications" },
+    { "name": "Audit", "description": "Audit log (admin/owner)" },
+    { "name": "System", "description": "Health check & system" }
+  ]
+}

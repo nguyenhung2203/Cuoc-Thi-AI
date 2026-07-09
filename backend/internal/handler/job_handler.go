@@ -101,6 +101,11 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log job creation
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("job:create", "job", job.ID, companyID, nil, job)
+	}
+
 	candidateCount, interviewCount, _ := h.svc.GetStats(r.Context(), job.ID)
 	stats := response.JobStats{CandidateCount: candidateCount, InterviewCount: interviewCount}
 	pkgresponse.JSON(w, http.StatusCreated, toJobDetail(*job, stats), nil, requestID)
@@ -139,10 +144,18 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch old job before updating (for audit diff)
+	oldJob, _ := h.svc.GetByID(r.Context(), companyID, jobID)
+
 	job, err := h.svc.Update(r.Context(), companyID, jobID, &req)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log job update
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("job:update", "job", jobID, companyID, oldJob, job)
 	}
 
 	candidateCount, interviewCount, _ := h.svc.GetStats(r.Context(), job.ID)
@@ -159,6 +172,11 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), companyID, jobID); err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log job deletion
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("job:delete", "job", jobID, companyID, map[string]string{"job_id": jobID}, nil)
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "job deleted"}, nil, requestID)

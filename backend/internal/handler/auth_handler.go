@@ -17,10 +17,11 @@ import (
 type AuthHandler struct {
 	authService *service.AuthService
 	jwtSecret   string
+	auditSvc    *service.AuditService
 }
 
-func NewAuthHandler(authService *service.AuthService, jwtSecret string) *AuthHandler {
-	return &AuthHandler{authService: authService, jwtSecret: jwtSecret}
+func NewAuthHandler(authService *service.AuthService, jwtSecret string, auditSvc *service.AuditService) *AuthHandler {
+	return &AuthHandler{authService: authService, jwtSecret: jwtSecret, auditSvc: auditSvc}
 }
 
 func (h *AuthHandler) Routes(r chi.Router) {
@@ -112,6 +113,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setRefreshTokenCookie(w, refreshToken)
+
+	// Audit log login
+	if authResp != nil {
+		h.auditSvc.LogAction(r.Context(), service.AuditLogInput{
+			ActorUserID:  authResp.User.ID,
+			ActorRole:    authResp.User.Role,
+			Action:       "login",
+			ResourceType: "user",
+			ResourceID:   authResp.User.ID,
+			IPAddress:    ipAddress,
+			UserAgent:    userAgent,
+		})
+	}
+
 	pkgresponse.JSON(w, http.StatusOK, authResp, nil, "")
 }
 
@@ -161,9 +176,25 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	userRole, _ := r.Context().Value(middleware.CtxUserRole).(string)
+
 	cookie, err := r.Cookie("refresh_token")
 	if err == nil {
 		_ = h.authService.Logout(r.Context(), cookie.Value)
+	}
+
+	// Audit log logout
+	if userID != "" {
+		h.auditSvc.LogAction(r.Context(), service.AuditLogInput{
+			ActorUserID:  userID,
+			ActorRole:    userRole,
+			Action:       "logout",
+			ResourceType: "user",
+			ResourceID:   userID,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+		})
 	}
 
 	clearRefreshTokenCookie(w)
@@ -171,13 +202,27 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
-	if !ok || userID == "" {
+	uid, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || uid == "" {
 		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
 		return
 	}
 
-	revokedCount, _ := h.authService.LogoutAll(r.Context(), userID)
+	userRole, _ := r.Context().Value(middleware.CtxUserRole).(string)
+	revokedCount, _ := h.authService.LogoutAll(r.Context(), uid)
+
+	// Audit log logout-all
+	h.auditSvc.LogAction(r.Context(), service.AuditLogInput{
+		ActorUserID:  uid,
+		ActorRole:    userRole,
+		Action:       "logout_all",
+		ResourceType: "user",
+		ResourceID:   uid,
+		IPAddress:    getClientIP(r),
+		UserAgent:    r.UserAgent(),
+		AfterData:    map[string]int{"revoked_sessions": revokedCount},
+	})
+
 	clearRefreshTokenCookie(w)
 	pkgresponse.JSON(w, http.StatusOK, response.LogoutAllResponse{
 		Message:         "All sessions revoked. Please login again.",

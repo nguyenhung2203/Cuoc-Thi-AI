@@ -8,3 +8,8 @@ type ScoreAnswerRequest struct {
 type GenerateReportRequest struct {
 	JobID string `json:"job_id" validate:"required"`
 }
+
+type SuggestFollowUpRequest struct {
+	LastTranscriptID string `json:"last_transcript_id"`
+	Focus            string `json:"focus"`
+}

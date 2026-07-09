@@ -71,6 +71,8 @@ func main() {
 	qGenerator := ai.NewQuestionGenerator(aiOrchestrator)
 
 	// 4. Services
+	auditRepo := repository.NewAuditRepository(db)
+	auditSvc := service.NewAuditService(auditRepo)
 	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
@@ -81,13 +83,14 @@ func main() {
 	scoreSvc := service.NewScoreService(scoreRepo, transcriptRepo, rubricRepo, interviewRepo, aiOrchestrator)
 	reportSvc := service.NewReportService(reportRepo, transcriptRepo, scoreRepo, jobRepo, interviewRepo, notificationRepo, aiOrchestrator)
 	interviewSvc := service.NewInterviewService(interviewRepo, reportSvc)
+	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
 	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo)
 
 	// 5. Handlers
-	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret)
+	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)
 	candidateHandler := handler.NewCandidateHandler(candidateSvc, aiSvc, fileSvc)
@@ -100,7 +103,9 @@ func main() {
 	notificationHandler := handler.NewNotificationHandler(notificationRepo)
 	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
-	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc)
+
+	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
+	auditHandler := handler.NewAuditHandler(auditSvc)
 
 	// 6. Router
 	r := chi.NewRouter()
@@ -140,6 +145,7 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+			r.Use(middleware.AuditMiddleware(auditSvc))
 
 			r.Route("/mock-interviews", func(r chi.Router) {
 				r.Post("/", mockHandler.Create)
@@ -176,6 +182,8 @@ func main() {
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 
+				r.Get("/audit-logs", auditHandler.ListAuditLogs)
+
 				r.Route("/rubrics", func(r chi.Router) {
 					r.Post("/", rubricHandler.CreateRubric)
 					r.Get("/", rubricHandler.ListCompanyRubrics)
@@ -197,6 +205,7 @@ func main() {
 					r.Route("/{interview_id}/ai", func(r chi.Router) {
 						r.Post("/score-answer", aiHandler.ScoreAnswer)
 						r.Post("/generate-report", aiHandler.GenerateReport)
+						r.Post("/suggest-follow-up", aiHandler.SuggestFollowUp)
 					})
 				})
 			})
