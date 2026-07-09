@@ -57,6 +57,8 @@ type RoomJoinedPayload struct {
 	MediaStatus       *MediaStatusInfo  `json:"media_status,omitempty"`
 	MissedEventsCount int               `json:"missed_events_count,omitempty"`
 	SyncFromTimestamp time.Time         `json:"sync_from_timestamp,omitempty"`
+	StartedAt         *time.Time        `json:"started_at,omitempty"`
+	EndedAt           *time.Time        `json:"ended_at,omitempty"`
 }
 
 // RoomUserJoinedPayload is broadcast to everyone else when a new participant joins.

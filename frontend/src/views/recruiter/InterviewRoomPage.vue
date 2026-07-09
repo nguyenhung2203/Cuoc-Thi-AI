@@ -1,12 +1,11 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Modal from '../../components/common/AppModal.vue'
-import Toast from '../../components/common/AppToast.vue'
-import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft } from 'lucide-vue-next'
+import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, Send, LogOut, Play, Pause } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
 import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
@@ -27,13 +26,24 @@ const transcriptStore = useTranscriptStore()
 const aiStore = useAiStore()
 
 const {
-  isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn,
+  isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn, isScreenSharing,
   localVideoEl, remoteVideoEl,
-  connectToRoom, toggleMic, toggleCamera, disconnect: liveKitDisconnect
+  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
 } = useLiveKit()
 
-const activeTab = ref('assistant')
-const isPanelExpanded = ref(true)
+const activeTab = ref(sessionStorage.getItem('recruiter_active_tab') || 'assistant')
+watch(activeTab, (val) => { sessionStorage.setItem('recruiter_active_tab', val); })
+
+const isPanelExpanded = ref(sessionStorage.getItem('recruiter_panel_expanded') !== 'false')
+watch(isPanelExpanded, (val) => { sessionStorage.setItem('recruiter_panel_expanded', val); })
+
+const chatInput = ref('')
+
+const handleSendMessage = () => {
+  if (!chatInput.value || !chatInput.value.trim()) return
+  chatStore.sendChat(chatInput.value.trim(), 'room', roomStore.roomId, roomStore.interviewId, 'Nhà tuyển dụng (Bạn)')
+  chatInput.value = ''
+}
 
 const showEndModal = ref(false)
 const isEnding = ref(false)
@@ -107,13 +117,54 @@ onMounted(async () => {
   }
 })
 
+const showLeaveWarningModal = ref(false)
+const pendingRouteResolve = ref(null)
+
+const handleBeforeUnload = (e) => {
+  if (!isEnding.value && roomStore.status !== 'completed' && roomStore.status !== 'expired' && roomStore.status !== 'cancelled') {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
 onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   liveKitDisconnect()
   roomStore.disconnectRoom()
   chatStore.cleanupListeners()
   transcriptStore.cleanupListeners()
   aiStore.cleanupListeners()
 })
+
+onBeforeRouteLeave((to, from) => {
+  if (isEnding.value || roomStore.status === 'completed' || roomStore.status === 'expired' || roomStore.status === 'cancelled') {
+    return true
+  }
+  return new Promise((resolve) => {
+    pendingRouteResolve.value = resolve
+    showLeaveWarningModal.value = true
+  })
+})
+
+const handleConfirmLeave = () => {
+  showLeaveWarningModal.value = false
+  if (pendingRouteResolve.value) {
+    pendingRouteResolve.value(true)
+    pendingRouteResolve.value = null
+  }
+}
+
+const handleCancelLeave = () => {
+  showLeaveWarningModal.value = false
+  if (pendingRouteResolve.value) {
+    pendingRouteResolve.value(false)
+    pendingRouteResolve.value = null
+  }
+}
 
 const handleEndCall = () => {
   showEndModal.value = true
@@ -181,7 +232,8 @@ const elapsedFormatted = computed(() => {
 
 onUnmounted(() => { if (timerInterval) clearInterval(timerInterval) })
 
-const recruiterNoteContent = ref('')
+const recruiterNoteContent = ref(localStorage.getItem('recruiter_personal_note_' + (route.params.interviewId || 'default')) || '')
+watch(recruiterNoteContent, (val) => { localStorage.setItem('recruiter_personal_note_' + (route.params.interviewId || 'default'), val || ''); })
 const saveRecruiterNote = () => {
   if (!recruiterNoteContent.value.trim()) return
   roomStore.createNote(recruiterNoteContent.value.trim(), ['manual'])
@@ -207,6 +259,30 @@ const formatTime = (ms) => {
   const date = new Date(ms)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+// Auto-hide control bar after 3.5s of mouse inactivity
+const isControlBarVisible = ref(true)
+let controlBarTimer = null
+
+const resetControlBarTimer = () => {
+  isControlBarVisible.value = true
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+  controlBarTimer = setTimeout(() => {
+    isControlBarVisible.value = false
+  }, 3500)
+}
+
+const keepControlBarVisible = () => {
+  isControlBarVisible.value = true
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+}
+
+onMounted(() => {
+  resetControlBarTimer()
+})
+onUnmounted(() => {
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+})
 
 </script>
 
@@ -239,11 +315,11 @@ const formatTime = (ms) => {
     </div>
 
     <!-- Header -->
-    <div style="height: 64px; background-color: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px">
+    <div style="height: 48px; background-color: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px">
       <div style="display: flex; align-items: center; gap: 16px">
         <div>
-          <h1 class="text-h2">Phòng phỏng vấn <span v-if="candidateParticipant">- {{ candidateParticipant.display_name }}</span></h1>
-          <div style="display: flex; gap: 12px; margin-top: 4px">
+          <h1 class="text-h2" style="font-size: 16px; line-height: 1.2;">Phòng phỏng vấn <span v-if="candidateParticipant">- {{ candidateParticipant.display_name }}</span></h1>
+          <div style="display: flex; gap: 12px; margin-top: 1px">
             <span v-if="roomStore.status === 'active'" class="text-helper" style="color: var(--danger); display: flex; align-items: center; gap: 4px">
               <div style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--danger); animation: pulse 1.5s infinite;"></div> Đang ghi âm & Transcript
             </span>
@@ -261,9 +337,9 @@ const formatTime = (ms) => {
         <Badge :type="roomStore.status === 'active' ? 'info' : 'secondary'">
           <Sparkles size="12" style="margin-right: 4px" /> {{ roomStore.status === 'active' ? 'AI Active' : 'AI Inactive' }}
         </Badge>
-        <Button v-if="roomStore.status === 'waiting'" variant="primary" @click="handleStartCall">Bắt đầu Phỏng vấn</Button>
-        <Button v-if="roomStore.status === 'active'" variant="secondary" @click="handlePauseCall">Tạm dừng</Button>
-        <Button variant="secondary" @click="router.push('/interviews')">Rời tạm thời</Button>
+        <Button variant="secondary" style="padding: 6px 12px; font-size: 13px;" @click="router.push('/interviews')" title="Rời phòng tạm thời, buổi phỏng vấn vẫn được lưu">
+          <LogOut size="16" style="margin-right: 6px" /> Rời tạm thời
+        </Button>
       </div>
     </div>
 
@@ -271,11 +347,15 @@ const formatTime = (ms) => {
     <div style="display: flex; flex: 1; overflow: hidden">
       
       <!-- Left: Video Area -->
-      <div style="flex: 1; display: flex; flex-direction: column; padding: 12px; position: relative; overflow: hidden;">
+      <div style="flex: 1; display: flex; flex-direction: column; padding: 6px; position: relative; overflow: hidden;">
         <!-- Video Grid -->
         <div style="flex: 1; display: flex; position: relative; width: 100%; height: 100%;">
           <!-- Candidate Video (Main Full Area) -->
-          <div style="flex: 1; background-color: #0F172A; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.08);">
+          <div 
+            @mousemove="resetControlBarTimer"
+            @click="resetControlBarTimer"
+            style="flex: 1; background-color: #0F172A; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.08);"
+          >
             <!-- Thẻ video thật cho LiveKit -->
             <video ref="remoteVideoEl" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;"></video>
             
@@ -291,7 +371,20 @@ const formatTime = (ms) => {
             </div>
 
             <!-- Floating Control Bar (Center Bottom of Video) -->
-            <div style="position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background-color: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 16px; border-radius: 9999px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6); display: flex; align-items: center; gap: 12px; z-index: 20;">
+            <div 
+              @mouseenter="keepControlBarVisible"
+              @mouseleave="resetControlBarTimer"
+              :style="{ 
+                position: 'absolute', bottom: '24px', left: '50%', 
+                transform: isControlBarVisible ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(24px)', 
+                opacity: isControlBarVisible ? 1 : 0, 
+                pointerEvents: isControlBarVisible ? 'auto' : 'none', 
+                transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)', 
+                backgroundColor: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(16px)', 
+                border: '1px solid rgba(255, 255, 255, 0.15)', padding: '8px 16px', borderRadius: '9999px', 
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6)', display: 'flex', alignItems: 'center', gap: '12px', zIndex: 20 
+              }"
+            >
               <button :title="isMicOn ? 'Tắt micro' : 'Bật micro'" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: isMicOn ? 'rgba(51, 65, 85, 0.8)' : '#EF4444', color: 'white' }">
                 <Mic v-if="isMicOn" size="20" />
                 <MicOff v-else size="20" />
@@ -302,7 +395,7 @@ const formatTime = (ms) => {
                 <VideoOff v-else size="20" />
               </button>
               
-              <button title="Chia sẻ màn hình" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: 'rgba(51, 65, 85, 0.8)', color: 'white' }">
+              <button :title="isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'" @click="toggleScreenShare" :style="{ width: '44px', height: '44px', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: isScreenSharing ? '#2563EB' : 'rgba(51, 65, 85, 0.8)', color: 'white' }">
                 <MonitorUp size="20" />
               </button>
               
@@ -312,7 +405,20 @@ const formatTime = (ms) => {
               
               <div style="width: 1px; height: 28px; background-color: rgba(255, 255, 255, 0.2); margin: 0 4px;"></div>
               
-              <button title="Kết thúc cuộc gọi" @click="handleEndCall" style="background-color: #EF4444; color: white; border: none; height: 44px; padding: 0 20px; border-radius: 9999px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background-color 0.2s; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
+              <!-- Nút Bắt đầu / Tạm dừng (Chỉ hiện nếu CHƯA Hoàn thành hoặc Hủy) -->
+              <button v-if="roomStore.status !== 'completed' && roomStore.status !== 'cancelled' && roomStore.status !== 'expired'" :title="roomStore.status === 'active' ? 'Tạm dừng buổi phỏng vấn' : 'Bắt đầu phỏng vấn'" @click="handleToggleCallState" :style="{ backgroundColor: roomStore.status === 'active' ? 'rgba(51, 65, 85, 0.8)' : '#22C55E', color: 'white', border: 'none', height: '44px', padding: '0 20px', borderRadius: '9999px', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', boxShadow: roomStore.status === 'active' ? 'none' : '0 4px 12px rgba(34, 197, 94, 0.4)' }">
+                <Pause v-if="roomStore.status === 'active'" size="16" fill="white" />
+                <Play v-else size="16" fill="white" />
+                <span style="white-space: nowrap;">{{ roomStore.status === 'active' ? 'Tạm dừng' : 'Bắt đầu phỏng vấn' }}</span>
+              </button>
+              
+              <!-- Nút Tiếp tục (Chỉ hiện khi đang Tạm dừng) -->
+              <button v-if="roomStore.status === 'paused'" title="Tiếp tục phỏng vấn" @click="handleResumeCall" style="background-color: #3B82F6; color: white; border: none; height: 44px; padding: 0 20px; border-radius: 9999px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background-color 0.2s; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);">
+                <Play size="16" fill="white" /> <span style="white-space: nowrap;">Tiếp tục</span>
+              </button>
+              
+              <!-- Nút Kết thúc (Chỉ hiện khi đã Bắt đầu hoặc Đang tạm dừng) -->
+              <button v-if="roomStore.status === 'active' || roomStore.status === 'paused'" title="Kết thúc cuộc gọi và xuất báo cáo" @click="handleEndCall" style="background-color: #EF4444; color: white; border: none; height: 44px; padding: 0 20px; border-radius: 9999px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: background-color 0.2s; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);">
                 <PhoneOff size="18" /> <span style="white-space: nowrap;">Kết thúc</span>
               </button>
             </div>
@@ -328,38 +434,62 @@ const formatTime = (ms) => {
       </div>
 
       <!-- Right: AI Panel -->
-      <div v-if="aiStore.aiError?.severity !== 'critical'" :style="{ width: isPanelExpanded ? '420px' : '64px', minWidth: isPanelExpanded ? '420px' : '64px', maxWidth: isPanelExpanded ? '420px' : '64px', flexShrink: 0, backgroundColor: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', transition: 'width 0.3s ease, min-width 0.3s ease, max-width 0.3s ease' }">
+      <div v-if="aiStore.aiError?.severity !== 'critical'" class="bg-white border-l border-slate-200 flex flex-col shrink-0 shadow-sm relative z-20 transition-all duration-300" :style="{ width: isPanelExpanded ? '460px' : '48px' }">
         
-        <!-- Toggle Button & Header -->
-        <div :style="{ display: 'flex', alignItems: 'center', justifyContent: isPanelExpanded ? 'space-between' : 'center', padding: '12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }">
-          <span v-if="isPanelExpanded" style="font-weight: 600; font-size: 14px; color: var(--text-main)">Công cụ Hỗ trợ</span>
-          <Button variant="ghost" style="padding: 4px; height: auto;" @click="isPanelExpanded = !isPanelExpanded">
-            <ChevronRight v-if="isPanelExpanded" size="20" />
-            <ChevronLeft v-else size="20" />
-          </Button>
+        <!-- Collapsed Sidebar Icon Mode -->
+        <div v-if="!isPanelExpanded" class="flex flex-col items-center py-3 gap-2.5 h-full bg-slate-50 border-l border-slate-200">
+          <button @click="isPanelExpanded = true" class="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center transition-colors shadow-sm" title="Mở rộng bảng công cụ">
+            <ChevronsLeft class="w-4 h-4" />
+          </button>
+          <div class="w-6 h-px bg-slate-200 my-0.5"></div>
+          
+          <button @click="() => { activeTab = 'assistant'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'assistant' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="AI Assistant">
+            <Sparkles class="w-4 h-4" />
+          </button>
+          <button @click="() => { activeTab = 'rubric'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'rubric' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Tiêu chí">
+            <CheckCircle class="w-4 h-4" />
+          </button>
+          <button @click="() => { activeTab = 'transcript'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'transcript' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Transcript">
+            <MessageSquare class="w-4 h-4" />
+          </button>
+          <button @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'chat' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Chat">
+            <MessageSquare class="w-4 h-4" />
+            <span v-if="chatStore.messages.length > 0" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-white"></span>
+          </button>
+          <button @click="() => { activeTab = 'notes'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'notes' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Ghi chú">
+            <FileText class="w-4 h-4" />
+          </button>
         </div>
 
-        <!-- Tabs -->
-        <div class="tabs-container" :style="{ display: 'flex', flexDirection: isPanelExpanded ? 'row' : 'column', borderBottom: isPanelExpanded ? '1px solid var(--border)' : 'none', overflowX: isPanelExpanded ? 'auto' : 'hidden', overflowY: 'hidden', flexShrink: 0 }">
-          <div :class="['nav-item', activeTab === 'assistant' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'assistant'; isPanelExpanded = true" title="AI Assistant">
-            <Sparkles size="16" /> <span v-if="isPanelExpanded">AI Assistant</span>
+        <!-- Expanded Sidebar Mode -->
+        <template v-else>
+          <!-- Tabs Header -->
+          <div class="flex border-b border-slate-200 shrink-0 bg-slate-50 items-center justify-between pr-2">
+            <div class="flex flex-1 overflow-x-auto custom-scrollbar">
+              <button @click="activeTab = 'assistant'" class="py-3 px-2 flex items-center justify-center gap-1.5 font-medium text-xs transition-colors border-b-2 whitespace-nowrap" :class="activeTab === 'assistant' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'" title="AI Assistant">
+                <Sparkles class="w-4 h-4 shrink-0" /> AI Assistant
+              </button>
+              <button @click="activeTab = 'rubric'" class="py-3 px-2 flex items-center justify-center gap-1.5 font-medium text-xs transition-colors border-b-2 whitespace-nowrap" :class="activeTab === 'rubric' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'" title="Tiêu chí">
+                <CheckCircle class="w-4 h-4 shrink-0" /> Tiêu chí
+              </button>
+              <button @click="activeTab = 'transcript'" class="py-3 px-2 flex items-center justify-center gap-1.5 font-medium text-xs transition-colors border-b-2 whitespace-nowrap" :class="activeTab === 'transcript' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'" title="Transcript">
+                <MessageSquare class="w-4 h-4 shrink-0" /> Transcript
+              </button>
+              <button @click="activeTab = 'chat'" class="py-3 px-2 flex items-center justify-center gap-1.5 font-medium text-xs transition-colors border-b-2 relative whitespace-nowrap" :class="activeTab === 'chat' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'" title="Chat">
+                <MessageSquare class="w-4 h-4 shrink-0" /> Chat
+                <span v-if="chatStore.messages.length > 0" class="absolute top-2 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-white"></span>
+              </button>
+              <button @click="activeTab = 'notes'" class="py-3 px-2 flex items-center justify-center gap-1.5 font-medium text-xs transition-colors border-b-2 whitespace-nowrap" :class="activeTab === 'notes' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'" title="Ghi chú">
+                <FileText class="w-4 h-4 shrink-0" /> Ghi chú
+              </button>
+            </div>
+            <button @click="isPanelExpanded = false" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition-colors ml-1 shrink-0" title="Thu gọn bảng công cụ">
+              <ChevronsRight class="w-4 h-4" />
+            </button>
           </div>
-          <div :class="['nav-item', activeTab === 'rubric' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'rubric'; isPanelExpanded = true" title="Tiêu chí">
-            <CheckCircle size="16" /> <span v-if="isPanelExpanded">Tiêu chí</span>
-          </div>
-          <div :class="['nav-item', activeTab === 'transcript' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'transcript'; isPanelExpanded = true" title="Transcript">
-            <MessageSquare size="16" /> <span v-if="isPanelExpanded">Transcript</span>
-          </div>
-          <div :class="['nav-item', activeTab === 'chat' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'chat'; isPanelExpanded = true" title="Chat">
-             <MessageSquare size="16" /> <span v-if="isPanelExpanded">Chat</span>
-          </div>
-          <div :class="['nav-item', activeTab === 'notes' ? 'active' : '']" :style="{ flex: isPanelExpanded ? '0 0 auto' : 'unset', justifyContent: 'center', cursor: 'pointer', padding: isPanelExpanded ? '16px 12px' : '16px 0' }" @click="activeTab = 'notes'; isPanelExpanded = true" title="Ghi chú">
-            <FileText size="16" /> <span v-if="isPanelExpanded">Ghi chú</span>
-          </div>
-        </div>
 
-        <!-- Tab Content -->
-        <div v-show="isPanelExpanded" style="flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px;">
+          <!-- Tab Content -->
+          <div class="flex-1 overflow-y-auto overflow-x-hidden p-5 bg-white flex flex-col relative custom-scrollbar">
           
           <!-- AI Error Degraded Indicator -->
           <div v-if="aiStore.aiError && aiStore.aiError.severity === 'degraded'" style="margin-bottom: 16px; font-size: 12px; color: var(--warning);">
@@ -459,17 +589,22 @@ const formatTime = (ms) => {
           </div>
           
           <div v-if="activeTab === 'chat'" style="display: flex; flex-direction: column; height: 100%;">
-            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
-              <div v-if="chatStore.messages.length === 0" class="text-helper text-center text-muted">
-                Không có tin nhắn.
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; padding-right: 4px;">
+              <div v-if="chatStore.messages.length === 0" class="text-helper text-center text-muted" style="margin-top: 20px;">
+                Chưa có tin nhắn nào.
               </div>
-              <div v-for="msg in chatStore.messages" :key="msg.message_id" style="padding: 8px 12px; border-radius: var(--radius); background-color: var(--surface-soft);">
-                <div style="font-size: 11px; font-weight: bold; color: var(--primary); margin-bottom: 2px;">{{ msg.sender_name }} <span v-if="msg.visibility === 'recruiter_only'" style="color:var(--danger)">(Internal)</span></div>
-                <div class="text-body">{{ msg.message }}</div>
+              <div v-for="msg in chatStore.messages" :key="msg.message_id" style="display: flex; flex-direction: column;" :style="{ alignItems: (msg.sender_type === 'recruiter' || msg.sender_type === 'local') ? 'flex-end' : 'flex-start' }">
+                <span style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">{{ (msg.sender_type === 'recruiter' || msg.sender_type === 'local') ? 'Bạn (Nhà tuyển dụng)' : (msg.sender_name || 'Ứng viên') }}</span>
+                <div style="padding: 10px 14px; border-radius: 12px; max-width: 85%; font-size: 13px;" :style="{ backgroundColor: (msg.sender_type === 'recruiter' || msg.sender_type === 'local') ? 'var(--primary)' : 'var(--surface-soft)', color: (msg.sender_type === 'recruiter' || msg.sender_type === 'local') ? '#ffffff' : 'var(--text-main)' }">
+                  {{ msg.message }}
+                </div>
               </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-               <input type="text" id="chatInput" placeholder="Nhập tin nhắn..." class="app-input" style="flex: 1;" @keyup.enter="(e) => { chatStore.sendChat(e.target.value, 'room', roomStore.roomId, roomStore.interviewId); e.target.value=''; }">
+            <div style="display: flex; align-items: center; gap: 8px; background-color: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 4px 6px 4px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: border-color 0.2s; flex-shrink: 0;">
+               <input type="text" v-model="chatInput" placeholder="Nhập tin nhắn..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; color: var(--text-main); padding: 6px 0;" @keyup.enter="handleSendMessage">
+               <button @click="handleSendMessage" style="width: 34px; height: 34px; border-radius: 50%; background-color: var(--primary); color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s, opacity 0.2s; flex-shrink: 0; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);" title="Gửi tin nhắn">
+                 <Send size="16" />
+               </button>
             </div>
           </div>
 
@@ -488,7 +623,8 @@ const formatTime = (ms) => {
             </div>
           </div>
 
-        </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -497,6 +633,14 @@ const formatTime = (ms) => {
       <div style="display: flex; justify-content: flex-end; gap: 12px">
         <Button variant="ghost" @click="showEndModal = false">Huỷ</Button>
         <Button variant="primary" @click="confirmEndCall" style="background-color: var(--danger); color: white; border-color: var(--danger)">OK</Button>
+      </div>
+    </Modal>
+
+    <Modal :isOpen="showLeaveWarningModal" @close="handleCancelLeave" title="Xác nhận rời phòng phỏng vấn">
+      <p class="text-body" style="margin-bottom: 24px">Bạn đang trong phòng phỏng vấn. Bạn có chắc chắn muốn rời khỏi phòng ngay bây giờ? (Bạn vẫn có thể quay lại sau từ danh sách phỏng vấn)</p>
+      <div style="display: flex; justify-content: flex-end; gap: 12px">
+        <Button variant="ghost" @click="handleCancelLeave">Ở lại phòng</Button>
+        <Button variant="primary" @click="handleConfirmLeave" style="background-color: var(--warning); color: #1a1a2e; font-weight: 600;">Rời đi</Button>
       </div>
     </Modal>
   </div>

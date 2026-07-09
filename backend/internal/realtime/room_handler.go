@@ -122,6 +122,8 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		RoomStatus:      room.Status,
 		InterviewStatus: string(room.Status),
 		Participants:    room.ParticipantList(),
+		StartedAt:       room.StartedAt,
+		EndedAt:         room.EndedAt,
 	}
 	if isReconnect {
 		ackPayload.MediaStatus = &p.MediaStatus
@@ -134,6 +136,15 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		rawAck, _ := ackEnv.ToJSON()
 		if !conn.TrySend(rawAck) {
 			log.Printf("[room] send buffer full/closed for participant=%s ACK", conn.ID)
+		}
+	}
+
+	// Stream historical chat messages to joining client so chat history persists across browser refresh (F5)
+	for _, chatMsg := range r.roomManager.GetChatHistory(room.ID) {
+		if chatEnv, err := events.NewEnvelope(events.EventChatMessage, "", room.ID, room.InterviewID, chatMsg); err == nil {
+			if rawChat, err := chatEnv.ToJSON(); err == nil {
+				conn.TrySend(rawChat)
+			}
 		}
 	}
 

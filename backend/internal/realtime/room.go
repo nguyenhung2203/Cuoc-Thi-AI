@@ -24,6 +24,8 @@ type Room struct {
 	ID                            string
 	InterviewID                   string
 	Status                        events.RoomStatus
+	StartedAt                     *time.Time
+	EndedAt                       *time.Time
 	TranscriptEnabledForCandidate bool
 	IsMockInterview               bool
 	Participants                  map[string]*Participant // participantID (connectionID) → Participant

@@ -16,9 +16,9 @@ export function useLiveKit() {
   const isConnected = ref(false);
   const error = ref(null);
   
-  // Trạng thái thiết bị local
-  const isMicOn = ref(true);
-  const isCameraOn = ref(true);
+  // Trạng thái thiết bị local - persist across reload
+  const isMicOn = ref(sessionStorage.getItem('livekit_mic_enabled') !== 'false');
+  const isCameraOn = ref(sessionStorage.getItem('livekit_camera_enabled') !== 'false');
 
   // References cho video elements (được bind bởi ref="localVideoEl" trong template)
   const localVideoEl = ref(null);
@@ -135,6 +135,7 @@ export function useLiveKit() {
       nativeStream.getAudioTracks().forEach(t => { t.enabled = !isMicOn.value; });
     }
     isMicOn.value = !isMicOn.value;
+    sessionStorage.setItem('livekit_mic_enabled', isMicOn.value);
   };
 
   // ─── TOGGLE CAMERA ───────────────────────────────────────────────────────
@@ -185,6 +186,63 @@ export function useLiveKit() {
       }
     }
     isCameraOn.value = !isCameraOn.value;
+    sessionStorage.setItem('livekit_camera_enabled', isCameraOn.value);
+  };
+
+  // ─── TOGGLE SCREEN SHARE ────────────────────────────────────────────────
+  const isScreenSharing = ref(false);
+  let localScreenTrack = null;
+  let screenStream = null;
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing.value) {
+      // Dừng chia sẻ màn hình
+      if (room.value && localScreenTrack) {
+        try {
+          await room.value.localParticipant.unpublishTrack(localScreenTrack, true);
+          localScreenTrack.stop();
+          localScreenTrack = null;
+        } catch (e) { console.warn('[useLiveKit] unpublish screen track error', e); }
+      } else if (screenStream) {
+        screenStream.getTracks().forEach(t => t.stop());
+        screenStream = null;
+        if (remoteVideoEl.value) remoteVideoEl.value.srcObject = null;
+      }
+      isScreenSharing.value = false;
+    } else {
+      // Bắt đầu chia sẻ màn hình
+      try {
+        if (room.value) {
+          const { createLocalScreenTracks } = await import('livekit-client');
+          const tracks = await createLocalScreenTracks({ audio: true });
+          localScreenTrack = tracks.find(t => t.kind === 'video') || tracks[0];
+          await room.value.localParticipant.publishTrack(localScreenTrack);
+          
+          if (localScreenTrack && localScreenTrack.mediaStreamTrack) {
+            localScreenTrack.mediaStreamTrack.onended = () => {
+              if (isScreenSharing.value) toggleScreenShare();
+            };
+          }
+        } else {
+          // Native fallback mode: getDisplayMedia
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+          if (remoteVideoEl.value) {
+            remoteVideoEl.value.srcObject = screenStream;
+            remoteVideoEl.value.play().catch(() => {});
+          }
+          
+          screenStream.getVideoTracks()[0].onended = () => {
+            if (isScreenSharing.value) {
+              toggleScreenShare();
+            }
+          };
+        }
+        isScreenSharing.value = true;
+      } catch (err) {
+        console.warn('[useLiveKit] Bật chia sẻ màn hình thất bại:', err);
+        isScreenSharing.value = false;
+      }
+    }
   };
 
   // ─── DISCONNECT ──────────────────────────────────────────────────────────
@@ -196,14 +254,21 @@ export function useLiveKit() {
       nativeStream.getTracks().forEach(t => t.stop());
       nativeStream = null;
     }
+    if (screenStream) {
+      screenStream.getTracks().forEach(t => t.stop());
+      screenStream = null;
+    }
     if (localVideoEl.value) localVideoEl.value.srcObject = null;
+    if (remoteVideoEl.value) remoteVideoEl.value.srcObject = null;
   };
 
   const _cleanLiveKit = () => {
     if (localVideoTrack) { localVideoTrack.detach(); localVideoTrack.stop(); localVideoTrack = null; }
     if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack = null; }
+    if (localScreenTrack) { localScreenTrack.stop(); localScreenTrack = null; }
     isConnected.value = false;
     room.value = null;
+    isScreenSharing.value = false;
   };
 
   return {
@@ -212,11 +277,13 @@ export function useLiveKit() {
     error,
     isMicOn,
     isCameraOn,
+    isScreenSharing,
     localVideoEl,
     remoteVideoEl,
     connectToRoom,
     toggleMic,
     toggleCamera,
+    toggleScreenShare,
     disconnect,
   };
 }

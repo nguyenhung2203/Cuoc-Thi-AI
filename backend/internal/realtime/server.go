@@ -524,7 +524,13 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 	}
 
 	// Default case - valid token
-	interviewID := "interview-123"
+	interviewID := inviteToken
+	if strings.HasPrefix(inviteToken, "inv-") {
+		interviewID = strings.TrimPrefix(inviteToken, "inv-")
+	}
+	if interviewID == "" || interviewID == "interview-123" {
+		interviewID = "405516b8-8e08-4881-bab3-d9fc1bddc576" // Default mock interview ID used across UI so Candidate & Recruiter are inside the exact same room
+	}
 	roomID := "room-" + interviewID
 	candidateName := "Trần Văn B"
 	jobTitle := "Frontend Developer"

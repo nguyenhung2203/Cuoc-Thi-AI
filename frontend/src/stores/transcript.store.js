@@ -60,4 +60,8 @@ export const useTranscriptStore = defineStore('transcript', () => {
     setHistory,
     clearTranscripts
   };
+}, {
+  persist: {
+    paths: ['transcripts', 'activePartials']
+  }
 });

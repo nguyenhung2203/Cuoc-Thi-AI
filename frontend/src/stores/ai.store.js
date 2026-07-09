@@ -137,4 +137,8 @@ export const useAiStore = defineStore('ai', () => {
     requestScoreUpdate,
     clearData
   };
+}, {
+  persist: {
+    paths: ['suggestions', 'scores', 'aiError', 'aiWarning']
+  }
 });

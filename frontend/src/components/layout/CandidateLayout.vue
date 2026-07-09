@@ -197,7 +197,7 @@ const handleLogout = async () => {
     </header>
 
     <!-- Page Content -->
-    <main class="page-content" :class="{ 'container-bounded': route.path !== '/' && !route.path.includes('/candidate-room'), 'room-fullscreen': route.path.includes('/candidate-room') }">
+    <main class="page-content" :class="[(route.path.includes('candidate-room') || route.path.includes('mock-room')) ? 'room-fullscreen' : (route.path !== '/' ? 'container-bounded' : '')]">
       <router-view />
     </main>
   </div>

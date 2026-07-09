@@ -6,6 +6,7 @@ import "time"
 
 // ChatSendPayload is sent by any participant to post a message.
 type ChatSendPayload struct {
+	MessageID  string         `json:"message_id,omitempty"`
 	Message    string         `json:"message"`
 	Visibility ChatVisibility `json:"visibility"` // "room" | "recruiter_only"
 }

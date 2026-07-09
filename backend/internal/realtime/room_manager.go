@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -243,6 +244,14 @@ func (rm *RoomManager) SaveChatMessage(roomID string, msg events.ChatMessagePayl
 		rm.simulatedChat = make(map[string][]events.ChatMessagePayload)
 	}
 	rm.simulatedChat[roomID] = append(rm.simulatedChat[roomID], msg)
+	// In dev mode, replicate chat history across all active rooms so reconnecting Candidate or Recruiter tab sees everything
+	if os.Getenv("LIVEKIT_API_SECRET") == "" || os.Getenv("LIVEKIT_API_SECRET") == "devsecret" {
+		for id := range rm.rooms {
+			if id != roomID {
+				rm.simulatedChat[id] = append(rm.simulatedChat[id], msg)
+			}
+		}
+	}
 }
 
 // GetChatHistory retrieves historical chat messages for a room.
@@ -257,4 +266,13 @@ func (rm *RoomManager) GetChatHistory(roomID string) []events.ChatMessagePayload
 	out := make([]events.ChatMessagePayload, len(history))
 	copy(out, history)
 	return out
+}
+
+// BroadcastToAllRooms broadcasts raw JSON to every active room in the registry (used in mock dev environment).
+func (rm *RoomManager) BroadcastToAllRooms(data []byte) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	for _, r := range rm.rooms {
+		r.BroadcastAll(data)
+	}
 }

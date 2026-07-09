@@ -47,11 +47,11 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 	}
 
 	// Set room configuration from consent flags
+	now := time.Now().UTC()
 	room.mu.Lock()
 	room.TranscriptEnabledForCandidate = payload.ConsentRecording
+	room.StartedAt = &now
 	room.mu.Unlock()
-
-	now := time.Now().UTC()
 
 	// 6. Simulate DB & Redis updates
 	log.Printf("[db] UPDATE interview_rooms SET status = 'active' WHERE id = '%s'", room.ID)
@@ -123,6 +123,9 @@ func (r *MessageRouter) handleInterviewEnd(conn *ClientConnection, env *events.E
 	}
 
 	now := time.Now().UTC()
+	room.mu.Lock()
+	room.EndedAt = &now
+	room.mu.Unlock()
 
 	// 6. Simulate DB & Redis updates
 	log.Printf("[db] UPDATE interview_rooms SET status = 'completed' WHERE id = '%s'", room.ID)

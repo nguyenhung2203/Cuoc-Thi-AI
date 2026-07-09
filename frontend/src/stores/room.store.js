@@ -26,6 +26,15 @@ export const useRoomStore = defineStore('room', () => {
   const connectRoom = (token, room_id, interview_id) => {
     roomId.value = room_id;
     interviewId.value = interview_id;
+    
+    // Restore persistent status and timestamps across reload immediately
+    const savedStatus = sessionStorage.getItem('room_status_' + room_id);
+    if (savedStatus && savedStatus !== 'waiting') status.value = savedStatus;
+    const savedStartedAt = sessionStorage.getItem('room_started_at_' + room_id);
+    if (savedStartedAt) startedAt.value = savedStartedAt;
+    const savedEndedAt = sessionStorage.getItem('room_ended_at_' + room_id);
+    if (savedEndedAt) endedAt.value = savedEndedAt;
+
     connect(token);
     
     // Đăng ký nhận sự kiện sau khi kết nối
@@ -119,6 +128,17 @@ export const useRoomStore = defineStore('room', () => {
     myParticipantId.value = envelope.payload.participant_id;
     status.value = envelope.payload.room_status;
     participants.value = envelope.payload.participants || [];
+    if (envelope.payload.started_at) {
+      startedAt.value = envelope.payload.started_at;
+    }
+    if (envelope.payload.ended_at) {
+      endedAt.value = envelope.payload.ended_at;
+    }
+    if (roomId.value) {
+      sessionStorage.setItem('room_status_' + roomId.value, status.value);
+      if (startedAt.value) sessionStorage.setItem('room_started_at_' + roomId.value, startedAt.value);
+      if (endedAt.value) sessionStorage.setItem('room_ended_at_' + roomId.value, endedAt.value);
+    }
   };
 
   const handleUserJoined = (envelope) => {
@@ -148,12 +168,20 @@ export const useRoomStore = defineStore('room', () => {
   const handleInterviewStarted = (envelope) => {
     status.value = envelope.payload.status;
     startedAt.value = envelope.payload.started_at || new Date().toISOString();
+    if (roomId.value) {
+      sessionStorage.setItem('room_status_' + roomId.value, status.value);
+      sessionStorage.setItem('room_started_at_' + roomId.value, startedAt.value);
+    }
   };
 
   const handleInterviewCompleted = (envelope) => {
     status.value = envelope.payload.status;
     endedAt.value = envelope.payload.ended_at || new Date().toISOString();
     reportStatus.value = envelope.payload.report_status || null;
+    if (roomId.value) {
+      sessionStorage.setItem('room_status_' + roomId.value, status.value);
+      sessionStorage.setItem('room_ended_at_' + roomId.value, endedAt.value);
+    }
   };
 
   const handleMediaStatusChanged = (envelope) => {
@@ -267,4 +295,8 @@ export const useRoomStore = defineStore('room', () => {
     createNote,
     markQuestionAsked
   };
+}, {
+  persist: {
+    paths: ['roomId', 'interviewId', 'status', 'participants', 'myParticipantId', 'startedAt', 'endedAt', 'reportStatus', 'cancelReason']
+  }
 });

@@ -1,10 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
-import Toast from '../../components/common/AppToast.vue'
-import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, CheckCircle, FileText } from 'lucide-vue-next'
+import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, CheckCircle, FileText, ChevronsRight, ChevronsLeft, X, Send } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
 
 // Import Stores
@@ -19,12 +18,16 @@ const roomStore = useRoomStore()
 const chatStore = useChatStore()
 
 const {
-  isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn,
+  isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn, isScreenSharing,
   localVideoEl, remoteVideoEl,
-  connectToRoom, toggleMic, toggleCamera, disconnect: liveKitDisconnect
+  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
 } = useLiveKit()
 
-const activeTab = ref('info')
+const activeTab = ref(sessionStorage.getItem('candidate_active_tab') || 'info')
+watch(activeTab, (val) => {
+  sessionStorage.setItem('candidate_active_tab', val);
+})
+
 const showLeaveModal = ref(false)
 const isLeaving = ref(false)
 
@@ -47,8 +50,8 @@ const interviewId = tokenClaims.interview_id || ''
 const chatInput = ref('')
 
 const handleSendMessage = () => {
-  if (!chatInput.value.trim()) return
-  chatStore.sendChat(chatInput.value.trim(), 'room', roomId, interviewId)
+  if (!chatInput.value || !chatInput.value.trim()) return
+  chatStore.sendChat(chatInput.value.trim(), 'room', roomId, interviewId, 'Ứng viên (Bạn)')
   chatInput.value = ''
 }
 
@@ -83,9 +86,47 @@ onMounted(async () => {
       console.error('Không thể vào phòng', err)
     }
   }
+  window.addEventListener('beforeunload', handleCandidateBeforeUnload)
 })
 
+const showNavWarningModal = ref(false)
+const pendingCandidateRouteResolve = ref(null)
+
+const handleCandidateBeforeUnload = (e) => {
+  if (!isLeaving.value && roomStore.status !== 'completed' && roomStore.status !== 'expired' && roomStore.status !== 'cancelled') {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onBeforeRouteLeave((to, from) => {
+  if (isLeaving.value || roomStore.status === 'completed' || roomStore.status === 'expired' || roomStore.status === 'cancelled') {
+    return true
+  }
+  return new Promise((resolve) => {
+    pendingCandidateRouteResolve.value = resolve
+    showNavWarningModal.value = true
+  })
+})
+
+const handleCandidateConfirmLeave = () => {
+  showNavWarningModal.value = false
+  if (pendingCandidateRouteResolve.value) {
+    pendingCandidateRouteResolve.value(true)
+    pendingCandidateRouteResolve.value = null
+  }
+}
+
+const handleCandidateCancelLeave = () => {
+  showNavWarningModal.value = false
+  if (pendingCandidateRouteResolve.value) {
+    pendingCandidateRouteResolve.value(false)
+    pendingCandidateRouteResolve.value = null
+  }
+}
+
 onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleCandidateBeforeUnload)
   liveKitDisconnect()
   roomStore.disconnectRoom()
   chatStore.cleanupListeners()
@@ -152,61 +193,103 @@ const recruiterParticipant = computed(() => {
   return roomStore.participants.find(p => p.participant_type === 'recruiter') || null
 })
 
+const isPanelExpanded = ref(sessionStorage.getItem('candidate_panel_expanded') !== 'false')
+watch(isPanelExpanded, (val) => {
+  sessionStorage.setItem('candidate_panel_expanded', val);
+})
+
+const candidatePersonalNote = ref(localStorage.getItem('candidate_personal_note_' + (interviewId || 'default')) || '')
+watch(candidatePersonalNote, (val) => {
+  localStorage.setItem('candidate_personal_note_' + (interviewId || 'default'), val || '');
+})
+
+const showReminder = ref(true)
+
+// Auto-hide control bar after 3.5s of mouse inactivity
+const isControlBarVisible = ref(true)
+let controlBarTimer = null
+
+const resetControlBarTimer = () => {
+  isControlBarVisible.value = true
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+  controlBarTimer = setTimeout(() => {
+    isControlBarVisible.value = false
+  }, 3500)
+}
+
+const keepControlBarVisible = () => {
+  isControlBarVisible.value = true
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+}
+
+onMounted(() => {
+  resetControlBarTimer()
+})
+onUnmounted(() => {
+  if (controlBarTimer) clearTimeout(controlBarTimer)
+})
+
 </script>
 
 <template>
-  <div class="h-screen flex flex-col bg-slate-900 font-sans text-gray-100 overflow-hidden relative">
+  <div class="h-screen flex flex-col bg-slate-50 font-sans text-slate-800 overflow-hidden relative">
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
     <Toast v-if="isLeaving" type="info" message="Đang rời phòng phỏng vấn..." :duration="1500" />
 
     <!-- Top Header -->
-    <header class="h-16 bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50 flex items-center justify-between px-6 z-20 shadow-sm shrink-0">
+    <header class="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm shrink-0">
       <div class="flex items-center gap-4">
         <div>
-          <h1 class="text-lg font-bold text-white truncate max-w-[300px] md:max-w-[500px]">
+          <h1 class="text-base font-bold text-slate-800 truncate max-w-[300px] md:max-w-[500px]">
             Phỏng vấn: {{ interviewInfo?.job_title || 'Vị trí ứng tuyển' }}
           </h1>
-          <p class="text-sm text-slate-400 font-medium">Công ty {{ interviewInfo?.company_name || 'Tuyển dụng' }}</p>
         </div>
       </div>
-      <div class="flex items-center gap-4 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-700">
-        <span class="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-emerald-400" :class="{ 'animate-pulse': roomStore.isConnected }"></span>
+      <div class="flex items-center gap-3 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
+        <span class="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500" :class="{ 'animate-pulse': roomStore.isConnected }"></span>
           <span class="hidden sm:inline">{{ roomStore.isConnected ? 'Đường truyền tốt' : 'Mất kết nối' }}</span>
         </span>
-        <span class="w-px h-4 bg-slate-700"></span>
-        <span class="text-sm font-mono font-bold text-white tracking-wider flex items-center gap-2">
-          <span v-if="roomStore.status === 'active'" class="text-rose-500 flex items-center gap-1.5">
+        <span class="w-px h-3.5 bg-slate-300"></span>
+        <span class="text-xs font-mono font-bold text-slate-700 tracking-wider flex items-center gap-1.5">
+          <span v-if="roomStore.status === 'active'" class="text-rose-600 flex items-center gap-1.5">
             <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
             Đang Live
           </span>
-          <span v-else-if="roomStore.status === 'waiting'" class="text-amber-500">Đang chờ</span>
-          <span v-else-if="roomStore.status === 'paused'" class="text-amber-500">⏸️ Tạm dừng</span>
-          <span v-else-if="roomStore.status === 'completed'" class="text-emerald-500">✅ Đã kết thúc</span>
+          <span v-else-if="roomStore.status === 'waiting'" class="text-amber-600">Đang chờ</span>
+          <span v-else-if="roomStore.status === 'paused'" class="text-amber-600">⏸️ Tạm dừng</span>
+          <span v-else-if="roomStore.status === 'completed'" class="text-emerald-600">✅ Đã kết thúc</span>
           <span v-else>{{ roomStore.status }}</span>
           
-          <span v-if="roomStore.startedAt" class="text-indigo-400 font-mono ml-2">{{ elapsedFormatted }}</span>
+          <span v-if="roomStore.startedAt" class="text-blue-600 font-mono ml-1.5">{{ elapsedFormatted }}</span>
         </span>
       </div>
     </header>
 
     <!-- Main Workspace -->
-    <div class="flex flex-1 overflow-hidden relative z-10">
+    <div class="flex flex-1 overflow-hidden relative z-10 bg-slate-900">
       
       <!-- Left: Video Area -->
-      <div class="flex-1 flex flex-col p-4 md:p-6 gap-4 relative transition-all duration-300">
+      <div class="flex-1 flex flex-col p-0.5 md:p-1 gap-1 relative transition-all duration-300 min-w-0">
         
-        <!-- Notification Banner -->
-        <div class="bg-indigo-500/10 border border-indigo-500/30 backdrop-blur-md rounded-xl p-3 flex items-center gap-3 text-indigo-200 text-sm shadow-sm shrink-0">
-          <div class="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-          </div>
-          <p><strong class="text-indigo-300">Lời nhắc:</strong> Hãy trả lời tự nhiên. Nhà tuyển dụng sẽ dẫn dắt buổi phỏng vấn.</p>
-        </div>
-
-        <!-- Video Grid -->
-        <div class="flex-1 relative rounded-2xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800/60 ring-1 ring-white/5 flex">
+        <!-- Video Grid (Fills almost 100% height) -->
+        <div 
+          @mousemove="resetControlBarTimer"
+          @click="resetControlBarTimer"
+          class="flex-1 relative rounded-xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800/80 ring-1 ring-white/5 flex items-center justify-center"
+        >
           
+          <!-- Floating Notification Banner inside video top-left (Dismissible) -->
+          <div v-if="showReminder" class="absolute top-4 left-4 z-10 max-w-lg bg-slate-900/85 backdrop-blur-md border border-indigo-500/30 rounded-xl px-4 py-2.5 flex items-center gap-3 text-indigo-200 text-xs md:text-sm shadow-xl transition-all">
+            <div class="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+            </div>
+            <p class="flex-1"><strong class="text-indigo-300 font-semibold">Lời nhắc:</strong> Hãy trả lời tự nhiên. Nhà tuyển dụng sẽ dẫn dắt buổi phỏng vấn.</p>
+            <button @click="showReminder = false" class="text-slate-400 hover:text-white p-1 transition-colors">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
           <!-- Recruiter Video (Main View) -->
           <div class="absolute inset-0 flex items-center justify-center">
             <!-- Thẻ video thật cho LiveKit (Remote - Recruiter) -->
@@ -228,7 +311,7 @@ const recruiterParticipant = computed(() => {
           </div>
           
           <!-- Candidate Self View (PiP) -->
-          <div class="absolute top-6 right-6 w-48 md:w-64 aspect-video bg-slate-800 rounded-xl overflow-hidden border-2 border-slate-700/80 shadow-2xl z-20 group hover:scale-105 transition-transform duration-300 cursor-move">
+          <div class="absolute top-6 right-6 w-48 md:w-60 aspect-video bg-slate-900 rounded-xl overflow-hidden border-2 border-slate-700/80 shadow-2xl z-20 group hover:scale-105 transition-all duration-300 cursor-move">
              <!-- Thẻ video thật cho LiveKit (Local) -->
              <video ref="localVideoEl" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
              
@@ -242,111 +325,152 @@ const recruiterParticipant = computed(() => {
                <MicOff v-else class="w-3 h-3 text-rose-500" />
              </div>
           </div>
-        </div>
 
-        <!-- Floating Control Bar -->
-        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-xl border border-slate-600/50 p-2 rounded-2xl shadow-2xl flex items-center gap-2 z-30 transition-transform hover:-translate-y-1 duration-300">
-          <button @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isMicOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
-            <Mic v-if="isMicOn" class="w-5 h-5" />
-            <MicOff v-else class="w-5 h-5" />
-          </button>
-          
-          <button @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200" :class="isCameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-500 border border-rose-500/50'">
-            <Video v-if="isCameraOn" class="w-5 h-5" />
-            <VideoOff v-else class="w-5 h-5" />
-          </button>
-          
-          <div class="w-px h-8 bg-slate-700 mx-2"></div>
-          
-          <button @click="handleLeave" class="h-12 px-6 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-600/20 flex items-center gap-2 transition-colors">
-            <PhoneOff class="w-5 h-5" /> <span class="hidden sm:inline">Rời phòng</span>
-          </button>
+          <!-- Floating Control Bar inside bottom of Video Grid -->
+          <div 
+            @mouseenter="keepControlBarVisible"
+            @mouseleave="resetControlBarTimer"
+            :style="{
+              opacity: isControlBarVisible ? 1 : 0,
+              transform: isControlBarVisible ? 'translateX(-50%) translateY(0)' : 'translateX(-50%) translateY(24px)',
+              pointerEvents: isControlBarVisible ? 'auto' : 'none',
+              transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
+            }"
+            class="absolute bottom-6 left-1/2 bg-slate-900/90 backdrop-blur-xl border border-slate-700/80 px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 z-30"
+          >
+            <button :title="isMicOn ? 'Tắt micro' : 'Bật micro'" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isMicOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500 hover:bg-rose-600 text-white'">
+              <Mic v-if="isMicOn" class="w-5 h-5" />
+              <MicOff v-else class="w-5 h-5" />
+            </button>
+            
+            <button :title="isCameraOn ? 'Tắt camera' : 'Bật camera'" @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isCameraOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500 hover:bg-rose-600 text-white'">
+              <Video v-if="isCameraOn" class="w-5 h-5" />
+              <VideoOff v-else class="w-5 h-5" />
+            </button>
+
+            <button :title="isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'" @click="toggleScreenShare" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isScreenSharing ? 'bg-blue-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'">
+              <MonitorUp class="w-5 h-5" />
+            </button>
+
+            <button title="Mở khung Chat" @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="activeTab === 'chat' && isPanelExpanded ? 'bg-blue-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'">
+              <MessageSquare class="w-5 h-5" />
+            </button>
+            
+            <div class="w-px h-7 bg-slate-700/80 mx-1"></div>
+            
+            <button @click="handleLeave" class="h-11 px-6 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 text-sm">
+              <PhoneOff class="w-4 h-4" /> <span class="hidden sm:inline">Rời phòng</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- Right: Side Panel (Tabs: JD / Chat) -->
-      <div class="w-80 md:w-96 bg-slate-800/50 border-l border-slate-700/50 flex flex-col shrink-0 backdrop-blur-sm relative z-20">
-        <!-- Tabs Header -->
-        <div class="flex border-b border-slate-700/50 shrink-0">
-          <button @click="activeTab = 'info'" class="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors border-b-2" :class="activeTab === 'info' ? 'text-indigo-400 border-indigo-400 bg-indigo-500/5' : 'text-slate-400 border-transparent hover:bg-slate-800 hover:text-slate-200'">
-            <FileText class="w-4 h-4" /> JD & Ghi chú
+      <!-- Right: Side Panel (Collapsible: Width 340px when expanded, 48px when collapsed) -->
+      <div class="bg-white border-l border-slate-200 flex flex-col shrink-0 shadow-sm relative z-20 transition-all duration-300" :style="{ width: isPanelExpanded ? '340px' : '48px' }">
+        
+        <!-- Collapsed Sidebar Icon Mode -->
+        <div v-if="!isPanelExpanded" class="flex flex-col items-center py-3 gap-2.5 h-full bg-slate-50 border-l border-slate-200">
+          <button @click="isPanelExpanded = true" class="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center transition-colors shadow-sm" title="Mở rộng bảng công cụ">
+            <ChevronsLeft class="w-4 h-4" />
           </button>
-          <button @click="activeTab = 'chat'" class="flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors border-b-2 relative" :class="activeTab === 'chat' ? 'text-indigo-400 border-indigo-400 bg-indigo-500/5' : 'text-slate-400 border-transparent hover:bg-slate-800 hover:text-slate-200'">
-            <MessageSquare class="w-4 h-4" /> Chat
-            <span v-if="chatStore.messages.length > 0" class="absolute top-3 right-8 w-2 h-2 rounded-full bg-rose-500 border-2 border-slate-800"></span>
+          <div class="w-6 h-px bg-slate-200 my-0.5"></div>
+          <button @click="() => { activeTab = 'info'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'info' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="JD & Ghi chú">
+            <FileText class="w-4 h-4" />
+          </button>
+          <button @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'chat' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Chat">
+            <MessageSquare class="w-4 h-4" />
+            <span v-if="chatStore.messages.length > 0" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-white"></span>
           </button>
         </div>
 
-        <!-- Tab Content Area -->
-        <div class="flex-1 overflow-y-auto custom-scrollbar relative">
-          
-          <!-- Tab: Info & Notes -->
-          <div v-show="activeTab === 'info'" class="absolute inset-0 p-6 flex flex-col">
-            <div class="mb-6">
-              <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
-                Yêu cầu công việc
-              </h3>
-              <ul class="space-y-3">
-                <li class="flex items-start gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-2 shrink-0"></span>
-                  <span class="text-sm text-slate-300 leading-relaxed">Phát triển các tính năng theo yêu cầu.</span>
-                </li>
-              </ul>
+        <!-- Expanded Sidebar Mode -->
+        <template v-else>
+          <!-- Tabs Header -->
+          <div class="flex border-b border-slate-200 shrink-0 bg-slate-50 items-center justify-between pr-3">
+            <div class="flex flex-1">
+              <button @click="activeTab = 'info'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2" :class="activeTab === 'info' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
+                <FileText class="w-4 h-4" /> JD & Ghi chú
+              </button>
+              <button @click="activeTab = 'chat'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2 relative" :class="activeTab === 'chat' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
+                <MessageSquare class="w-4 h-4" /> Chat
+                <span v-if="chatStore.messages.length > 0" class="absolute top-2.5 right-6 w-2 h-2 rounded-full bg-rose-500 border-2 border-white"></span>
+              </button>
             </div>
-            
-            <div class="flex-1 flex flex-col">
-              <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
-                Ghi chú của bạn
-              </h3>
-              <textarea 
-                class="flex-1 w-full bg-slate-900/50 border border-slate-700 rounded-xl p-4 text-slate-300 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none transition-all" 
-                placeholder="Viết nháp câu trả lời hoặc note nhanh tại đây (Nhà tuyển dụng không thấy)..."
-              ></textarea>
-            </div>
+            <button @click="isPanelExpanded = false" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center transition-colors ml-1 shrink-0" title="Thu gọn bảng công cụ">
+              <ChevronsRight class="w-4 h-4" />
+            </button>
           </div>
 
-          <!-- Tab: Chat -->
-          <div v-show="activeTab === 'chat'" class="absolute inset-0 flex flex-col bg-slate-800/30">
-            <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-              <div v-for="msg in chatStore.messages" :key="msg.message_id" class="flex flex-col gap-1" :class="msg.sender_type === 'candidate' ? 'items-end' : 'items-start'">
-                <span class="text-xs text-slate-500 font-medium px-1">
-                  {{ msg.sender_type === 'candidate' ? 'Bạn' : (msg.sender_name || 'Hệ thống') }}
-                </span>
-                <div 
-                  class="px-4 py-2.5 rounded-2xl text-sm max-w-[85%] shadow-sm"
-                  :class="msg.sender_type === 'candidate' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-200 rounded-tl-none'"
-                >
-                  {{ msg.message }}
+          <!-- Tab Content Area -->
+          <div class="flex-1 overflow-y-auto custom-scrollbar relative flex flex-col bg-white">
+            
+            <!-- Tab: Info & Notes -->
+            <div v-show="activeTab === 'info'" class="flex-1 p-5 flex flex-col gap-6">
+              <div>
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
+                  Yêu cầu công việc
+                </h3>
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-slate-700">
+                  <p class="text-sm leading-relaxed">{{ interviewInfo?.job_title ? `Vị trí ứng tuyển: ${interviewInfo.job_title}` : 'Phát triển và hoàn thiện các tính năng theo yêu cầu của nhà tuyển dụng.' }}</p>
                 </div>
               </div>
               
-              <div v-if="chatStore.messages.length === 0" class="text-center text-slate-500 text-sm mt-4">
-                Chưa có tin nhắn nào.
+              <div class="flex-1 flex flex-col">
+                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                  Ghi chú cá nhân của bạn
+                </h3>
+                <textarea 
+                  v-model="candidatePersonalNote"
+                  class="flex-1 w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none resize-none transition-all custom-scrollbar shadow-inner" 
+                  placeholder="Viết nháp ý chính hoặc ghi chú nhanh tại đây (Chỉ một mình bạn nhìn thấy)..."
+                ></textarea>
               </div>
             </div>
-            
-            <div class="p-4 bg-slate-800/80 border-t border-slate-700/50 shrink-0">
-              <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700 rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
-                <input 
-                  type="text" 
-                  v-model="chatInput" 
-                  @keyup.enter="handleSendMessage"
-                  class="flex-1 bg-transparent border-none text-sm text-white px-3 outline-none placeholder-slate-500" 
-                  placeholder="Nhập tin nhắn..." 
-                />
-                <button 
-                  @click="handleSendMessage"
-                  class="w-8 h-8 flex items-center justify-center bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shrink-0"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transform rotate-90" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
-                </button>
+
+            <!-- Tab: Chat -->
+            <div v-show="activeTab === 'chat'" class="flex-1 flex flex-col h-full bg-slate-50/50">
+              <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 custom-scrollbar">
+                <div v-if="chatStore.messages.length === 0" class="flex flex-col items-center justify-center h-full text-center text-slate-400 text-sm py-10 gap-2">
+                  <MessageSquare class="w-8 h-8 text-slate-300" />
+                  <span>Chưa có tin nhắn nào.<br/>Hãy gửi tin nhắn đầu tiên để trò chuyện!</span>
+                </div>
+
+                <div v-for="msg in chatStore.messages" :key="msg.message_id" class="flex flex-col gap-1" :class="(msg.sender_type === 'candidate' || msg.sender_type === 'local') ? 'items-end self-end' : 'items-start self-start'">
+                  <span class="text-[11px] text-slate-500 font-medium px-1">
+                    {{ (msg.sender_type === 'candidate' || msg.sender_type === 'local') ? 'Bạn (Ứng viên)' : (msg.sender_name || 'Nhà tuyển dụng') }}
+                  </span>
+                  <div 
+                    class="px-3.5 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm leading-relaxed"
+                    :class="(msg.sender_type === 'candidate' || msg.sender_type === 'local') ? 'bg-blue-600 text-white rounded-tr-sm shadow-md' : 'bg-white text-slate-800 border border-slate-200 rounded-tl-sm shadow-sm'"
+                  >
+                    {{ msg.message }}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="p-3 bg-white border-t border-slate-200 shrink-0">
+                <div class="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-full py-1 pl-4 pr-1.5 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all shadow-inner">
+                  <input 
+                    type="text" 
+                    v-model="chatInput" 
+                    @keyup.enter="handleSendMessage"
+                    class="flex-1 bg-transparent border-none text-sm text-slate-800 outline-none placeholder-slate-400 py-1.5" 
+                    placeholder="Nhập tin nhắn..." 
+                  />
+                  <button 
+                    @click="handleSendMessage"
+                    class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shrink-0 shadow-md"
+                    title="Gửi tin nhắn"
+                  >
+                    <Send class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-
-        </div>
+        </template>
       </div>
     </div>
 
@@ -355,11 +479,25 @@ const recruiterParticipant = computed(() => {
       <div class="p-2">
         <p class="text-gray-700 mb-6 font-medium">Bạn có chắc chắn muốn kết thúc buổi phỏng vấn và rời phòng?</p>
         <div class="flex justify-end gap-3">
-          <button @click="showLeaveModal = false" class="px-5 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition-colors">
+          <button @click="showLeaveModal = false" class="px-5 py-2.5 rounded-full border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition-colors">
             Tiếp tục ở lại
           </button>
-          <button @click="confirmLeave" class="px-5 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-500 shadow-md shadow-rose-600/20 transition-colors flex items-center gap-2">
+          <button @click="confirmLeave" class="px-5 py-2.5 rounded-full bg-rose-600 text-white font-bold hover:bg-rose-500 shadow-md shadow-rose-600/20 transition-colors flex items-center gap-2">
             <PhoneOff class="w-4 h-4" /> Rời khỏi phòng
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal :isOpen="showNavWarningModal" @close="handleCandidateCancelLeave" title="Cảnh báo rời phòng phỏng vấn">
+      <div class="p-2">
+        <p class="text-gray-700 mb-6 font-medium">Bạn đang trong phòng phỏng vấn. Bạn có chắc chắn muốn rời đi hoặc chuyển sang trang khác không?</p>
+        <div class="flex justify-end gap-3">
+          <button @click="handleCandidateCancelLeave" class="px-5 py-2.5 rounded-full border border-gray-300 text-gray-700 font-bold hover:bg-gray-50 transition-colors">
+            Ở lại phòng
+          </button>
+          <button @click="handleCandidateConfirmLeave" class="px-5 py-2.5 rounded-full bg-amber-500 text-slate-900 font-bold hover:bg-amber-400 shadow-md transition-colors flex items-center gap-2">
+            Rời khỏi phòng
           </button>
         </div>
       </div>

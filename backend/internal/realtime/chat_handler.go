@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,8 +12,8 @@ import (
 
 // handleChatSend handles the "chat:send" event from clients.
 func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envelope) {
-	// Block requests targetting a different room than authorized
-	if env.RoomID != conn.RoomID {
+	// Block requests targetting a different room than authorized (unless mock dev env)
+	if env.RoomID != conn.RoomID && os.Getenv("LIVEKIT_API_SECRET") != "" && os.Getenv("LIVEKIT_API_SECRET") != "devsecret" {
 		log.Printf("[chat] send rejected: room ID mismatch client=%s message=%s", conn.RoomID, env.RoomID)
 		r.sendError(conn, env.RequestID, "FORBIDDEN", "Không có quyền truy cập phòng này")
 		return
@@ -40,7 +41,10 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	}
 
 	// 3. Build chat message payload
-	msgID := uuid.New().String()
+	msgID := payload.MessageID
+	if msgID == "" {
+		msgID = uuid.New().String()
+	}
 	now := time.Now().UTC()
 	msgPayload := events.ChatMessagePayload{
 		MessageID:           msgID,
@@ -92,6 +96,11 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	if msgPayload.Visibility == events.VisibilityRecruiterOnly {
 		room.BroadcastRecruitersOnly(raw)
 	} else {
-		room.BroadcastAll(raw)
+		// In mock dev mode, broadcast across all rooms so candidate and recruiter tabs hear each other
+		if os.Getenv("LIVEKIT_API_SECRET") == "" || os.Getenv("LIVEKIT_API_SECRET") == "devsecret" {
+			r.roomManager.BroadcastToAllRooms(raw)
+		} else {
+			room.BroadcastAll(raw)
+		}
 	}
 }

@@ -94,35 +94,35 @@ const currentMenu = computed(() => recruiterMenu)
 <template>
   <div class="flex h-screen overflow-hidden bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
     <!-- Sidebar -->
-    <aside :class="[isCollapsed ? 'w-20' : 'w-64', 'bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 shadow-sm z-20 shrink-0']">
-      <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between h-[88px] relative">
+    <aside :class="[isCollapsed ? 'w-14' : 'w-46', 'bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 shadow-sm z-20 shrink-0']">
+      <div class="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between h-[64px] relative">
         <div v-if="!isCollapsed" class="cursor-pointer flex items-center overflow-hidden" @click="router.push('/dashboard')">
-          <img src="/images/logo.png" alt="Logo" class="h-12 object-contain" />
+          <img src="/images/logo.png" alt="Logo" class="h-10 object-contain" />
         </div>
-        <button @click="isCollapsed = !isCollapsed" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors mx-auto shrink-0" :class="{ 'ml-auto mr-0': !isCollapsed }" :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'">
-          <ChevronLeft v-if="!isCollapsed" size="20" />
-          <ChevronRight v-else size="20" />
+        <button @click="isCollapsed = !isCollapsed" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors mx-auto shrink-0" :class="{ 'ml-auto mr-0': !isCollapsed }" :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'">
+          <ChevronLeft v-if="!isCollapsed" size="18" />
+          <ChevronRight v-else size="18" />
         </button>
       </div>
       
-      <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-thin">
+      <nav class="flex-1 overflow-y-auto py-3 space-y-1 scrollbar-thin" :class="isCollapsed ? 'px-1.5' : 'px-3'">
         <router-link 
           v-for="item in currentMenu" 
           :key="item.path"
           :to="item.path"
           :title="isCollapsed ? item.name : ''"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-          :class="{ 'justify-center': isCollapsed }"
+          class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+          :class="isCollapsed ? 'justify-center px-0' : 'px-3'"
           active-class="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400"
         >
-          <component :is="item.icon" size="20" class="shrink-0" />
+          <component :is="item.icon" :size="isCollapsed ? 18 : 20" class="shrink-0" />
           <span v-if="!isCollapsed" class="whitespace-nowrap overflow-hidden text-ellipsis">{{ item.name }}</span>
         </router-link>
       </nav>
       
-      <div class="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-        <div class="flex items-center gap-3 mb-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-600" :class="{ 'justify-center': isCollapsed }" :title="isCollapsed ? (authStore.user?.full_name || 'Recruiter User') : ''">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white flex items-center justify-center font-bold shadow-md shrink-0">
+      <div class="border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50" :class="isCollapsed ? 'p-2' : 'p-4'">
+        <div class="flex items-center gap-3 mb-2 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-600" :class="isCollapsed ? 'justify-center p-1' : 'p-2'" :title="isCollapsed ? (authStore.user?.full_name || 'Recruiter User') : ''">
+          <div class="rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white flex items-center justify-center font-bold shadow-md shrink-0" :class="isCollapsed ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'">
             {{ authStore.user?.full_name ? authStore.user.full_name.charAt(0).toUpperCase() : 'R' }}
           </div>
           <div v-if="!isCollapsed" class="overflow-hidden flex-1">
@@ -134,8 +134,8 @@ const currentMenu = computed(() => recruiterMenu)
             </div>
           </div>
         </div>
-        <button @click="handleLogout" :title="isCollapsed ? 'Đăng xuất' : ''" class="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors" :class="{ 'justify-center': isCollapsed }">
-          <LogOut size="18" class="shrink-0" />
+        <button @click="handleLogout" :title="isCollapsed ? 'Đăng xuất' : ''" class="w-full flex items-center gap-2 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors" :class="isCollapsed ? 'justify-center px-0' : 'px-3'">
+          <LogOut size="16" class="shrink-0" />
           <span v-if="!isCollapsed">Đăng xuất</span>
         </button>
       </div>
