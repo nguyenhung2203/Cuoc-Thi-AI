@@ -56,6 +56,14 @@ func (s *CompanyService) ListCompanies(ctx context.Context, userID string) ([]mo
 	return companies, nil
 }
 
+func (s *CompanyService) ListAllCompanies(ctx context.Context) ([]models.Company, error) {
+	companies, err := s.companyRepo.ListAll(ctx)
+	if err != nil {
+		return nil, errors.NewInternal("failed to list all companies")
+	}
+	return companies, nil
+}
+
 func (s *CompanyService) UpdateCompany(ctx context.Context, id, name, website, industry, size string) (*models.Company, error) {
 	company, err := s.companyRepo.FindByID(ctx, id)
 	if err != nil {

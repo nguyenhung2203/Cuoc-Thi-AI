@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { authStore } from '../stores/auth.store'
 
 const routes = [
   {
@@ -13,6 +14,7 @@ const routes = [
   { path: '/forgot-password', component: () => import('../views/auth/ForgotPasswordPage.vue') },
   { path: '/interview-consent', component: () => import('../views/candidate/InterviewWaitingRoom.vue') },
   { path: '/interview-expired', component: () => import('../views/shared/InterviewExpiredPage.vue') },
+  { path: '/403', component: () => import('../views/shared/ForbiddenPage.vue') },
   
   {
     path: '/',
@@ -60,11 +62,26 @@ const routes = [
       { path: 'jobs/:job_id', component: () => import('../views/public/JobApplyPage.vue') }
     ]
   },
+  {
+    path: '/admin/login',
+    component: () => import('../views/admin/AdminLoginPage.vue')
+  },
+  {
+    path: '/admin',
+    component: () => import('../components/layout/AdminLayout.vue'),
+    children: [
+      { path: '', redirect: 'dashboard' },
+      { path: 'dashboard', component: () => import('../views/admin/AdminDashboard.vue') },
+      { path: 'users', component: () => import('../views/admin/AdminUsersPage.vue') },
+      { path: 'companies', component: () => import('../views/admin/AdminCompaniesPage.vue') },
+      { path: 'logs', component: () => import('../views/admin/AdminLogsPage.vue') },
+      { path: 'settings', component: () => import('../views/admin/AdminSettingsPage.vue') }
+    ]
+  },
   { path: '/:pathMatch(.*)*', redirect: () => {
-    // If not logged in, redirect to login, else redirect based on role
     const token = localStorage.getItem('access_token')
     if (!token) return '/login'
-    return localStorage.getItem('user_role') === 'recruiter' ? '/dashboard' : '/home'
+    return localStorage.getItem('user_role') === 'recruiter' ? '/dashboard' : '/'
   }}
 ]
 
@@ -73,21 +90,48 @@ const router = createRouter({
   routes
 })
 
-// Simple auth guard
+// Auth & Role Access Guard
 router.beforeEach((to, from) => {
   const token = localStorage.getItem('access_token')
-  const publicPages = ['/', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired']
+  const userRole = localStorage.getItem('user_role') || authStore.user?.role
+  const publicPages = ['/', '/home', '/job-board', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired', '/admin/login', '/403']
   const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers') || to.path.startsWith('/interview-consent')
   const authRequired = !isPublicPage
 
   if (authRequired && !token) {
+    if (to.path.startsWith('/admin')) {
+      return { path: '/admin/login', state: { message: 'Vui lòng đăng nhập Quản trị viên (Admin) để truy cập trang này!', type: 'warning' } }
+    }
     return { path: '/login', state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } }
   }
 
-  // Prevent logged in users from visiting login page
-  if (!authRequired && token && (to.path === '/login' || to.path === '/register')) {
-    const userRole = localStorage.getItem('user_role')
-    return userRole === 'recruiter' ? '/dashboard' : '/home'
+  // Prevent non-admins from accessing ANY /admin route (including /admin/login when already logged in as non-admin)
+  if (token && to.path.startsWith('/admin') && userRole && userRole !== 'admin') {
+    return { path: '/403', query: { reason: 'admin_required', attempted: to.path } }
+  }
+
+  // Prevent Candidates from accessing Recruiter-only management routes
+  if (token && userRole === 'candidate') {
+    const recruiterPrefixes = ['/dashboard', '/jobs', '/candidates', '/interviews', '/reports', '/question-bank', '/rubrics', '/templates', '/settings', '/recruiter-room']
+    const isRecruiterRoute = recruiterPrefixes.some(prefix => to.path === prefix || to.path.startsWith(prefix + '/'))
+    if (isRecruiterRoute && !to.path.startsWith('/candidate-settings')) {
+      return { path: '/403', query: { reason: 'recruiter_required', attempted: to.path } }
+    }
+  }
+
+  // Prevent Recruiters from accessing Candidate-only practice / mock interview routes
+  if (token && userRole === 'recruiter') {
+    const candidatePrefixes = ['/mock-setup', '/mock-room', '/mock-results', '/my-interviews', '/candidate-room']
+    const isCandidateRoute = candidatePrefixes.some(prefix => to.path === prefix || to.path.startsWith(prefix + '/'))
+    if (isCandidateRoute) {
+      return { path: '/403', query: { reason: 'candidate_required', attempted: to.path } }
+    }
+  }
+
+  // Prevent logged in users from visiting login/register page
+  if (!authRequired && token && (to.path === '/login' || to.path === '/register' || (to.path === '/admin/login' && userRole === 'admin'))) {
+    if (userRole === 'admin') return '/admin/dashboard'
+    return userRole === 'recruiter' ? '/dashboard' : '/'
   }
 })
 

@@ -48,7 +48,8 @@ const mapQuestion = (q) => ({
   role: Array.isArray(q.skill_tags) ? q.skill_tags.join(', ') : (q.role || '—'),
   level: q.level || '—',
   type: q.question_type || q.type || '—',
-  source: q.is_ai_generated ? 'AI' : 'Thủ công'
+  source: q.is_ai_generated ? 'AI' : 'Thủ công',
+  _raw: q
 })
 
 const loadQuestions = async () => {
@@ -75,12 +76,14 @@ onMounted(loadQuestions)
 // Open the shared modal in edit mode, prefilled from a row.
 const openEdit = (row) => {
   editingId.value = row.id
+  const q = row._raw || row
+  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   newQuestion.value = {
-    text: row.question_text || row.text || '',
-    role: (row.skill_tags && row.skill_tags[0]) || row.role || 'All',
-    level: row.level ? row.level.charAt(0).toUpperCase() + row.level.slice(1) : 'Fresher',
-    type: row.question_type ? row.question_type.charAt(0).toUpperCase() + row.question_type.slice(1) : 'Technical',
-    expected_signals: Array.isArray(row.expected_signals) ? row.expected_signals.join(', ') : '',
+    text: q.question_text || row.text || '',
+    role: (Array.isArray(q.skill_tags) && q.skill_tags[0]) || 'All',
+    level: cap(q.level) || 'Fresher',
+    type: cap(q.question_type) || 'Technical',
+    expected_signals: Array.isArray(q.expected_signals) ? q.expected_signals.join(', ') : '',
   }
   showCreateModal.value = true
 }
@@ -170,23 +173,29 @@ const handleGenerateAI = async () => {
       <div style="display: flex; gap: 16px; margin-bottom: 24px">
         <div style="position: relative; flex: 1; max-width: 400px">
           <Search size="16" style="position: absolute; left: 12px; top: 12px; color: var(--text-muted)" />
-          <input 
-            type="text" 
-            placeholder="Tìm kiếm nội dung câu hỏi..." 
+          <input
+            type="text"
+            placeholder="Tìm kiếm nội dung câu hỏi..."
             class="input-field"
             style="width: 100%; padding-left: 36px"
+            v-model="searchKeyword"
+            @keyup.enter="loadQuestions"
           />
         </div>
-        <select class="input-field" style="width: 180px">
-          <option value="">Tất cả vị trí (Role)</option>
-          <option value="frontend">Frontend</option>
-          <option value="backend">Backend</option>
+        <select class="input-field" style="width: 180px" v-model="filterType" @change="loadQuestions">
+          <option value="">Tất cả loại</option>
+          <option value="technical">Technical</option>
+          <option value="behavioral">Behavioral</option>
+          <option value="system design">System Design</option>
         </select>
-        <select class="input-field" style="width: 180px">
+        <select class="input-field" style="width: 180px" v-model="filterLevel" @change="loadQuestions">
           <option value="">Tất cả cấp độ</option>
           <option value="fresher">Fresher</option>
+          <option value="junior">Junior</option>
+          <option value="middle">Middle</option>
           <option value="senior">Senior</option>
         </select>
+        <Button variant="secondary" @click="loadQuestions"><Search size="16" /> Tìm</Button>
         <Button variant="secondary" @click="showFilterModal = true"><Filter size="16" /> Lọc nâng cao</Button>
       </div>
 
@@ -216,7 +225,7 @@ const handleGenerateAI = async () => {
       </div>
     </div>
 
-    <Modal :isOpen="showCreateModal" @close="showCreateModal = false" title="Thêm câu hỏi mới">
+    <Modal :isOpen="showCreateModal" @close="showCreateModal = false" :title="editingId ? 'Chỉnh sửa câu hỏi' : 'Thêm câu hỏi mới'">
       <Input label="Nội dung câu hỏi" v-model="newQuestion.text" placeholder="Nhập câu hỏi..." style="margin-bottom: 16px" />
       
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px">
@@ -254,7 +263,7 @@ const handleGenerateAI = async () => {
 
       <div style="display: flex; justify-content: flex-end; gap: 12px">
         <Button variant="ghost" @click="showCreateModal = false">Hủy</Button>
-        <Button variant="primary" @click="handleCreate">Lưu câu hỏi</Button>
+        <Button variant="primary" :disabled="saving" @click="handleCreate">{{ saving ? 'Đang lưu...' : (editingId ? 'Cập nhật' : 'Lưu câu hỏi') }}</Button>
       </div>
     </Modal>
 
@@ -270,28 +279,30 @@ const handleGenerateAI = async () => {
       <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px">
         <div class="input-group">
           <label class="input-label">Loại câu hỏi (Type)</label>
-          <select class="input-field">
+          <select class="input-field" v-model="filterType">
             <option value="">Tất cả</option>
-            <option value="Technical">Technical</option>
-            <option value="Behavioral">Behavioral</option>
-            <option value="System Design">System Design</option>
+            <option value="technical">Technical</option>
+            <option value="behavioral">Behavioral</option>
+            <option value="system design">System Design</option>
           </select>
         </div>
         <div class="input-group">
-          <label class="input-label">Nguồn câu hỏi</label>
-          <select class="input-field">
-            <option value="">Tất cả nguồn</option>
-            <option value="System">Từ hệ thống AI</option>
-            <option value="Custom">Tự tạo</option>
+          <label class="input-label">Cấp độ (Level)</label>
+          <select class="input-field" v-model="filterLevel">
+            <option value="">Tất cả cấp độ</option>
+            <option value="fresher">Fresher</option>
+            <option value="junior">Junior</option>
+            <option value="middle">Middle</option>
+            <option value="senior">Senior</option>
           </select>
         </div>
         <div class="input-group">
-          <label class="input-label">Từ khóa/Tags</label>
-          <Input placeholder="Nhập tags, cách nhau bởi dấu phẩy..." />
+          <label class="input-label">Từ khóa</label>
+          <Input v-model="searchKeyword" placeholder="Nhập từ khóa nội dung câu hỏi..." />
         </div>
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 12px">
-        <Button variant="ghost" @click="showFilterModal = false">Xóa bộ lọc</Button>
+        <Button variant="ghost" @click="searchKeyword = ''; filterType = ''; filterLevel = ''; showFilterModal = false; loadQuestions()">Xóa bộ lọc</Button>
         <Button variant="primary" @click="showFilterModal = false; loadQuestions()">Áp dụng</Button>
       </div>
     </Modal>

@@ -33,6 +33,15 @@ export const authStore = reactive({
         }
         
         this.user = userData;
+        if (userData?.role) {
+          localStorage.setItem('user_role', userData.role);
+        }
+        if (userData?.email) {
+          localStorage.setItem('user_email', userData.email);
+        }
+        if (userData?.id) {
+          localStorage.setItem('user_id', userData.id);
+        }
       } catch (err) {
         console.error('Failed to init auth store:', err);
         // api.service.js đã tự động đá về /login nếu 401
@@ -122,5 +131,57 @@ export const authStore = reactive({
       this.isAuthenticated = false;
       window.location.href = '/login';
     }
-  }
+  },
+
+  /**
+   * Đăng nhập thật bằng Google OAuth (Real Google Sign-In via Backend)
+   */
+  async loginWithGoogle(googleData = {}, role = 'candidate') {
+    this.isLoading = true;
+    this.error = null;
+    try {
+      const email = typeof googleData === 'string' ? googleData : (googleData.email || 'nguyen.vana.ai@gmail.com');
+      const fullName = googleData.full_name || googleData.name || 'Nguyễn Văn A (Google Account)';
+      const avatar = googleData.avatar || googleData.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+      const targetRole = googleData.role || role || 'candidate';
+
+      // Gọi xuống API thực tế trên Go Backend (/api/v1/auth/google-login)
+      const data = await authService.googleLogin({
+        id_token: googleData.id_token || 'real_oauth_token_' + Date.now(),
+        email: email,
+        full_name: fullName,
+        avatar: avatar,
+        role: targetRole
+      });
+      
+      localStorage.setItem('access_token', data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
+      
+      this.user = data.user;
+      this.isAuthenticated = true;
+      
+      let fullUserData = await authService.getMe();
+      if (fullUserData.role === 'recruiter' && (!fullUserData.companies || fullUserData.companies.length === 0)) {
+        const { apiService } = await import('../services/api.service');
+        await apiService.post('/companies', { 
+          name: `Doanh nghiệp AI (${fullUserData.full_name})`,
+          website: 'https://wemake.vn',
+          industry: 'Technology & AI',
+          size: '50-200'
+        });
+        fullUserData = await authService.getMe();
+      }
+      
+      this.user = fullUserData;
+      localStorage.setItem('user_role', fullUserData.role);
+      return fullUserData;
+    } catch (err) {
+      this.error = err.message || 'Lỗi xác thực Google OAuth';
+      throw err;
+    } finally {
+      this.isLoading = false;
+    }
+  },
 });

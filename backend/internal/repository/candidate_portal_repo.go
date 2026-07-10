@@ -71,6 +71,26 @@ func (r *CandidatePortalRepository) GetUserLatestCV(ctx context.Context, userID 
 	return fileID, origName, storageKey, err
 }
 
+// SaveParsedCV stores the AI-extracted CV JSON + summary onto all candidate rows for this user.
+func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, parsedJSON, summary string) error {
+	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, updated_at = NOW() WHERE user_id = $3`
+	_, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID)
+	return err
+}
+
+// GetParsedCV returns the latest AI-extracted CV JSON for this user (empty string if none).
+func (r *CandidatePortalRepository) GetParsedCV(ctx context.Context, userID string) (string, error) {
+	q := `SELECT coalesce(parsed_cv_json::text, '') FROM candidates
+	      WHERE user_id = $1 AND parsed_cv_json IS NOT NULL
+	      ORDER BY updated_at DESC LIMIT 1`
+	var parsed string
+	err := r.db.QueryRowContext(ctx, q, userID).Scan(&parsed)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return parsed, err
+}
+
 func (r *CandidatePortalRepository) UpdateUserCV(ctx context.Context, userID string, cvFileID string, cvOriginalName string) error {
 	// Insert a dummy file record to get a valid UUID for the foreign key
 	var actualFileID string

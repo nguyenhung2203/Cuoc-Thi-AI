@@ -24,6 +24,14 @@ export const authService = {
   },
 
   /**
+   * Đăng nhập thật bằng Google OAuth token
+   * @param {Object} payload - { id_token, email, full_name, avatar, role }
+   */
+  googleLogin: (payload) => {
+    return apiService.post('/auth/google-login', payload);
+  },
+
+  /**
    * Lấy thông tin user hiện tại (Me)
    * @returns {Promise<Object>} { id, email, full_name, role, companies }
    */
@@ -63,5 +71,31 @@ export const authService = {
    */
   saveSettings: (settings) => {
     return apiService.put('/auth/me/settings', { settings });
+  },
+
+  /**
+   * Xác thực tài liệu
+   * @param {string} fileId
+   * @returns {Promise<Object>}
+   */
+  verifyDocument: (fileId) => {
+    return apiService.post('/auth/me/verify-document', { file_id: fileId });
+  },
+
+  /**
+   * Đổi mật khẩu
+   * @param {Object} data { current_password, new_password }
+   * @returns {Promise<Object>}
+   */
+  changePassword: (data) => {
+    return apiService.put('/auth/me/password', data);
+  },
+
+  /**
+   * Xóa tài khoản (soft-delete) của chính mình
+   * @returns {Promise<Object>}
+   */
+  deleteAccount: () => {
+    return apiService.delete('/auth/me');
   }
 };

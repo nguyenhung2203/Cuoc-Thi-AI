@@ -24,6 +24,10 @@ type Config struct {
 	SMTPPort string
 	SMTPUser string
 	SMTPPass string
+	SMTPFrom string
+
+	// Public base URL of the frontend (for links in emails)
+	FrontendURL string
 
 	// Gemini
 	GeminiAPIKey string
@@ -65,10 +69,12 @@ func Load() (*Config, error) {
 		DBPassword:    getEnv("DB_PASSWORD", ""),
 		DBName:        getEnv("DB_NAME", ""),
 		DBSSLMode:     getEnv("DB_SSL_MODE", "disable"),
-		SMTPHost:      getEnv("SMTP_HOST", "smtp.example.com"),
+		SMTPHost:      getEnv("SMTP_HOST", ""),
 		SMTPPort:      getEnv("SMTP_PORT", "587"),
 		SMTPUser:      getEnv("SMTP_USER", ""),
 		SMTPPass:      getEnv("SMTP_PASS", ""),
+		SMTPFrom:      getEnv("SMTP_FROM", "no-reply@ai-interview.local"),
+		FrontendURL:   getEnv("FRONTEND_URL", "http://localhost:5173"),
 		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		JWTAccessTTL:  getEnv("JWT_ACCESS_TTL", "15m"),

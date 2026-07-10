@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import AppFooter from './AppFooter.vue'
 const router = useRouter()
 </script>
 
@@ -21,8 +22,6 @@ const router = useRouter()
     </main>
 
     <!-- Footer -->
-    <footer style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 14px; border-top: 1px solid var(--border);">
-      © 2026 Interview AI. All rights reserved.
-    </footer>
+    <AppFooter />
   </div>
 </template>

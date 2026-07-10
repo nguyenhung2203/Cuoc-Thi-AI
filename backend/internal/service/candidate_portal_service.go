@@ -2,11 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 
 	"backend/internal/dto/response"
 
 	"backend/internal/pkg/errors"
 	"backend/internal/repository"
+	"backend/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -15,6 +18,8 @@ type CandidatePortalService struct {
 	userRepo      *repository.UserRepository
 	candidateRepo *repository.CandidateRepository
 	jobRepo       *repository.JobRepository
+	aiSvc         *AIService
+	notifRepo     *repository.NotificationRepository
 }
 
 func NewCandidatePortalService(
@@ -22,12 +27,16 @@ func NewCandidatePortalService(
 	userRepo *repository.UserRepository,
 	candidateRepo *repository.CandidateRepository,
 	jobRepo *repository.JobRepository,
+	aiSvc *AIService,
+	notifRepo *repository.NotificationRepository,
 ) *CandidatePortalService {
 	return &CandidatePortalService{
 		repo:          repo,
 		userRepo:      userRepo,
 		candidateRepo: candidateRepo,
 		jobRepo:       jobRepo,
+		aiSvc:         aiSvc,
+		notifRepo:     notifRepo,
 	}
 }
 
@@ -111,19 +120,47 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 		cvName = fileName
 	}
 
-	return &response.CandidatePortalProfile{
+	profile := &response.CandidatePortalProfile{
 		UserID:    user.ID,
 		FullName:  user.FullName,
 		Email:     user.Email,
 		AvatarURL: user.AvatarURL.String,
+		CVFileID:  fileID,
 		CVUrl:     cvUrl,
 		CVName:    cvName,
-	}, nil
+	}
+
+	// Attach AI-parsed CV data if available.
+	if parsedJSON, err := s.repo.GetParsedCV(ctx, userID); err == nil && parsedJSON != "" {
+		var parsed interface{}
+		if json.Unmarshal([]byte(parsedJSON), &parsed) == nil {
+			profile.ParsedData = parsed
+		}
+	}
+
+	return profile, nil
 }
 
-// UploadCV handles updating the central CV for the user
-func (s *CandidatePortalService) UploadCV(ctx context.Context, userID string, originalName string, cvFileID string) error {
-	return s.repo.UpdateUserCV(ctx, userID, cvFileID, originalName)
+// UploadCV updates the central CV for the user, then parses it with AI (best-effort).
+// storageKey is the on-disk key of the freshly uploaded file so we can read/parse it.
+func (s *CandidatePortalService) UploadCV(ctx context.Context, userID, originalName, cvFileID, storageKey string) error {
+	if err := s.repo.UpdateUserCV(ctx, userID, cvFileID, originalName); err != nil {
+		return err
+	}
+
+	// Parse the CV with AI and persist the result. Best-effort: upload still
+	// succeeds even if parsing fails (e.g. AI unavailable or non-PDF content).
+	if s.aiSvc != nil && storageKey != "" {
+		parsedJSON, summary, perr := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
+		if perr != nil {
+			log.Printf("portal: CV parse failed for user %s: %v", userID, perr)
+			return nil
+		}
+		if serr := s.repo.SaveParsedCV(ctx, userID, parsedJSON, summary); serr != nil {
+			log.Printf("portal: failed to save parsed CV for user %s: %v", userID, serr)
+		}
+	}
+	return nil
 }
 
 func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID, cvFileID, cvOriginalName string) error {
@@ -149,5 +186,27 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 		return errors.NewInternal("failed to apply for job")
 	}
 	
+	// Notify Recruiter (Job Creator) and Candidate
+	if s.notifRepo != nil {
+		// Notify Recruiter
+		if job.CreatedBy != "" {
+			_ = s.notifRepo.Create(ctx, &models.Notification{
+				UserID:  job.CreatedBy,
+				Title:   "Ứng viên mới",
+				Message: "Ứng viên " + user.FullName + " vừa ứng tuyển vào vị trí: " + job.Title,
+				Type:    "new_applicant",
+				Link:    "/candidates",
+			})
+		}
+		// Notify Candidate
+		_ = s.notifRepo.Create(ctx, &models.Notification{
+			UserID:  user.ID,
+			Title:   "Ứng tuyển thành công",
+			Message: "Bạn đã ứng tuyển thành công vào vị trí: " + job.Title,
+			Type:    "job_applied",
+			Link:    "/job-board",
+		})
+	}
+
 	return nil
 }

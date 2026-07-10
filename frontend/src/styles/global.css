@@ -4,6 +4,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Scrollbar Prevention (Eliminate Double Scrollbars) */
+html {
+  overflow-y: auto !important;
+  overflow-x: clip !important;
+}
+
+body, #app, .candidate-layout, .public-layout, .landing-page {
+  overflow-x: clip !important;
+}
+
 :root {
   /* Primary Colors */
   --primary: #2563EB;
@@ -290,7 +300,6 @@ textarea.input-field {
 .page-content {
   padding: 32px;
   flex: 1;
-  overflow-y: auto;
 }
 
 /* Dashboard specific */

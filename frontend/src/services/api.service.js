@@ -52,6 +52,22 @@ const request = async (endpoint, options = {}) => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login'; 
+        return;
+      }
+
+      // Bắt lỗi 403 Forbidden hoặc lỗi cấm quyền -> Đẩy về trang /403 cảnh báo
+      const errorCode = (data.error?.code || '').toUpperCase();
+      if (response.status === 403 || errorCode === 'FORBIDDEN' || errorCode === 'UNAUTHORIZED_ROLE') {
+        window.location.href = '/403?reason=unauthorized&attempted=' + encodeURIComponent(window.location.pathname);
+        return;
+      }
+      if (errorCode === 'ACCOUNT_LOCKED' || errorCode === 'ACCOUNT_BLOCKED') {
+        window.location.href = '/403?reason=account_blocked';
+        return;
+      }
+      if (errorCode === 'ACCOUNT_PENDING') {
+        window.location.href = '/403?reason=pending_approval';
+        return;
       }
       
       // Quăng lỗi ra ngoài để component tự xử lý (hiển thị Toast)

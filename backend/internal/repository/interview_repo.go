@@ -100,6 +100,13 @@ func (r *InterviewRepository) UpdateStatus(ctx context.Context, id, status strin
 	return err
 }
 
+// UpdateNotes saves the recruiter's internal notes for an interview (company-scoped).
+func (r *InterviewRepository) UpdateNotes(ctx context.Context, id, companyID, notes string) error {
+	q := `UPDATE interviews SET recruiter_notes = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3`
+	_, err := r.db.ExecContext(ctx, q, notes, id, companyID)
+	return err
+}
+
 func (r *InterviewRepository) UpdateRoomStatus(ctx context.Context, id, status string) error {
 	q := `UPDATE interview_rooms SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, q, status, id)

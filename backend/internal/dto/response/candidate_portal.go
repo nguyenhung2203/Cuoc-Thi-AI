@@ -24,12 +24,13 @@ type CandidatePortalInterview struct {
 }
 
 type CandidatePortalProfile struct {
-	UserID    string `json:"user_id"`
-	FullName  string `json:"full_name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	AvatarURL string `json:"avatar_url"`
-	CVFileID  string `json:"cv_file_id"`
-	CVUrl     string `json:"cv_url"`
-	CVName    string `json:"cv_name"`
+	UserID     string      `json:"user_id"`
+	FullName   string      `json:"full_name"`
+	Email      string      `json:"email"`
+	Phone      string      `json:"phone"`
+	AvatarURL  string      `json:"avatar_url"`
+	CVFileID   string      `json:"cv_file_id"`
+	CVUrl      string      `json:"cv_url"`
+	CVName     string      `json:"cv_name"`
+	ParsedData interface{} `json:"parsed_data,omitempty"`
 }

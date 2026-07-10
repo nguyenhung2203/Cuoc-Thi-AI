@@ -5,7 +5,7 @@ import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { ArrowLeft, Download, Share2, CheckCircle, AlertTriangle, FileText } from 'lucide-vue-next'
+import { ArrowLeft, Download, Share2, CheckCircle, AlertTriangle, FileText, Sparkles, Save } from 'lucide-vue-next'
 import { authStore } from '../../stores/auth.store'
 import { reportService } from '../../services/report.service'
 import { transcriptService } from '../../services/transcript.service'
@@ -74,6 +74,29 @@ const handleViewTranscripts = async () => {
   }
 }
 
+const handleShare = async () => {
+  const url = window.location.href
+  const title = `Báo cáo phỏng vấn: ${report.value?.candidate_name || ''}`
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, url })
+      return
+    }
+    await navigator.clipboard.writeText(url)
+    toast.value = { type: 'success', message: 'Đã sao chép liên kết báo cáo vào clipboard!' }
+  } catch (err) {
+    // Người dùng hủy hộp thoại chia sẻ — không coi là lỗi
+    if (err && err.name !== 'AbortError') {
+      toast.value = { type: 'error', message: 'Không thể chia sẻ báo cáo.' }
+    }
+  }
+}
+
+const handleExportPDF = () => {
+  // Dùng cơ chế in của trình duyệt (Save as PDF) — không cần thư viện ngoài.
+  window.print()
+}
+
 const handleRetryReport = async () => {
   retryingReport.value = true
   try {
@@ -106,11 +129,11 @@ const handleRetryReport = async () => {
           <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium">{{ report?.job_title }} • {{ report ? new Date(report.date).toLocaleDateString('vi-VN') : '' }}</p>
         </div>
       </div>
-      <div class="flex gap-3">
-        <Button variant="secondary" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+      <div class="flex gap-3 no-print">
+        <Button variant="secondary" @click="handleShare" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
           <Share2 size="16" class="mr-1.5" /> Chia sẻ
         </Button>
-        <Button class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+        <Button @click="handleExportPDF" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
           <Download size="16" class="mr-1.5" /> Xuất PDF
         </Button>
       </div>
@@ -318,3 +341,9 @@ const handleRetryReport = async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media print {
+  .no-print { display: none !important; }
+}
+</style>

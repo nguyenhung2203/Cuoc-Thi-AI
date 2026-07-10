@@ -40,3 +40,17 @@ func (h *AuditHandler) LogActionDirect(w http.ResponseWriter, r *http.Request) {
 	// Internal: not exposed via router, for use by other handlers through shared AuditService
 	pkgresponse.Error(w, apierrors.NewValidation("direct", []string{"use audit service from within handlers"}), "")
 }
+
+func (h *AuditHandler) ListAllGlobalLogs(w http.ResponseWriter, r *http.Request) {
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	page := 1
+	pageSize := 50
+
+	logs, err := h.auditSvc.ListAll(r.Context(), page, pageSize)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, logs, nil, requestID)
+}

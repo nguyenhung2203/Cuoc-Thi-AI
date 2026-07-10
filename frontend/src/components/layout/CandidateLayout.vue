@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
 import { useNotificationStore } from '../../stores/notification.store'
+import AppFooter from './AppFooter.vue'
 import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -16,8 +17,12 @@ const unreadCount = computed(() => notificationStore.unreadCount)
 
 onMounted(async () => {
   if (authStore.user) {
-    await notificationStore.fetch()
+    notificationStore.startPolling()
   }
+})
+
+onUnmounted(() => {
+  notificationStore.stopPolling()
 })
 
 const handleMarkAllAsRead = async (e) => {
@@ -176,6 +181,7 @@ const handleLogout = async () => {
     <main class="page-content" :class="[(route.path.includes('candidate-room') || route.path.includes('mock-room')) ? 'room-fullscreen' : (route.path !== '/' ? 'container-bounded' : '')]">
       <router-view />
     </main>
+    <AppFooter v-if="!route.path.includes('candidate-room') && !route.path.includes('mock-room')" />
   </div>
 </template>
 
@@ -183,7 +189,7 @@ const handleLogout = async () => {
 .candidate-layout {
   min-height: 100vh;
   background-color: var(--background);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .top-navbar {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"net"
 	"time"
@@ -89,13 +90,18 @@ func (s *AuthService) Register(ctx context.Context, req request.RegisterRequest,
 		role = models.RoleCandidate // default
 	}
 
+	status := models.UserStatusActive
+	if role == models.RoleRecruiter {
+		status = models.UserStatusPending
+	}
+
 	user := &models.User{
 		ID:           uuid.NewString(),
 		Email:        req.Email,
 		PasswordHash: string(hash),
 		FullName:     req.FullName,
 		Role:         role,
-		Status:       models.UserStatusActive,
+		Status:       status,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -170,12 +176,93 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest, ipAdd
 	return resp, refreshToken, nil
 }
 
+// GoogleLogin handles real authentication/registration via Google OAuth API tokens
+func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRequest, ipAddress, userAgent string) (*response.AuthResponse, string, error) {
+	ipAddress = stripPort(ipAddress)
+
+	// Look up user by email in PostgreSQL/Supabase
+	user, err := s.userRepo.FindByEmail(ctx, req.Email)
+	if err != nil {
+		// User not found -> Auto create a real user record in database
+		role := models.UserRole(req.Role)
+		if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+			role = models.RoleCandidate
+		}
+		status := models.UserStatusActive
+		if role == models.RoleRecruiter {
+			status = models.UserStatusPending
+		}
+		user = &models.User{
+			ID:           uuid.NewString(),
+			Email:        req.Email,
+			PasswordHash: "google_oauth_user",
+			FullName:     req.FullName,
+			Role:         role,
+			Status:       status,
+		}
+		if req.Avatar != "" {
+			user.AvatarURL = sql.NullString{String: req.Avatar, Valid: true}
+		}
+		if errCreate := s.userRepo.Create(ctx, user); errCreate != nil {
+			return nil, "", errors.NewInternal("failed to create user from Google OAuth: " + errCreate.Error())
+		}
+	} else if user.FullName == "" && req.FullName != "" {
+		_ = s.userRepo.UpdateProfile(ctx, user.ID, req.FullName, req.Avatar)
+	}
+
+	accessToken, _, err := jwt.GenerateTokenPair(
+		user.ID, user.Email, string(user.Role), s.jwtSecret,
+		15*time.Minute, 7*24*time.Hour,
+	)
+	if err != nil {
+		return nil, "", errors.NewInternal("failed to generate tokens")
+	}
+
+	familyID := uuid.NewString()
+	refreshToken, err := s.createAndSaveRefreshToken(ctx, user.ID, user.Email, string(user.Role), familyID, ipAddress, userAgent)
+	if err != nil {
+		return nil, "", err
+	}
+
+	resp := &response.AuthResponse{
+		User: response.AuthUser{
+			ID:       user.ID,
+			Email:    user.Email,
+			FullName: user.FullName,
+			Role:     string(user.Role),
+			Status:   string(user.Status),
+		},
+		AccessToken: accessToken,
+	}
+
+	return resp, refreshToken, nil
+}
+
 // UpdateProfile updates the current user's editable profile fields.
 func (s *AuthService) UpdateProfile(ctx context.Context, userID, fullName, avatarURL string) error {
 	if fullName == "" {
 		return errors.NewValidation("full_name", []string{"full_name is required"})
 	}
 	return s.userRepo.UpdateProfile(ctx, userID, fullName, avatarURL)
+}
+
+// ChangePassword verifies the current password and sets a new one.
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	if len(newPassword) < 6 {
+		return errors.NewValidation("new_password", []string{"new password must be at least 6 characters"})
+	}
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return errors.NewNotFound("user not found")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return errors.NewValidation("current_password", []string{"current password is incorrect"})
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.NewInternal("failed to hash password")
+	}
+	return s.userRepo.UpdatePassword(ctx, userID, string(hash))
 }
 
 // GetSettings returns the current user's settings JSON blob ({} if unset).
@@ -196,6 +283,15 @@ func (s *AuthService) UpdateSettings(ctx context.Context, userID string, setting
 		settings = models.JSONB([]byte("{}"))
 	}
 	return s.userRepo.UpdateSettings(ctx, userID, settings)
+}
+
+// VerifyDocument saves the uploaded business license file ID.
+func (s *AuthService) VerifyDocument(ctx context.Context, userID, fileID string) error {
+	if fileID == "" {
+		return errors.NewValidation("file_id", []string{"file_id is required"})
+	}
+	// We don't change status to active here, admin will do it.
+	return s.userRepo.UpdateVerificationFile(ctx, userID, fileID)
 }
 
 func (s *AuthService) GetMe(ctx context.Context, userID string) (*response.UserMeResponse, error) {
@@ -219,12 +315,14 @@ func (s *AuthService) GetMe(ctx context.Context, userID string) (*response.UserM
 	}
 
 	return &response.UserMeResponse{
-		ID:        user.ID,
-		Email:     user.Email,
-		FullName:  user.FullName,
-		Role:      string(user.Role),
-		AvatarURL: user.AvatarURL.String,
-		Companies: companies,
+		ID:                 user.ID,
+		Email:              user.Email,
+		FullName:           user.FullName,
+		Role:               string(user.Role),
+		Status:             string(user.Status),
+		AvatarURL:          user.AvatarURL.String,
+		VerificationFileID: user.VerificationFileID.String,
+		Companies:          companies,
 	}, nil
 }
 
@@ -292,4 +390,17 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 
 func (s *AuthService) LogoutAll(ctx context.Context, userID string) (int, error) {
 	return s.refreshTokenRepo.RevokeAllByUserID(ctx, userID)
+}
+
+// DeleteAccount soft-deletes the user and revokes all their refresh tokens.
+func (s *AuthService) DeleteAccount(ctx context.Context, userID string) error {
+	if _, err := s.userRepo.FindByID(ctx, userID); err != nil {
+		return errors.NewNotFound("user not found")
+	}
+	if err := s.userRepo.SoftDelete(ctx, userID); err != nil {
+		return errors.NewInternal("failed to delete account")
+	}
+	// Best-effort: revoke all sessions so the account can no longer be used.
+	_, _ = s.refreshTokenRepo.RevokeAllByUserID(ctx, userID)
+	return nil
 }

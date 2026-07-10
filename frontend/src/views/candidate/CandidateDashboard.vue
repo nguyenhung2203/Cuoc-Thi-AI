@@ -25,6 +25,18 @@ onMounted(async () => {
     window.history.replaceState({}, document.title)
   }
 
+  if (!authStore.isAuthenticated && !localStorage.getItem('access_token')) {
+    stats.value = {
+      upcoming_interviews: 0,
+      completed_mock_tests: 0,
+      average_mock_score: 0,
+      profile_completeness: 0
+    }
+    upcomingInterviews.value = []
+    loading.value = false
+    return
+  }
+
   try {
     const [statsData, interviewsData] = await Promise.all([
       candidatePortalService.getDashboardStats(),

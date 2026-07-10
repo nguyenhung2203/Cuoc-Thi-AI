@@ -14,6 +14,8 @@ const activeTab = ref('account')
 const toast = ref(null)
 const showDeleteModal = ref(false)
 const saving = ref(false)
+const changingPassword = ref(false)
+const passwordForm = ref({ current: '', next: '', confirm: '' })
 const settings = ref({
   notify_email_interview: true,
   notify_email_report: true,
@@ -49,13 +51,48 @@ const handleSave = async (e) => {
   }
 }
 
+const handleChangePassword = async (e) => {
+  if (e && e.preventDefault) e.preventDefault()
+  if (!passwordForm.value.current || !passwordForm.value.next) {
+    toast.value = { type: 'warning', message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.' }
+    return
+  }
+  if (passwordForm.value.next.length < 6) {
+    toast.value = { type: 'warning', message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' }
+    return
+  }
+  if (passwordForm.value.next !== passwordForm.value.confirm) {
+    toast.value = { type: 'warning', message: 'Xác nhận mật khẩu mới không khớp.' }
+    return
+  }
+  changingPassword.value = true
+  try {
+    await authService.changePassword({
+      current_password: passwordForm.value.current,
+      new_password: passwordForm.value.next
+    })
+    passwordForm.value = { current: '', next: '', confirm: '' }
+    toast.value = { type: 'success', message: 'Đổi mật khẩu thành công!' }
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Lỗi đổi mật khẩu: ' + (error.message || 'Không xác định') }
+  } finally {
+    changingPassword.value = false
+  }
+}
+
 const handleDeleteAccount = () => {
   showDeleteModal.value = true
 }
 
-const confirmDeleteAccount = () => {
+const confirmDeleteAccount = async () => {
   showDeleteModal.value = false
-  toast.value = { type: 'success', message: 'Yêu cầu xóa tài khoản đã được gửi.' }
+  try {
+    await authService.deleteAccount()
+    toast.value = { type: 'success', message: 'Tài khoản đã được xóa. Đang đăng xuất...' }
+    setTimeout(() => { authStore.logout() }, 2000)
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Lỗi xóa tài khoản: ' + (error.message || 'Không xác định') }
+  }
 }
 </script>
 
@@ -112,22 +149,24 @@ const confirmDeleteAccount = () => {
                 <Input label="Tên người dùng" :modelValue="authStore.user?.full_name || ''" disabled />
                 <Input label="Email đăng nhập" type="email" :modelValue="authStore.user?.email || ''" disabled />
                 
-                <div style="border-top: 1px solid var(--border); padding-top: 24px; margin-top: 8px">
-                  <h3 class="text-body" style="font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px">
-                    <Key size="16" /> Đổi mật khẩu
-                  </h3>
-                  <div style="display: flex; flex-direction: column; gap: 16px">
-                    <Input label="Mật khẩu hiện tại" type="password" />
-                    <Input label="Mật khẩu mới" type="password" />
-                    <Input label="Xác nhận mật khẩu mới" type="password" />
-                  </div>
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-                  <Button><Save size="16" /> Lưu thay đổi</Button>
-                </div>
               </div>
             </form>
+
+            <div style="border-top: 1px solid var(--border); padding-top: 24px; margin-top: 24px">
+              <h3 class="text-body" style="font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px">
+                <Key size="16" /> Đổi mật khẩu
+              </h3>
+              <form @submit="handleChangePassword">
+                <div style="display: flex; flex-direction: column; gap: 16px">
+                  <Input label="Mật khẩu hiện tại" type="password" v-model="passwordForm.current" />
+                  <Input label="Mật khẩu mới" type="password" v-model="passwordForm.next" />
+                  <Input label="Xác nhận mật khẩu mới" type="password" v-model="passwordForm.confirm" />
+                </div>
+                <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+                  <Button type="submit" :disabled="changingPassword"><Save size="16" /> {{ changingPassword ? 'Đang đổi...' : 'Đổi mật khẩu' }}</Button>
+                </div>
+              </form>
+            </div>
           </Card>
         </div>
 

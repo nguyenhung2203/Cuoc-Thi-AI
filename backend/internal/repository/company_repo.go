@@ -60,6 +60,12 @@ func (r *CompanyRepository) ListByUserID(ctx context.Context, userID string) ([]
 	return companies, err
 }
 
+func (r *CompanyRepository) ListAll(ctx context.Context) ([]models.Company, error) {
+	var companies []models.Company
+	err := r.db.SelectContext(ctx, &companies, "SELECT * FROM companies WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	return companies, err
+}
+
 func (r *CompanyRepository) Update(ctx context.Context, company *models.Company) error {
 	query := `
 		UPDATE companies

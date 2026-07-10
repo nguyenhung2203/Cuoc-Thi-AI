@@ -19,6 +19,7 @@ const interview = ref(null)
 const loading = ref(true)
 const copied = ref(false)
 const toast = ref(null)
+const noteContent = ref('')
 
 onMounted(async () => {
   try {
@@ -40,11 +41,15 @@ onMounted(async () => {
       interview.value = {
         ...data,
         candidateName: candidate.full_name || candidate.name || 'Không rõ ứng viên',
+        candidateEmail: candidate.email || '',
         jobTitle: job.title || 'Không rõ vị trí',
         datetime: dt,
         status: data.status === 'scheduled' ? 'Scheduled' : data.status,
         link: data.invite_url || ''
       }
+
+      // Ghi chú nội bộ lấy trực tiếp từ backend (cột recruiter_notes)
+      noteContent.value = data.recruiter_notes || ''
     }
   } catch (error) {
     toast.value = { type: 'error', message: 'Không thể tải thông tin phỏng vấn' }
@@ -61,8 +66,35 @@ const copyLink = () => {
   }
 }
 
-const handleSaveNotes = () => {
-  toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
+const savingNote = ref(false)
+const sendingReminder = ref(false)
+
+const handleSaveNotes = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  savingNote.value = true
+  try {
+    await interviewService.updateNotes(companyId, id, noteContent.value || '')
+    toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lỗi lưu ghi chú: ' + (err.message || 'Không xác định') }
+  } finally {
+    savingNote.value = false
+  }
+}
+
+const handleSendReminder = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  sendingReminder.value = true
+  try {
+    const res = await interviewService.sendReminder(companyId, id)
+    toast.value = { type: 'success', message: `Đã gửi email nhắc nhở tới ${res?.to || 'ứng viên'}.` }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lỗi gửi nhắc nhở: ' + (err.message || 'Không xác định') }
+  } finally {
+    sendingReminder.value = false
+  }
 }
 
 const dateObj = computed(() => {
@@ -129,8 +161,8 @@ const dateObj = computed(() => {
                 <Button variant="secondary" @click="copyLink">
                   <Copy size="16" /> Copy Link Invite
                 </Button>
-                <Button variant="ghost">
-                  <Mail size="16" /> Gửi email nhắc nhở
+                <Button variant="ghost" :disabled="sendingReminder" @click="handleSendReminder">
+                  <Mail size="16" /> {{ sendingReminder ? 'Đang gửi...' : 'Gửi email nhắc nhở' }}
                 </Button>
               </div>
             </div>
@@ -148,13 +180,14 @@ const dateObj = computed(() => {
 
         <div>
           <Card title="Ghi chú nội bộ">
-            <textarea 
-              class="input-field" 
+            <textarea
+              v-model="noteContent"
+              class="input-field"
               rows="6"
               placeholder="Nhập ghi chú hoặc nhắc nhở trước buổi phỏng vấn (Chỉ recruiter xem được)..."
               style="width: 100%; margin-bottom: 16px"
             ></textarea>
-            <Button variant="secondary" style="width: 100%" @click="handleSaveNotes">Lưu ghi chú</Button>
+            <Button variant="secondary" style="width: 100%" :disabled="savingNote" @click="handleSaveNotes">{{ savingNote ? 'Đang lưu...' : 'Lưu ghi chú' }}</Button>
           </Card>
         </div>
       </div>

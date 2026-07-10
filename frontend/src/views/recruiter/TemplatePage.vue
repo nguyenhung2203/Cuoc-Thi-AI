@@ -9,8 +9,19 @@ import Badge from '../../components/common/AppBadge.vue'
 import { Plus, Search, Filter, Bot, Copy, Edit, Trash2, Tag, Clock, MoreHorizontal } from 'lucide-vue-next'
 import { templateService } from '../../services/template.service'
 import { authStore } from '../../stores/auth.store'
+import { computed } from 'vue'
 
 const templates = ref([])
+const searchKeyword = ref('')
+const filterType = ref('')
+const filteredTemplates = computed(() => {
+  const kw = searchKeyword.value.trim().toLowerCase()
+  return templates.value.filter(t => {
+    const matchKw = !kw || (t.title || '').toLowerCase().includes(kw) || (t.desc || '').toLowerCase().includes(kw)
+    const matchType = !filterType.value || t.type === filterType.value
+    return matchKw && matchType
+  })
+})
 const loading = ref(true)
 const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
@@ -172,15 +183,15 @@ const handleUpdate = async () => {
           placeholder="Tìm kiếm mẫu AI..."
           class="input-field"
           style="width: 100%; padding-left: 36px"
+          v-model="searchKeyword"
         />
       </div>
-      <select class="input-field" style="width: 180px">
+      <select class="input-field" style="width: 180px" v-model="filterType">
         <option value="">Tất cả loại kịch bản</option>
         <option value="Technical">Kỹ năng chuyên môn</option>
         <option value="Behavioral">Kỹ năng mềm</option>
         <option value="Management">Quản lý</option>
       </select>
-      <Button variant="secondary"><Filter size="16" /> Lọc nâng cao</Button>
     </div>
 
     <!-- Loading state -->
@@ -202,7 +213,7 @@ const handleUpdate = async () => {
 
     <!-- Template Grid -->
     <div v-else class="grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px">
-      <Card v-for="template in templates" :key="template.id" style="display: flex; flex-direction: column; height: 100%; transition: transform 0.2s, box-shadow 0.2s" class="hover-card">
+      <Card v-for="template in filteredTemplates" :key="template.id" style="display: flex; flex-direction: column; height: 100%; transition: transform 0.2s, box-shadow 0.2s" class="hover-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px">
           <div style="display: flex; gap: 12px; align-items: flex-start">
             <div style="width: 40px; height: 40px; border-radius: 8px; background-color: rgba(37, 99, 235, 0.1); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0">
@@ -214,7 +225,7 @@ const handleUpdate = async () => {
             </div>
           </div>
           <div style="display: flex; gap: 4px">
-            <Button variant="ghost" style="padding: 4px; color: var(--text-muted)" @click="handleDuplicate(row)"><Copy size="16" /></Button>
+            <Button variant="ghost" style="padding: 4px; color: var(--text-muted)" @click="handleDuplicate(template)"><Copy size="16" /></Button>
             <Button variant="ghost" style="padding: 4px; color: var(--text-muted)" @click="openEditModal(template)"><Edit size="16" /></Button>
             <Button variant="ghost" style="padding: 4px; color: var(--danger)" @click="deletingId = template.id; showDeleteModal = true"><Trash2 size="16" /></Button>
           </div>
@@ -230,7 +241,7 @@ const handleUpdate = async () => {
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center">
             <span class="text-helper" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted)"><Clock size="12" /> Đã tạo: {{ template.created }}</span>
-            <Button variant="ghost" style="font-size: 13px; color: var(--primary); padding: 0">Cấu hình &rarr;</Button>
+            <Button variant="ghost" style="font-size: 13px; color: var(--primary); padding: 0" @click="openEditModal(template)">Cấu hình &rarr;</Button>
           </div>
         </div>
       </Card>

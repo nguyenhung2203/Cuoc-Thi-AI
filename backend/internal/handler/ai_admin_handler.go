@@ -47,4 +47,13 @@ func (h *AIAdminHandler) CreatePromptTemplate(w http.ResponseWriter, r *http.Req
 	pkgresponse.JSON(w, http.StatusCreated, created, nil, requestID)
 }
 
-// Additional handlers like GetPromptLogs, ListTemplates can be added here.
+// ListTemplates handles GET /api/v1/admin/ai-prompts
+func (h *AIAdminHandler) ListTemplates(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	templates, err := h.promptSvc.ListAllTemplates(r.Context())
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, templates, nil, requestID)
+}

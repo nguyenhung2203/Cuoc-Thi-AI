@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { UploadCloud, FileText, CheckCircle, ArrowLeft, Loader2, Search } from 'lucide-vue-next'
+import { UploadCloud, FileText, CheckCircle, ArrowLeft, Loader2, Search, Sparkles } from 'lucide-vue-next'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import { candidatePortalService } from '../../services/candidate-portal.service'
@@ -44,16 +44,18 @@ const processFile = async (selectedFile) => {
     uploadStatus.value = 'error'
     return
   }
-  
+
   file.value = selectedFile
   uploadStatus.value = 'uploading'
   uploadProgress.value = 0
-  
+
   try {
+    uploadStatus.value = 'parsing'
+    // Backend upload CV + parse bằng AI ngay trong 1 request, trả về parsed_data thật.
     const res = await candidatePortalService.uploadCv(selectedFile)
     uploadProgress.value = 100
     if (res && res.cv_url) {
-       startParsing()
+       await loadParsedData(res.parsed_data)
     } else {
        uploadStatus.value = 'error'
     }
@@ -62,26 +64,32 @@ const processFile = async (selectedFile) => {
   }
 }
 
-const startParsing = async () => {
-  uploadStatus.value = 'parsing'
-  
-  // Fake AI parsing delay
-  await new Promise(resolve => setTimeout(resolve, 2500))
-  
-  parsedData.value = {
-    name: 'Nguyễn Văn A',
-    email: 'nguyenvana@example.com',
-    phone: '0901234567',
-    skills: ['Vue.js', 'React', 'JavaScript', 'TypeScript', 'Node.js'],
-    experience: '3 năm kinh nghiệm lập trình Frontend'
+// Hiển thị dữ liệu CV do AI trích xuất thật. Ưu tiên parsed_data từ response upload,
+// bổ sung name/email/phone từ hồ sơ. Không bịa dữ liệu — nếu AI chưa phân tích được thì nói rõ.
+const loadParsedData = async (parsedFromUpload) => {
+  let parsed = parsedFromUpload || {}
+  let profile = {}
+  try {
+    const res = await candidatePortalService.getProfile()
+    profile = res?.data || res || {}
+    if (!parsedFromUpload && profile.parsed_data) parsed = profile.parsed_data
+  } catch (err) {
+    // giữ nguyên parsed từ upload nếu getProfile lỗi
   }
-  
+  parsedData.value = {
+    name: profile.full_name || '—',
+    email: profile.email || '—',
+    phone: profile.phone || '—',
+    skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+    experience: parsed.experience || parsed.summary || 'AI chưa trích xuất được kinh nghiệm từ CV này.'
+  }
   uploadStatus.value = 'success'
 }
 
 const handleSave = () => {
-  router.push({ 
-    path: '/home', 
+  // CV đã được lưu ở bước upload; ở đây chỉ điều hướng về trang chủ.
+  router.push({
+    path: '/home',
     state: { message: 'Đã cập nhật CV thành công!' }
   })
 }
@@ -218,9 +226,12 @@ const handleSave = () => {
             <div>
               <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Kỹ năng chính</label>
               <div class="flex flex-wrap gap-2 mt-2">
-                <span v-for="skill in parsedData.skills" :key="skill" 
+                <span v-for="skill in parsedData.skills" :key="skill"
                   class="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-sm font-semibold shadow-sm hover:bg-indigo-100 transition-colors cursor-default">
                   {{ skill }}
+                </span>
+                <span v-if="!parsedData.skills || parsedData.skills.length === 0" class="text-sm text-gray-400 italic">
+                  AI chưa trích xuất được kỹ năng từ CV.
                 </span>
               </div>
             </div>

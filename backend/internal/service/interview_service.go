@@ -12,20 +12,35 @@ import (
 
 	"backend/internal/livekit"
 	"backend/internal/models"
+	"backend/internal/pkg/email"
 	"backend/internal/pkg/errors"
 	"backend/internal/repository"
 )
 
 type InterviewService struct {
-	repo      *repository.InterviewRepository
-	reportSvc *ReportService
+	repo          *repository.InterviewRepository
+	reportSvc     *ReportService
+	candidateRepo *repository.CandidateRepository
+	notifRepo     *repository.NotificationRepository
+	mailer        *email.Sender
+	frontendURL   string
 }
 
-func NewInterviewService(repo *repository.InterviewRepository, reportSvc *ReportService) *InterviewService {
+func NewInterviewService(repo *repository.InterviewRepository, reportSvc *ReportService, notifRepo *repository.NotificationRepository) *InterviewService {
 	return &InterviewService{
 		repo:      repo,
 		reportSvc: reportSvc,
+		notifRepo: notifRepo,
 	}
+}
+
+// WithMailer attaches email/candidate dependencies for invite & reminder emails.
+// Optional so existing construction keeps working.
+func (s *InterviewService) WithMailer(candidateRepo *repository.CandidateRepository, mailer *email.Sender, frontendURL string) *InterviewService {
+	s.candidateRepo = candidateRepo
+	s.mailer = mailer
+	s.frontendURL = frontendURL
+	return s
 }
 
 type CreateInterviewRequest struct {
@@ -99,6 +114,21 @@ func (s *InterviewService) CreateInterview(ctx context.Context, req CreateInterv
 
 	if err := s.repo.Create(ctx, interview, room); err != nil {
 		return nil, err
+	}
+
+	// Notify candidate if possible
+	if s.candidateRepo != nil && s.notifRepo != nil {
+		if cand, candErr := s.candidateRepo.GetByID(ctx, req.CompanyID, req.CandidateID); candErr == nil && cand != nil {
+			if cand.UserID.Valid {
+				_ = s.notifRepo.Create(ctx, &models.Notification{
+					UserID:  cand.UserID.String,
+					Title:   "Lịch phỏng vấn mới",
+					Message: "Bạn vừa được mời tham gia phỏng vấn: " + req.Title,
+					Type:    "interview_invite",
+					Link:    "/my-interviews",
+				})
+			}
+		}
 	}
 
 	return &CreateInterviewResponse{
@@ -196,6 +226,48 @@ func (s *InterviewService) GetInterview(ctx context.Context, interviewID, compan
 	return i, nil
 }
 
+// SendReminder emails the candidate a reminder for an upcoming interview.
+// Returns the recipient email on success.
+func (s *InterviewService) SendReminder(ctx context.Context, interviewID, companyID string) (string, error) {
+	iv, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
+	if err != nil {
+		return "", errors.NewNotFound("interview not found")
+	}
+	if s.candidateRepo == nil || s.mailer == nil {
+		return "", errors.NewInternal("email service not configured")
+	}
+	cand, err := s.candidateRepo.GetByID(ctx, companyID, iv.CandidateID)
+	if err != nil || cand == nil {
+		return "", errors.NewNotFound("candidate not found")
+	}
+	if cand.Email == "" {
+		return "", errors.NewBadRequest("candidate has no email")
+	}
+
+	when := "thời gian đã hẹn"
+	if iv.ScheduledAt.Valid {
+		when = iv.ScheduledAt.Time.Format("15:04 02/01/2006")
+	}
+	subject := "Nhắc lịch phỏng vấn: " + iv.Title
+	body := "Xin chào " + cand.FullName + ",\n\n" +
+		"Đây là lời nhắc cho buổi phỏng vấn \"" + iv.Title + "\" vào " + when + ".\n" +
+		"Vui lòng đăng nhập hệ thống để tham gia đúng giờ.\n\n" +
+		"Trân trọng,\nAI Interview Platform"
+
+	if err := s.mailer.Send(cand.Email, subject, body); err != nil {
+		return "", errors.NewInternal("failed to send reminder email")
+	}
+	return cand.Email, nil
+}
+
+// UpdateNotes saves recruiter internal notes after verifying the interview exists in the company.
+func (s *InterviewService) UpdateNotes(ctx context.Context, interviewID, companyID, notes string) error {
+	if _, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID); err != nil {
+		return errors.NewNotFound("interview not found")
+	}
+	return s.repo.UpdateNotes(ctx, interviewID, companyID, notes)
+}
+
 // GetRoom returns room metadata for an interview (after verifying company scope).
 func (s *InterviewService) GetRoom(ctx context.Context, interviewID, companyID string) (*models.InterviewRoom, error) {
 	if _, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID); err != nil {
@@ -223,6 +295,22 @@ func (s *InterviewService) CancelInterview(ctx context.Context, interviewID, com
 	if i.RoomID.Valid {
 		_ = s.repo.UpdateRoomStatus(ctx, i.RoomID.String, "closed")
 	}
+
+	// Notify candidate if possible
+	if s.candidateRepo != nil && s.notifRepo != nil {
+		if cand, candErr := s.candidateRepo.GetByID(ctx, companyID, i.CandidateID); candErr == nil && cand != nil {
+			if cand.UserID.Valid {
+				_ = s.notifRepo.Create(ctx, &models.Notification{
+					UserID:  cand.UserID.String,
+					Title:   "Lịch phỏng vấn bị hủy",
+					Message: "Lịch phỏng vấn: " + i.Title + " đã bị hủy.",
+					Type:    "interview_cancelled",
+					Link:    "/my-interviews",
+				})
+			}
+		}
+	}
+
 	return nil
 }
 

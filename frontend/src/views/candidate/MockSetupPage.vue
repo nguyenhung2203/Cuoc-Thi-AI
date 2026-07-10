@@ -4,12 +4,15 @@ import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Toast from '../../components/common/AppToast.vue'
+import { onMounted } from 'vue'
 import { Play, FileText, Sparkles } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
+import { candidatePortalService } from '../../services/candidate-portal.service'
 
 const router = useRouter()
 const loading = ref(false)
 const toast = ref(null)
+const cvFileId = ref('')
 
 const setup = ref({
   jobRole: 'frontend',
@@ -19,15 +22,30 @@ const setup = ref({
   useCurrentCv: false
 })
 
+// Lấy CV file id thật từ hồ sơ candidate để dùng cho phiên luyện tập
+onMounted(async () => {
+  try {
+    const res = await candidatePortalService.getProfile()
+    const profile = res?.data || res || {}
+    cvFileId.value = profile.cv_file_id || ''
+  } catch (err) {
+    cvFileId.value = ''
+  }
+})
+
 const handleStart = async (e) => {
   e.preventDefault()
+  if (setup.value.useCurrentCv && !cvFileId.value) {
+    toast.value = { type: 'warning', message: 'Bạn chưa có CV trong hồ sơ. Vui lòng tải CV lên trước hoặc bỏ chọn tùy chọn này.' }
+    return
+  }
   loading.value = true
   try {
     // Bước 1: Tạo session mới (status=draft) — API_SPEC §11.1
     const session = await mockService.createMockInterview({
       target_role: setup.value.jobRole,
       target_level: setup.value.level,
-      cv_file_id: setup.value.useCurrentCv ? 'my_cv_id_here' : undefined
+      cv_file_id: setup.value.useCurrentCv ? cvFileId.value : undefined
     })
     // Bước 2: Bắt đầu session → nhận câu hỏi đầu tiên — API_SPEC §11.2
     await mockService.startMockInterview(session.id)
@@ -110,9 +128,10 @@ const handleStart = async (e) => {
 
             <div class="mt-8 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
               <label class="flex items-center gap-3 cursor-pointer group bg-blue-50 hover:bg-blue-100 px-4 py-3 rounded-xl transition-colors border border-blue-100 w-full md:w-auto">
-                <input type="checkbox" v-model="setup.useCurrentCv" class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                <input type="checkbox" v-model="setup.useCurrentCv" :disabled="!cvFileId" class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 disabled:opacity-50" />
                 <div class="flex items-center gap-2 text-blue-800 font-medium">
                   <FileText class="w-5 h-5 text-blue-500" /> Sử dụng CV hiện tại trong Hồ sơ
+                  <span v-if="!cvFileId" class="text-xs text-gray-400 font-normal">(chưa có CV)</span>
                 </div>
               </label>
               

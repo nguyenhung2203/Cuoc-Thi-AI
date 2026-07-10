@@ -29,6 +29,8 @@ func NewAuthHandler(authService *service.AuthService, jwtSecret string, auditSvc
 func (h *AuthHandler) Routes(r chi.Router) {
 	r.Post("/register", h.Register)
 	r.Post("/login", h.Login)
+	r.Post("/google-login", h.GoogleLogin)
+	r.Post("/google", h.GoogleLogin)
 	r.Post("/refresh", h.Refresh)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout", h.Logout)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout-all", h.LogoutAll)
@@ -36,6 +38,9 @@ func (h *AuthHandler) Routes(r chi.Router) {
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Put("/me", h.UpdateMe)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Get("/me/settings", h.GetSettings)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Put("/me/settings", h.UpdateSettings)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Put("/me/password", h.ChangePassword)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/me/verify-document", h.VerifyDocument)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Delete("/me", h.DeleteAccount)
 }
 
 func setRefreshTokenCookie(w http.ResponseWriter, token string) {
@@ -125,6 +130,43 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			ActorUserID:  authResp.User.ID,
 			ActorRole:    authResp.User.Role,
 			Action:       "login",
+			ResourceType: "user",
+			ResourceID:   authResp.User.ID,
+			IPAddress:    ipAddress,
+			UserAgent:    userAgent,
+		})
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, authResp, nil, "")
+}
+
+func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
+	var req request.GoogleLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+
+	ipAddress := getClientIP(r)
+	userAgent := r.UserAgent()
+
+	authResp, refreshToken, err := h.authService.GoogleLogin(r.Context(), req, ipAddress, userAgent)
+	if err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("google login failed"), "")
+		}
+		return
+	}
+
+	setRefreshTokenCookie(w, refreshToken)
+
+	if authResp != nil {
+		h.auditSvc.LogAction(r.Context(), service.AuditLogInput{
+			ActorUserID:  authResp.User.ID,
+			ActorRole:    authResp.User.Role,
+			Action:       "google_login",
 			ResourceType: "user",
 			ResourceID:   authResp.User.ID,
 			IPAddress:    ipAddress,
@@ -259,6 +301,80 @@ func (h *AuthHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "saved"}, nil, "")
+}
+
+// ChangePassword lets the authenticated user change their own password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewValidation("payload", []string{"invalid json payload"}), "")
+		return
+	}
+
+	if err := h.authService.ChangePassword(r.Context(), userID, body.CurrentPassword, body.NewPassword); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to change password"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "password_changed"}, nil, "")
+}
+
+// VerifyDocument allows a pending user to submit their verification document.
+func (h *AuthHandler) VerifyDocument(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+
+	var body struct {
+		FileID string `json:"file_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewValidation("payload", []string{"invalid json payload"}), "")
+		return
+	}
+
+	if err := h.authService.VerifyDocument(r.Context(), userID, body.FileID); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to submit verification document"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "document_submitted"}, nil, "")
+}
+
+// DeleteAccount soft-deletes the authenticated user's account and clears their session.
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+	if err := h.authService.DeleteAccount(r.Context(), userID); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to delete account"), "")
+		}
+		return
+	}
+	clearRefreshTokenCookie(w)
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "account_deleted"}, nil, "")
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {

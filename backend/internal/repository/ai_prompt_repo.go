@@ -132,3 +132,17 @@ func (r *AIPromptRepository) CreateNewVersion(ctx context.Context, t *models.AIP
 
 	return &inserted, nil
 }
+
+func (r *AIPromptRepository) ListAllTemplates(ctx context.Context) ([]models.AIPromptTemplate, error) {
+	const qList = `
+		SELECT * FROM ai_prompt_templates
+		WHERE deleted_at IS NULL
+		ORDER BY name ASC, version DESC`
+
+	var tmpls []models.AIPromptTemplate
+	err := r.db.SelectContext(ctx, &tmpls, qList)
+	if err != nil {
+		return nil, fmt.Errorf("list prompt templates: %w", err)
+	}
+	return tmpls, nil
+}

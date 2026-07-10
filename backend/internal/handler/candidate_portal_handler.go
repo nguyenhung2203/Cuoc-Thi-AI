@@ -171,7 +171,7 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID)
+	err = h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID, fileRecord.StorageKey)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -179,10 +179,19 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 
 	cvUrl := "http://localhost:18080/uploads/" + fileRecord.StorageKey
 
-	response.JSON(w, http.StatusOK, map[string]string{
-		"message":   "CV uploaded",
-		"file_name": fileRecord.OriginalName,
-		"cv_url":    cvUrl,
+	// Fetch the freshly parsed profile so the client can show real extracted data.
+	profile, _ := h.svc.GetProfile(r.Context(), userID)
+	var parsedData interface{}
+	if profile != nil {
+		parsedData = profile.ParsedData
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "CV uploaded",
+		"file_name":   fileRecord.OriginalName,
+		"cv_url":      cvUrl,
+		"cv_file_id":  fileRecord.ID,
+		"parsed_data": parsedData,
 	}, nil, requestID)
 }
 

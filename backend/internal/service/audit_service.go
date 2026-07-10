@@ -78,5 +78,22 @@ func (s *AuditService) ListByCompany(ctx context.Context, companyID, resourceTyp
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
 	return s.auditRepo.ListByCompany(ctx, companyID, resourceType, actorUserID, pageSize, offset)
+}
+
+func (s *AuditService) ListAll(ctx context.Context, page, pageSize int) ([]models.AuditLog, error) {
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	return s.auditRepo.ListAll(ctx, pageSize, offset)
 }

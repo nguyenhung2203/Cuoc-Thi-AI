@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,11 +13,13 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 
 	"backend/internal/ai"
 	"backend/internal/config"
 	"backend/internal/handler"
 	"backend/internal/middleware"
+	"backend/internal/pkg/email"
 	"backend/internal/queue"
 	"backend/internal/repository"
 	"backend/internal/service"
@@ -44,6 +47,22 @@ func main() {
 	defer db.Close()
 	log.Println("database: connected")
 
+	// 2b. Connect to Redis
+	redisDB := 0
+	if v, convErr := strconv.Atoi(cfg.RedisDB); convErr == nil {
+		redisDB = v
+	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.RedisAddr(),
+		Password: cfg.RedisPassword,
+		DB:       redisDB,
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Printf("redis: unavailable (%v) — notifications will not persist until redis is ready", err)
+	} else {
+		log.Println("redis: connected")
+	}
+
 	// 3. Repositories
 	userRepo := repository.NewUserRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
@@ -52,7 +71,8 @@ func main() {
 	fileRepo := repository.NewFileRepository(db)
 	interviewRepo := repository.NewInterviewRepository(db)
 	transcriptRepo := repository.NewTranscriptRepository(db)
-	notificationRepo := repository.NewNotificationRepository(db)
+	systemSettingsRepo := repository.NewSystemSettingsRepository(db)
+	notificationRepo := repository.NewNotificationRepository(redisClient, systemSettingsRepo)
 	reportRepo := repository.NewReportRepository(db)
 	mockRepo := repository.NewMockRepository(db)
 	candidatePortalRepo := repository.NewCandidatePortalRepository(db)
@@ -85,19 +105,18 @@ func main() {
 	rubricSvc := service.NewRubricService(rubricRepo)
 	scoreSvc := service.NewScoreService(scoreRepo, transcriptRepo, rubricRepo, interviewRepo, aiOrchestrator)
 	reportSvc := service.NewReportService(reportRepo, transcriptRepo, scoreRepo, jobRepo, interviewRepo, notificationRepo, aiOrchestrator)
-	interviewSvc := service.NewInterviewService(interviewRepo, reportSvc)
+	mailer := email.NewSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
+	interviewSvc := service.NewInterviewService(interviewRepo, reportSvc, notificationRepo).
+		WithMailer(candidateRepo, mailer, cfg.FrontendURL)
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
 	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
 
-	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo)
+	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, notificationRepo)
+	userSvc := service.NewUserService(userRepo)
 
 	// 4b. Async queue (Redis/asynq). Best-effort: if Redis is unavailable the
 	// platform still runs, with heavy jobs processed inline instead.
-	redisDB := 0
-	if v, convErr := strconv.Atoi(cfg.RedisDB); convErr == nil {
-		redisDB = v
-	}
 	if dispatcher, derr := queue.NewDispatcher(cfg.RedisAddr(), cfg.RedisPassword, redisDB); derr != nil {
 		log.Printf("queue: Redis unavailable (%v) — reports will run inline", derr)
 	} else {
@@ -113,6 +132,7 @@ func main() {
 
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
+	userHandler := handler.NewUserHandler(userSvc, companySvc, auditSvc, cfg.JWTSecret)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)
 	candidateHandler := handler.NewCandidateHandler(candidateSvc, aiSvc, fileSvc)
@@ -134,6 +154,9 @@ func main() {
 
 	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
+
+	systemSettingsSvc := service.NewSystemSettingsService(systemSettingsRepo)
+	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsSvc, auditSvc)
 
 	// 6. Router
 	r := chi.NewRouter()
@@ -192,8 +215,14 @@ func main() {
 			})
 
 			r.Route("/admin", func(r chi.Router) {
+				r.Use(middleware.RoleMiddleware("admin"))
+				r.Get("/ai-prompts", aiAdminHandler.ListTemplates)
 				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
+				r.Get("/logs", auditHandler.ListAllGlobalLogs)
+				r.Get("/settings", systemSettingsHandler.GetSettings)
+				r.Put("/settings", systemSettingsHandler.UpdateSettings)
 			})
+			userHandler.Routes(r)
 
 			r.Route("/portal", func(r chi.Router) {
 				candidatePortalHandler.Routes(r)
@@ -208,6 +237,7 @@ func main() {
 			r.Route("/companies/{company_id}", func(r chi.Router) {
 				r.Use(middleware.CompanyScopeMiddleware(db))
 
+				companyHandler.Routes(r)
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 

@@ -1,8 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
 import { useNotificationStore } from '../../stores/notification.store'
+import { fileService } from '../../services/file.service'
+import { authService } from '../../services/auth.service'
 import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -10,9 +12,35 @@ const route = useRoute()
 const notificationStore = useNotificationStore()
 const showNotifications = ref(false)
 const isCollapsed = ref(false)
+const uploading = ref(false)
 
 const notifications = computed(() => notificationStore.notifications)
 const unreadCount = computed(() => notificationStore.unreadCount)
+
+const handleUploadDocument = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  try {
+    uploading.value = true;
+    const response = await fileService.uploadFile(file, 'image');
+    
+    // Call Verify Document API
+    await authService.verifyDocument(response.data.id);
+    
+    // Update local state
+    if (authStore.user) {
+      authStore.user.verification_file_id = response.data.id;
+    }
+    
+    alert('Đã tải tài liệu lên thành công. Vui lòng chờ Admin phê duyệt.');
+  } catch (error) {
+    console.error('Upload failed', error);
+    alert('Lỗi tải file: ' + (error.response?.data?.message || error.message));
+  } finally {
+    uploading.value = false;
+  }
+};
 
 watch(() => route.path, (newPath) => {
   if (newPath.includes('/recruiter-room')) {
@@ -28,8 +56,12 @@ onMounted(async () => {
   localStorage.setItem('theme', 'light')
 
   if (authStore.user) {
-    await notificationStore.fetch()
+    notificationStore.startPolling()
   }
+})
+
+onUnmounted(() => {
+  notificationStore.stopPolling()
 })
 
 const handleMarkAllAsRead = async (e) => {
@@ -75,6 +107,39 @@ const currentMenu = computed(() => recruiterMenu)
 
 <template>
   <div class="flex h-screen overflow-hidden bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
+    <!-- Verification Overlay -->
+    <div v-if="authStore.user?.role === 'recruiter' && authStore.user?.status === 'pending'" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-8 max-w-lg w-full text-center shadow-2xl">
+        <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Scale size="32" />
+        </div>
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-white mb-2">Xác thực tài khoản</h2>
+        <p class="text-slate-600 dark:text-slate-400 mb-6">
+          Tài khoản Nhà tuyển dụng của bạn đang chờ phê duyệt. Vui lòng tải lên Giấy phép kinh doanh (hoặc tài liệu xác minh doanh nghiệp) để chúng tôi xử lý.
+        </p>
+        
+        <div v-if="authStore.user?.verification_file_id" class="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-400 flex items-center gap-3 justify-center">
+          <span>Đã tải lên tài liệu xác minh. Đang chờ Admin duyệt.</span>
+        </div>
+        <div v-else class="space-y-4">
+          <label class="block w-full border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-500 rounded-xl p-8 cursor-pointer transition-colors bg-slate-50 dark:bg-slate-900/50">
+            <input type="file" class="hidden" @change="handleUploadDocument" accept=".pdf,.png,.jpg,.jpeg" />
+            <div class="flex flex-col items-center">
+              <span class="text-slate-600 dark:text-slate-300 font-medium">Nhấn để chọn file tải lên</span>
+              <span class="text-slate-500 text-sm mt-1">Hỗ trợ PDF, PNG, JPG (Tối đa 5MB)</span>
+            </div>
+          </label>
+          <div v-if="uploading" class="text-indigo-600">Đang tải lên...</div>
+        </div>
+        
+        <div class="mt-8 flex justify-center">
+          <button @click="authStore.logout()" class="text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
+            Đăng xuất
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Sidebar -->
     <aside :class="[isCollapsed ? 'w-14' : 'w-46', 'bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 shadow-sm z-20 shrink-0']">
       <div class="p-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between h-[64px] relative">

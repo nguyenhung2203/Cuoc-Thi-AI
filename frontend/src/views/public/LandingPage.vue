@@ -201,7 +201,7 @@ onUnmounted(() => {
 .landing-page {
   position: relative;
   min-height: calc(100vh - 64px);
-  overflow-x: hidden;
+  overflow-x: clip;
   padding: 0;
 }
 

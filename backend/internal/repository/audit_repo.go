@@ -67,3 +67,13 @@ func (r *AuditRepository) ListByCompany(ctx context.Context, companyID string, r
 	}
 	return items, nil
 }
+
+func (r *AuditRepository) ListAll(ctx context.Context, limit, offset int) ([]models.AuditLog, error) {
+	query := `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	var items []models.AuditLog
+	err := r.db.SelectContext(ctx, &items, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
