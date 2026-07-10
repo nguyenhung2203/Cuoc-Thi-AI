@@ -13,6 +13,7 @@ type Company struct {
 	Website   string          `db:"website"    json:"website"`
 	Industry  string          `db:"industry"   json:"industry"`
 	Size      string          `db:"size"       json:"size"`
+	Status    string          `db:"status"     json:"status"`
 	CreatedBy string          `db:"created_by" json:"created_by"`
 	Settings  JSONB           `db:"settings"   json:"settings,omitempty"`
 	CreatedAt time.Time       `db:"created_at" json:"created_at"`

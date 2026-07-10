@@ -6,10 +6,11 @@ import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
+import Modal from '../../components/common/AppModal.vue'
 import { candidateService } from '../../services/candidate.service'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
-import { ArrowLeft, Save, Upload, FileText, Sparkles, CheckCircle } from 'lucide-vue-next'
+import { ArrowLeft, Save, Upload, FileText, Sparkles, CheckCircle, Briefcase, Brain } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,9 @@ const localToast = ref(null)
 const selectedFile = ref(null)
 const cvPreviewUrl = ref(null)
 const isAiParsing = ref(false)
+const showAssignModal = ref(false)
+const assignJobId = ref('')
+const assigning = ref(false)
 
 onMounted(async () => {
   if (!isNew.value) {
@@ -195,6 +199,51 @@ const handleViewCV = async () => {
     localToast.value = { type: 'error', message: 'Lỗi khi xem CV: ' + (error.message || '') }
   }
 }
+
+const handleAssignToJob = async () => {
+  if (!assignJobId.value) {
+    localToast.value = { type: 'error', message: 'Vui lòng chọn một vị trí công việc' }
+    return
+  }
+  assigning.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await candidateService.assignToJob(companyId, assignJobId.value, id)
+    localToast.value = { type: 'success', message: 'Đã gán ứng viên vào vị trí thành công!' }
+    showAssignModal.value = false
+    assignJobId.value = ''
+  } catch (error) {
+    const msg = error?.message || 'Không thể gán ứng viên'
+    localToast.value = { type: 'error', message: msg }
+  } finally {
+    assigning.value = false
+  }
+}
+
+const handleReParseCV = async () => {
+  if (!candidate.value.cv_file_id) {
+    localToast.value = { type: 'error', message: 'Ứng viên chưa có CV để phân tích.' }
+    return
+  }
+  isAiParsing.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await candidateService.parseCV(companyId, id)
+    const updated = await candidateService.getCandidate(companyId, id)
+    if (updated.ai_cv_summary || updated.parsed_cv_json) {
+      parsedData.value = {
+        skills: updated.skills || [],
+        experience: updated.experience || updated.ai_cv_summary || '',
+        education: updated.education || ''
+      }
+    }
+    localToast.value = { type: 'success', message: 'AI đã phân tích CV thành công!' }
+  } catch (error) {
+    localToast.value = { type: 'error', message: 'Phân tích CV thất bại: ' + (error?.message || '') }
+  } finally {
+    isAiParsing.value = false
+  }
+}
 </script>
 
 <template>
@@ -226,6 +275,15 @@ const handleViewCV = async () => {
           </span>
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Candidates > {{ isNew ? 'New' : candidate.name }}</p>
+      </div>
+      <div v-if="!isNew" class="ml-auto flex gap-2">
+        <button @click="showAssignModal = true" class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-emerald-500/20 transition-all">
+          <Briefcase size="16" /> Gán vào Job
+        </button>
+        <button v-if="candidate.cv_file_id" @click="handleReParseCV" :disabled="isAiParsing" class="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-violet-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+          <Sparkles size="16" :class="{ 'animate-spin': isAiParsing }" />
+          {{ isAiParsing ? 'Đang phân tích...' : 'AI Phân tích CV' }}
+        </button>
       </div>
     </div>
 
@@ -387,5 +445,24 @@ const handleViewCV = async () => {
         </div>
       </div>
     </div>
+
+    <!-- Assign to Job Modal -->
+    <Modal :isOpen="showAssignModal" title="Gán ứng viên vào vị trí" @close="showAssignModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-slate-600 dark:text-slate-400">Chọn vị trí công việc bạn muốn gán <strong class="text-slate-800 dark:text-slate-200">{{ candidate.name }}</strong> vào:</p>
+        <select v-model="assignJobId" class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all text-slate-700 dark:text-slate-200">
+          <option value="" disabled>-- Chọn vị trí --</option>
+          <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
+        </select>
+        <div class="flex justify-end gap-3 pt-2">
+          <Button variant="ghost" @click="showAssignModal = false" class="text-slate-600 dark:text-slate-300">Hủy</Button>
+          <button @click="handleAssignToJob" :disabled="assigning || !assignJobId" class="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <div v-if="assigning" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <Briefcase v-else size="16" />
+            {{ assigning ? 'Đang gán...' : 'Xác nhận gán' }}
+          </button>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>

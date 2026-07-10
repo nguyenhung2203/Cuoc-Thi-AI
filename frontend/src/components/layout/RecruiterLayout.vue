@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
-import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale } from 'lucide-vue-next'
+import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, FileText } from 'lucide-vue-next'
 import { notificationService } from '../../services/notification.service'
 
 const router = useRouter()
@@ -19,7 +19,7 @@ onMounted(async () => {
   try {
     if (authStore.user) {
       const data = await notificationService.getNotifications()
-      notifications.value = data
+      notifications.value = data.notifications || []
     }
   } catch (error) {
     console.error('Failed to load notifications:', error)
@@ -72,10 +72,10 @@ const recruiterMenu = [
   { path: '/jobs', name: 'Việc làm', icon: Briefcase },
   { path: '/candidates', name: 'Ứng viên', icon: Users },
   { path: '/interviews', name: 'Lịch phỏng vấn', icon: Calendar },
-  { path: '/reports', name: 'Báo cáo', icon: BarChart2 },
   { path: '/question-bank', name: 'Kho câu hỏi', icon: BookOpen },
   { path: '/rubrics', name: 'Tiêu chí (Rubric)', icon: Scale },
   { path: '/templates', name: 'Mẫu AI', icon: Bot },
+  { path: '/audit-logs', name: 'Nhật ký', icon: FileText },
   { path: '/settings', name: 'Cài đặt', icon: Settings }
 ]
 

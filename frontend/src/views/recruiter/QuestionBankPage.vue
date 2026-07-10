@@ -9,8 +9,10 @@ import Input from '../../components/common/AppInput.vue'
 import { Plus, Search, Filter, Layers, Edit, Trash2, Sparkles, RefreshCw } from 'lucide-vue-next'
 import { questionBankService } from '../../services/questionBank.service'
 import { authStore } from '../../stores/auth.store'
+import { jobService } from '../../services/job.service'
 
 const questions = ref([])
+const jobs = ref([])
 const loading = ref(true)
 const aiGenerating = ref(false)
 const searchKeyword = ref('')
@@ -29,10 +31,21 @@ const columns = [
 const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
+const showAiModal = ref(false)
+const showEditModal = ref(false)
+const selectedJobId = ref('')
 const deletingId = ref(null)
+const editingId = ref(null)
 const saving = ref(false)
 const toast = ref(null)
 const newQuestion = ref({
+  text: '',
+  role: 'All',
+  level: 'Fresher',
+  type: 'Technical',
+  expected_signals: ''
+})
+const editQuestion = ref({
   text: '',
   role: 'All',
   level: 'Fresher',
@@ -45,7 +58,7 @@ const mapQuestion = (q) => ({
   id: q.id,
   text: q.question_text || q.text || '(Không có nội dung)',
   role: Array.isArray(q.skill_tags) ? q.skill_tags.join(', ') : (q.role || '—'),
-  level: q.level || '—',
+  level: (q.level && typeof q.level === 'object') ? q.level.String : (q.level || '—'),
   type: q.question_type || q.type || '—',
   source: q.is_ai_generated ? 'AI' : 'Thủ công'
 })
@@ -69,7 +82,21 @@ const loadQuestions = async () => {
   }
 }
 
-onMounted(loadQuestions)
+const loadJobs = async () => {
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) return
+    const data = await jobService.getJobs(companyId, { page_size: 100 })
+    jobs.value = Array.isArray(data) ? data : (data.data || [])
+  } catch (err) {
+    console.error('Lỗi tải danh sách Jobs', err)
+  }
+}
+
+onMounted(() => {
+  loadQuestions()
+  loadJobs()
+})
 
 const handleCreate = async () => {
   if (!newQuestion.value.text) return
@@ -97,6 +124,43 @@ const handleCreate = async () => {
   }
 }
 
+const openEditModal = (row) => {
+  editingId.value = row.id
+  editQuestion.value = {
+    text: row.text,
+    role: row.role !== '—' ? row.role : 'All',
+    level: (row.level && row.level !== '—') ? ((typeof row.level === 'object') ? row.level.String : row.level) : 'Fresher',
+    type: row.type !== '—' ? row.type : 'Technical',
+    expected_signals: '' // Assuming expected_signals are not fetched or shown in row
+  }
+  showEditModal.value = true
+}
+
+const handleUpdate = async () => {
+  if (!editQuestion.value.text) return
+  saving.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const payload = {
+      question_text: editQuestion.value.text,
+      question_type: editQuestion.value.type.toLowerCase(),
+      level: editQuestion.value.level.toLowerCase(),
+      skill_tags: editQuestion.value.role !== 'All' ? [editQuestion.value.role] : [],
+      expected_signals: editQuestion.value.expected_signals
+        ? editQuestion.value.expected_signals.split(',').map(s => s.trim())
+        : []
+    }
+    await questionBankService.updateQuestion(companyId, editingId.value, payload)
+    toast.value = { type: 'success', message: 'Đã cập nhật câu hỏi!' }
+    showEditModal.value = false
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Cập nhật thất bại.' }
+  } finally {
+    saving.value = false
+  }
+}
+
 const confirmDelete = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -114,14 +178,24 @@ const confirmDelete = async () => {
 
 const handleGenerateAI = async () => {
   const companyId = authStore.user?.companies?.[0]?.id
-  if (!companyId) return
+  if (!companyId || !selectedJobId.value) {
+    toast.value = { type: 'error', message: 'Vui lòng chọn công việc.' }
+    return
+  }
   aiGenerating.value = true
   try {
-    await questionBankService.generateWithAI(companyId, null, { count: 10, level: filterLevel.value || 'middle' })
+    const payload = { 
+      count: 10, 
+      difficulty: filterLevel.value || 'middle',
+      question_types: ['Technical', 'Behavioral']
+    }
+    await questionBankService.generateWithAI(companyId, selectedJobId.value, payload)
     toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
+    showAiModal.value = false
     await loadQuestions()
   } catch (err) {
-    toast.value = { type: 'info', message: 'Tính năng AI Generate đang chờ Backend.' }
+    console.error('Lỗi khi AI Generate:', err)
+    toast.value = { type: 'error', message: err.response?.data?.message || 'Có lỗi xảy ra khi tạo câu hỏi bằng AI.' }
   } finally {
     aiGenerating.value = false
   }
@@ -135,7 +209,10 @@ const handleGenerateAI = async () => {
         <h1 class="text-h1">Kho câu hỏi</h1>
         <p class="text-helper" style="margin-top: 4px">Quản lý ngân hàng câu hỏi dùng chung cho các buổi phỏng vấn.</p>
       </div>
-      <Button @click="showCreateModal = true"><Plus size="16" /> Thêm câu hỏi</Button>
+      <div style="display: flex; gap: 12px">
+        <Button variant="secondary" @click="showAiModal = true"><Sparkles size="16" /> Tạo bằng AI</Button>
+        <Button @click="showCreateModal = true"><Plus size="16" /> Thêm câu hỏi</Button>
+      </div>
     </div>
 
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
@@ -175,7 +252,7 @@ const handleGenerateAI = async () => {
         </template>
         <template #action="{ row }">
           <div style="display: flex; gap: 8px">
-            <Button variant="ghost" style="padding: 4px" @click="toast = { type: 'info', message: 'Tính năng chỉnh sửa đang phát triển' }"><Edit size="16" /></Button>
+            <Button variant="ghost" style="padding: 4px" @click="openEditModal(row)"><Edit size="16" /></Button>
             <Button variant="ghost" style="padding: 4px; color: var(--danger)" @click="deletingId = row.id; showDeleteModal = true"><Trash2 size="16" /></Button>
           </div>
         </template>
@@ -232,11 +309,74 @@ const handleGenerateAI = async () => {
       </div>
     </Modal>
 
+    <Modal :isOpen="showEditModal" @close="showEditModal = false" title="Cập nhật câu hỏi">
+      <Input label="Nội dung câu hỏi" v-model="editQuestion.text" placeholder="Nhập câu hỏi..." style="margin-bottom: 16px" />
+      
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px">
+        <div class="input-group">
+          <label class="input-label">Vị trí (Role)</label>
+          <select class="input-field" v-model="editQuestion.role">
+            <option value="All">Tất cả vị trí</option>
+            <option value="Frontend">Frontend</option>
+            <option value="Backend">Backend</option>
+            <option value="Fullstack">Fullstack</option>
+          </select>
+        </div>
+        
+        <div class="input-group">
+          <label class="input-label">Cấp độ (Level)</label>
+          <select class="input-field" v-model="editQuestion.level">
+            <option value="Any">Bất kỳ</option>
+            <option value="Fresher">Fresher</option>
+            <option value="Junior">Junior</option>
+            <option value="Middle">Middle</option>
+            <option value="Senior">Senior</option>
+          </select>
+        </div>
+        
+        <div class="input-group" style="grid-column: 1 / -1">
+          <label class="input-label">Loại câu hỏi (Type)</label>
+          <select class="input-field" v-model="editQuestion.type">
+            <option value="Technical">Technical</option>
+            <option value="Behavioral">Behavioral</option>
+            <option value="System Design">System Design</option>
+            <option value="Custom">Khác (Custom)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px">
+        <Button variant="ghost" @click="showEditModal = false">Hủy</Button>
+        <Button variant="primary" @click="handleUpdate">Cập nhật</Button>
+      </div>
+    </Modal>
+
     <Modal :isOpen="showDeleteModal" @close="showDeleteModal = false" title="Xác nhận xóa">
       <p class="text-body" style="margin-bottom: 24px">Bạn có chắc chắn muốn xóa câu hỏi này? Hành động này không thể hoàn tác.</p>
       <div style="display: flex; justify-content: flex-end; gap: 12px">
         <Button variant="ghost" @click="showDeleteModal = false">Hủy</Button>
         <Button variant="primary" style="background-color: var(--danger); border-color: var(--danger)" @click="confirmDelete">Xóa câu hỏi</Button>
+      </div>
+    </Modal>
+
+    <Modal :isOpen="showAiModal" @close="showAiModal = false" title="Tạo câu hỏi bằng AI">
+      <p class="text-body" style="margin-bottom: 16px">AI sẽ phân tích Job Description và sinh ra các câu hỏi phỏng vấn phù hợp.</p>
+      
+      <div class="input-group" style="margin-bottom: 24px">
+        <label class="input-label">Chọn công việc (Job)</label>
+        <select class="input-field" v-model="selectedJobId">
+          <option value="" disabled>-- Vui lòng chọn --</option>
+          <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
+        </select>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px">
+        <Button variant="ghost" @click="showAiModal = false">Hủy</Button>
+        <Button variant="primary" @click="handleGenerateAI" :disabled="aiGenerating">
+          <RefreshCw v-if="aiGenerating" size="16" class="animate-spin" style="margin-right: 8px" />
+          <Sparkles v-else size="16" style="margin-right: 8px" />
+          Tạo câu hỏi
+        </Button>
       </div>
     </Modal>
 

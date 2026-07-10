@@ -132,3 +132,21 @@ func (r *AIPromptRepository) CreateNewVersion(ctx context.Context, t *models.AIP
 
 	return &inserted, nil
 }
+
+// ListAllLatestSystem returns the latest active version of each system prompt template.
+func (r *AIPromptRepository) ListAllLatestSystem(ctx context.Context) ([]models.AIPromptTemplate, error) {
+	const q = `
+		SELECT DISTINCT ON (name) * 
+		FROM ai_prompt_templates 
+		WHERE company_id IS NULL AND is_active = true AND deleted_at IS NULL
+		ORDER BY name, version DESC`
+
+	var tmpls []models.AIPromptTemplate
+	err := r.db.SelectContext(ctx, &tmpls, q)
+	if err != nil {
+		return nil, fmt.Errorf("list all latest system prompts: %w", err)
+	}
+
+	return tmpls, nil
+}
+

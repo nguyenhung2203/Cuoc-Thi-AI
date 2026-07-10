@@ -44,6 +44,7 @@ func (h *JobHandler) Routes(r chi.Router) {
 			r.Put("/", h.Update)
 			r.Delete("/", h.Delete)
 			r.Post("/analyze", h.Analyze)
+			r.Post("/ai/generate-questions", h.GenerateQuestions)
 		})
 	})
 }
@@ -195,6 +196,33 @@ func (h *JobHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "job analyzed successfully"}, nil, requestID)
 }
+
+// GenerateQuestions handles POST /companies/{company_id}/jobs/{job_id}/ai/generate-questions
+func (h *JobHandler) GenerateQuestions(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	jobID := chi.URLParam(r, "job_id")
+
+	var req request.GenerateQuestionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("invalid JSON body", []string{err.Error()}), requestID)
+		return
+	}
+	if msgs := validator.Validate(&req); msgs != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("validation failed", msgs), requestID)
+		return
+	}
+
+	questions, err := h.svc.GenerateQuestions(r.Context(), companyID, jobID, &req)
+	if err != nil {
+		println("ERROR GENERATING QUESTIONS: " + err.Error())
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"questions": questions}, nil, requestID)
+}
+
 
 // ---------------------------------------------------------------------------
 // Mapping helpers

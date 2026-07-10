@@ -12,6 +12,9 @@ import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
 import { useWebSocket } from '../../composables/useWebSocket'
 import { useRoom } from '../../composables/useRoom'
+import { aiService } from '../../services/ai.service'
+import { transcriptService } from '../../services/transcript.service'
+import { interviewService } from '../../services/interview.service'
 
 const router = useRouter()
 const route = useRoute()
@@ -23,6 +26,12 @@ const {
 } = useLiveKit()
 
 const activeTab = ref('assistant')
+const aiSuggestions = ref([])
+const aiScores = ref([])
+const isSuggesting = ref(false)
+const isScoring = ref(false)
+const criteria = ref([])
+const interviewDetails = ref(null)
 const transcript = ref([])
 
 // WS and Room
@@ -47,6 +56,9 @@ const interviewId = history.state?.interviewId || null
 
 let timer = null
 
+
+
+
 onMounted(async () => {
   if (history.state?.message) {
     window.history.replaceState({ interviewId: history.state.interviewId }, document.title)
@@ -57,8 +69,16 @@ onMounted(async () => {
     try {
       const companyId = authStore.user?.companies?.[0]?.id
       if (companyId) {
+        try {
+          const intv = await interviewService.getInterview(companyId, interviewId)
+          interviewDetails.value = intv
+          if (intv.job && intv.job.rubric) {
+            criteria.value = intv.job.rubric.criteria || intv.job.rubric.rubric_criteria || []
+          }
+        } catch(e) { console.error('Lỗi lấy chi tiết phỏng vấn', e) }
+        
         const response = await roomService.getRoomToken(companyId, interviewId)
-        const token = response.token || response.livekit_token
+        const token = response.access_token || response.token || response.livekit_token
         if (token) {
           const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
           await connectToRoom(livekitUrl, token)
@@ -67,6 +87,13 @@ onMounted(async () => {
           connect(token)
           // The useRoom composable could be used here if we had roomId,
           // but we can just rely on the token.
+          
+          // Ghi nhận bắt đầu phỏng vấn
+          try {
+            await interviewService.startInterview(companyId, interviewId)
+          } catch(e) {
+            console.error('Không thể call API bắt đầu phỏng vấn', e)
+          }
           
           // Listen to events
           on('transcript:final', handleTranscriptFinal)
@@ -86,15 +113,69 @@ onUnmounted(() => {
   off('ai:suggestion', handleAISuggestion)
 })
 
+
+const getAiSuggestions = async () => {
+  if (!interviewId || isSuggesting.value) return
+  isSuggesting.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const res = await aiService.suggestFollowUp(companyId, interviewId, { focus: 'Chung' })
+    if (res && res.suggested_question) {
+      aiSuggestions.value.unshift(res)
+    }
+  } catch(err) {
+    // toast.value = { type: 'error', message: 'Lỗi lấy gợi ý AI' }
+    console.error('Lỗi lấy gợi ý', err)
+  } finally {
+    isSuggesting.value = false
+  }
+}
+
+const scoreCurrentAnswer = async () => {
+  if (!interviewId || isScoring.value || criteria.value.length === 0) {
+    // toast.value = { type: 'warning', message: 'Không có tiêu chí chấm điểm' }
+    return
+  }
+  isScoring.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const transcripts = await transcriptService.getTranscripts(companyId, interviewId)
+    const tIds = transcripts.slice(-5).map(t => t.id).filter(id => id)
+    if (tIds.length === 0) {
+      isScoring.value = false
+      return
+    }
+    const cIds = criteria.value.map(c => c.id)
+    const res = await aiService.scoreAnswer(companyId, interviewId, { transcript_ids: tIds, criterion_ids: cIds })
+    if (res && res.scores) {
+      aiScores.value = res.scores
+    }
+  } catch(err) {
+    console.error('Lỗi chấm điểm', err)
+  } finally {
+    isScoring.value = false
+  }
+}
+
 const handleEndCall = () => {
   showEndModal.value = true
 }
 
-const confirmEndCall = () => {
+const confirmEndCall = async () => {
   showEndModal.value = false
   isEnding.value = true
+  
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (companyId && interviewId) {
+    try {
+      await interviewService.endInterview(companyId, interviewId)
+    } catch(e) {
+      console.error('Lỗi kết thúc phỏng vấn:', e)
+    }
+  }
+  
   setTimeout(() => {
-    router.push({ path: '/reports', state: { message: 'Đã lưu kết quả phỏng vấn thành công' } })
+    router.push({ path: `/reports/${interviewId}`, state: { message: 'Đã lưu kết quả phỏng vấn thành công' } })
   }, 1500)
 }
 </script>
@@ -108,7 +189,7 @@ const confirmEndCall = () => {
     <div style="height: 64px; background-color: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px">
       <div style="display: flex; align-items: center; gap: 16px">
         <div>
-          <h1 class="text-h2">Frontend Developer - Nguyễn Văn A</h1>
+          <h1 class="text-h2">{{ interviewDetails?.job?.title || 'Đang tải...' }} - {{ interviewDetails?.candidate?.name || 'Đang tải...' }}</h1>
           <div style="display: flex; gap: 12px; margin-top: 4px">
             <span class="text-helper" style="color: var(--danger); display: flex; align-items: center; gap: 4px">
               <div style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--danger)"></div> Đang ghi âm & Transcript

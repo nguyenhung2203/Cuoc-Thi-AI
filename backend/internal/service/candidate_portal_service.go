@@ -108,6 +108,7 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 		FullName:  user.FullName,
 		Email:     user.Email,
 		AvatarURL: user.AvatarURL.String,
+		CVFileID:  fileID,
 		CVUrl:     cvUrl,
 		CVName:    cvName,
 	}, nil
@@ -134,6 +135,12 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 		return errors.NewNotFound("user not found")
 	}
 
+	// 2.5 Check if already applied
+	hasApplied, err := s.repo.CheckApplied(ctx, userID, jobID)
+	if err == nil && hasApplied {
+		return errors.NewBadRequest("you have already applied for this job")
+	}
+
 	// 3. Create or update Candidate record for this company
 	candidateID := uuid.NewString()
 	err = s.repo.ApplyForJob(ctx, candidateID, job.CompanyID, user.ID, user.FullName, user.Email, "", cvFileID, cvOriginalName, job.ID)
@@ -142,4 +149,12 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 	}
 	
 	return nil
+}
+
+func (s *CandidatePortalService) CheckApplied(ctx context.Context, userID, jobID string) (bool, error) {
+	return s.repo.CheckApplied(ctx, userID, jobID)
+}
+
+func (s *CandidatePortalService) GetApplications(ctx context.Context, userID string) ([]response.CandidateApplication, error) {
+	return s.repo.GetApplicationsByUserID(ctx, userID)
 }

@@ -4,9 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
-import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Sparkles } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
-import { apiService } from '../../services/api.service'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,7 +20,7 @@ onMounted(async () => {
     return
   }
   try {
-    const data = await apiService.get(`/mock-interviews/${id}`)
+    const data = await mockService.getReport(id)
     const messages = await mockService.getMessages(id)
     
     // Parse questions from messages
@@ -35,7 +34,9 @@ onMounted(async () => {
         const nextAi = messages.find(m2 => m2.sender_type === 'ai' && m2.created_at > m.created_at)
         let score = 0, feedback = ''
         if (nextAi && nextAi.score_json) {
-           const sj = JSON.parse(nextAi.score_json)
+           const sj = typeof nextAi.score_json === 'string' 
+             ? JSON.parse(nextAi.score_json) 
+             : nextAi.score_json
            score = sj.score
            feedback = nextAi.content
         }
@@ -52,17 +53,31 @@ onMounted(async () => {
     }
 
     // fallback score logic if final_score null
-    let finalScore = data.final_score
+    let finalScore = null
+    if (data.final_score && typeof data.final_score === 'object' && 'Valid' in data.final_score) {
+      if (data.final_score.Valid) {
+        finalScore = data.final_score.Float64
+      }
+    } else if (typeof data.final_score === 'number') {
+      finalScore = data.final_score
+    }
+
     if (finalScore == null && formattedQuestions.length > 0) {
        finalScore = formattedQuestions.reduce((sum, q) => sum + q.score, 0) / formattedQuestions.length
     }
     
+    // Fix feedback_json similar to score_json
+    let summaryFb = 'Không có nhận xét chung'
+    if (data.feedback_json) {
+       summaryFb = typeof data.feedback_json === 'string' ? data.feedback_json : JSON.stringify(data.feedback_json)
+    }
+
     sessionData.value = {
       role: data.target_role,
-      level: data.target_level || 'Junior',
+      level: (data.target_level && typeof data.target_level === 'object') ? data.target_level.String : (data.target_level || 'Junior'),
       date: new Date(data.created_at).toLocaleDateString('vi-VN'),
-      overallScore: finalScore ? finalScore.toFixed(1) : '0',
-      summaryFeedback: data.feedback_json || 'Không có nhận xét chung',
+      overallScore: finalScore !== null ? finalScore.toFixed(1) : '0',
+      summaryFeedback: summaryFb,
       questions: formattedQuestions.map(q => ({
         ...q,
         goodPoints: ['Đã trả lời câu hỏi'],

@@ -64,3 +64,18 @@ func (r *AuditRepository) ListByCompany(ctx context.Context, companyID string, r
 	}
 	return items, nil
 }
+
+func (r *AuditRepository) ListSystem(ctx context.Context, limit, offset int) ([]models.AuditLog, int, error) {
+	var total int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_logs WHERE action NOT IN ('login', 'logout')`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT * FROM audit_logs WHERE action NOT IN ('login', 'logout') ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	var items []models.AuditLog
+	if err := r.db.SelectContext(ctx, &items, query, limit, offset); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}

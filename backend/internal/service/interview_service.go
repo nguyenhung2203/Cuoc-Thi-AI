@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
 
+	"backend/internal/livekit"
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/repository"
@@ -106,26 +108,43 @@ func (s *InterviewService) CreateInterview(ctx context.Context, req CreateInterv
 	}, nil
 }
 
-func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*models.InterviewRoom, error) {
-	hasher := sha256.New()
-	hasher.Write([]byte(token))
-	hash := hex.EncodeToString(hasher.Sum(nil))
+func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*repository.CandidateJoinInfo, error) {
+	hash := token
+	if len(token) != 64 {
+		hasher := sha256.New()
+		hasher.Write([]byte(token))
+		hash = hex.EncodeToString(hasher.Sum(nil))
+	}
 
-	interview, err := s.repo.GetByInviteTokenHash(ctx, hash)
-	if err != nil || interview == nil {
+	info, err := s.repo.GetCandidateJoinInfo(ctx, hash)
+	if err != nil || info == nil {
 		return nil, errors.NewNotFound("invalid or expired token")
 	}
 
-	if interview.InviteExpiresAt.Valid && interview.InviteExpiresAt.Time.Before(time.Now()) {
-		return nil, errors.NewForbidden("token expired")
+	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
+	if livekitSecret == "" {
+		livekitSecret = "devsecret"
+	}
+	livekitKey := os.Getenv("LIVEKIT_API_KEY")
+	if livekitKey == "" {
+		livekitKey = "devkey"
 	}
 
-	room, err := s.repo.GetRoomByInterviewID(ctx, interview.ID)
-	if err != nil {
-		return nil, errors.NewInternal("failed to fetch room info")
+	tokenString, err := livekit.GenerateToken(
+		livekitKey,
+		livekitSecret,
+		info.RoomID,
+		info.CandidateID,
+		info.CandidateName,
+		"candidate",
+		info.InterviewID,
+	)
+	if err == nil {
+		info.RoomAccessToken = tokenString
+		info.RoomAccessTokenExpiresAt = time.Now().Add(4 * time.Hour).Format(time.RFC3339)
 	}
 
-	return room, nil
+	return info, nil
 }
 
 func (s *InterviewService) ListInterviews(ctx context.Context, companyID string, limit, offset int) ([]models.Interview, error) {

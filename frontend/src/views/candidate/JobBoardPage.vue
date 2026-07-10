@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiService } from '../../services/api.service'
+import { candidatePortalService } from '../../services/candidate-portal.service'
+import { authStore } from '../../stores/auth.store'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
@@ -11,6 +13,7 @@ const router = useRouter()
 const jobs = ref([])
 const loading = ref(true)
 const keyword = ref('')
+const appliedJobIds = ref(new Set())
 
 const currentPage = ref(1)
 const totalPages = ref(1)
@@ -55,7 +58,22 @@ const fetchJobs = async (page = 1) => {
   }
 }
 
-onMounted(() => fetchJobs(1))
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    try {
+      if (!authStore.user) {
+        await authStore.init();
+      }
+      const apps = await candidatePortalService.getApplications();
+      if (apps && apps.length > 0) {
+        appliedJobIds.value = new Set(apps.map(a => a.job_id));
+      }
+    } catch (err) {
+      console.error('Failed to load applications', err);
+    }
+  }
+  fetchJobs(1);
+})
 
 const handleSearch = () => {
   fetchJobs(1)
@@ -158,7 +176,11 @@ const viewJob = (job) => {
             <p class="text-gray-600 text-sm line-clamp-2 leading-relaxed">
               {{ job.description }}
             </p>
-            <div class="mt-4 flex items-center text-blue-600 font-semibold text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            <div v-if="appliedJobIds.has(job.id)" class="mt-4 flex items-center text-emerald-600 font-bold text-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+              Đã ứng tuyển
+            </div>
+            <div v-else class="mt-4 flex items-center text-blue-600 font-semibold text-sm opacity-0 group-hover:opacity-100 transition-opacity">
               Xem chi tiết <ChevronRight class="w-4 h-4 ml-1" />
             </div>
           </div>

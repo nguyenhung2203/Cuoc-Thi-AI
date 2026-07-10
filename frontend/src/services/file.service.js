@@ -84,7 +84,11 @@ export const fileService = {
     if (companyId) {
       formData.append('company_id', companyId);
     }
-    return apiService.post('/files', formData);
+    return apiService.post('/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   },
 
   /**

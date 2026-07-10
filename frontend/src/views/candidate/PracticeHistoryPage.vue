@@ -16,14 +16,30 @@ onMounted(async () => {
     // API_SPEC §11.5 — GET /mock-interviews/my
     const data = await mockService.listMyMockInterviews()
     // Map API response fields sang format hiển thị
-    history.value = (Array.isArray(data) ? data : []).map(item => ({
-      id: item.id,
-      role: item.target_role || 'Không rõ',
-      level: item.target_level || '—',
-      date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '—',
-      score: item.final_score != null ? Number(item.final_score).toFixed(1) : '—',
-      status: item.status || 'completed'
-    }))
+    history.value = (Array.isArray(data) ? data : []).map(item => {
+      let finalScore = null
+      if (item.final_score && typeof item.final_score === 'object' && 'Valid' in item.final_score) {
+        if (item.final_score.Valid) finalScore = item.final_score.Float64
+      } else if (typeof item.final_score === 'number') {
+        finalScore = item.final_score
+      }
+
+      let level = item.target_level
+      if (level && typeof level === 'object') {
+        level = level.String || '—'
+      } else if (!level) {
+        level = '—'
+      }
+
+      return {
+        id: item.id,
+        role: item.target_role || 'Không rõ',
+        level: level,
+        date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '—',
+        score: finalScore !== null ? finalScore.toFixed(1) : '0',
+        status: item.status || 'completed'
+      }
+    })
   } catch (err) {
     console.error('Lỗi tải lịch sử mock', err)
     // Giữ nguyên empty array — Backend chưa sẵn sàng
@@ -102,7 +118,7 @@ const columns = [
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" /></svg>
             Điểm cần khắc phục
           </p>
-          <ul class="space-y-2 text-amber-700 text-sm font-medium">
+          <ul v-if="history.length > 0" class="space-y-2 text-amber-700 text-sm font-medium">
             <li class="flex items-start gap-2">
               <span class="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 shrink-0"></span>
               Trình bày cấu trúc câu trả lời (STAR)
@@ -112,6 +128,9 @@ const columns = [
               Đưa ra thêm nhiều ví dụ thực tế
             </li>
           </ul>
+          <div v-else class="text-amber-600 text-sm font-medium italic mt-2">
+            Bạn chưa có dữ liệu
+          </div>
         </div>
       </Card>
     </div>

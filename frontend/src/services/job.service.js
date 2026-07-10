@@ -61,5 +61,35 @@ export const jobService = {
    */
   analyzeJD: (companyId, jobId, forceRefresh = false) => {
     return apiService.post(`/companies/${companyId}/jobs/${jobId}/analyze`, { force_refresh: forceRefresh });
+  },
+
+  /**
+   * Lấy danh sách ứng viên của 1 Job
+   * @param {String} companyId 
+   * @param {String} jobId 
+   */
+  getJobCandidates: (companyId, jobId) => {
+    return apiService.get(`/companies/${companyId}/jobs/${jobId}/candidates`);
+  },
+
+  /**
+   * Cập nhật trạng thái vòng phỏng vấn (pipeline) của ứng viên
+   * @param {String} companyId 
+   * @param {String} jobId 
+   * @param {String} candidateId 
+   * @param {String} status (Ví dụ: 'Applied', 'Screening', 'Interviewing', 'Offered', 'Hired', 'Rejected')
+   */
+  updateCandidatePipeline: (companyId, jobId, candidateId, status) => {
+    return apiService.put(`/companies/${companyId}/jobs/${jobId}/candidates/${candidateId}/pipeline`, { pipeline_status: status });
+  },
+
+  /**
+   * Gỡ ứng viên khỏi Job
+   * @param {String} companyId 
+   * @param {String} jobId 
+   * @param {String} candidateId 
+   */
+  unassignCandidate: (companyId, jobId, candidateId) => {
+    return apiService.delete(`/companies/${companyId}/jobs/${jobId}/candidates/${candidateId}/unassign`);
   }
 };

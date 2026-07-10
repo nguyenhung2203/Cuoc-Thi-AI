@@ -293,3 +293,62 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 
 	return nil
 }
+
+// GenerateQuestions triggers AI to generate new interview questions for the job and saves them to question_bank.
+func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID string, req *request.GenerateQuestionsRequest) ([]models.QuestionBank, error) {
+	job, err := s.GetByID(ctx, companyID, jobID)
+	if err != nil {
+		return nil, err
+	}
+
+	// For simplicity, passing basic arguments. You could fetch the actual candidate CV summary or Rubric if needed.
+	candidateSummary := ""
+	rubricText := ""
+	
+	// Convert slice of types to comma separated string
+	qTypes := strings.Join(req.QuestionTypes, ", ")
+
+	result, err := s.qGenerator.GenerateQuestions(
+		ctx,
+		job.Title+" - "+job.Description,
+		candidateSummary,
+		rubricText,
+		req.Difficulty,
+		fmt.Sprintf("%d", req.Count),
+		qTypes,
+		companyID,
+	)
+	if err != nil {
+		return nil, errors.NewInternal(fmt.Sprintf("failed to generate questions with AI: %v", err))
+	}
+
+	var questions []models.QuestionBank
+	now := time.Now()
+	for _, q := range result.Questions {
+		tagsBytes, _ := json.Marshal([]string{q.TargetSkill})
+		signalsBytes, _ := json.Marshal(q.ExpectedSignals)
+
+		questions = append(questions, models.QuestionBank{
+			ID:              uuid.NewString(),
+			CompanyID:       sql.NullString{String: companyID, Valid: true},
+			JobID:           sql.NullString{String: jobID, Valid: true},
+			CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
+			QuestionText:    q.QuestionText,
+			QuestionType:    q.QuestionType,
+			SkillTags:       models.JSONB(tagsBytes),
+			Level:           sql.NullString{String: q.Difficulty, Valid: true},
+			ExpectedSignals: models.JSONB(signalsBytes),
+			IsAIGenerated:   true,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		})
+	}
+
+	if len(questions) > 0 {
+		if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
+			return nil, errors.NewInternal("failed to save generated questions to bank")
+		}
+	}
+
+	return questions, nil
+}

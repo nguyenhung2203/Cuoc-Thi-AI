@@ -37,5 +37,50 @@ export const authService = {
    */
   logout: () => {
     return apiService.post('/auth/logout');
+  },
+
+  /**
+   * Quên mật khẩu
+   * @param {String} email
+   */
+  forgotPassword: (email) => {
+    return apiService.post('/auth/forgot-password', { email });
+  },
+
+  /**
+   * Đặt lại mật khẩu
+   * @param {String} email
+   * @param {String} otp
+   * @param {String} newPassword
+   */
+  resetPassword: (email, otp, newPassword) => {
+    return apiService.post('/auth/reset-password', { email, otp, new_password: newPassword });
+  },
+
+  /**
+   * Xác thực Email
+   * @param {String} email
+   * @param {String} otp
+   */
+  verifyEmail: (email, otp) => {
+    return apiService.post('/auth/verify-email', { email, otp });
+  },
+
+  /**
+   * Gửi lại mã OTP
+   * @param {String} email
+   * @param {String} purpose - 'register' hoặc 'forgot_password'
+   */
+  resendOTP: (email, purpose) => {
+    return apiService.post('/auth/resend-otp', { email, purpose });
+  },
+
+  /**
+   * Đổi mật khẩu
+   * @param {String} oldPassword
+   * @param {String} newPassword
+   */
+  changePassword: (oldPassword, newPassword) => {
+    return apiService.post('/auth/change-password', { old_password: oldPassword, new_password: newPassword });
   }
 };

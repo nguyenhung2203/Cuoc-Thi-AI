@@ -236,8 +236,8 @@ func (s *MockService) GetReport(ctx context.Context, id, userID string) (*models
 
 func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRole, targetLevel, cvFileID string, prevMessages []models.MockInterviewMessage) (string, error) {
 	variables := map[string]string{
-		"TARGET_ROLE":  targetRole,
-		"TARGET_LEVEL": targetLevel,
+		"target_role":  targetRole,
+		"target_level": targetLevel,
 	}
 
 	// Build conversation history
@@ -246,14 +246,14 @@ func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRo
 		history = append(history, fmt.Sprintf("%s: %s", msg.SenderType, msg.Content))
 	}
 	if len(history) > 0 {
-		variables["CONVERSATION"] = strings.Join(history, "\n")
+		variables["history"] = strings.Join(history, "\n")
 	} else {
-		variables["CONVERSATION"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
+		variables["history"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
 	}
 
 	// Use empty string as companyID — mock is user-scoped, not company-scoped.
 	// CallAI falls back to system-wide prompt templates when companyID is empty.
-	data, err := s.orchestrator.CallAI(ctx, "MOCK_QUESTION", "", variables)
+	data, err := s.orchestrator.CallAI(ctx, "mock_question", "", variables)
 	if err != nil {
 		return "", err
 	}

@@ -2,7 +2,6 @@ package realtime
 
 import (
 	"context"
-	"database/sql"
 	"log"
 
 	"backend/internal/models"
@@ -44,20 +43,21 @@ func (l *AuditLogger) LogEvent(action, actorID, actorRole, resourceType, resourc
 		Action:       action,
 		ResourceType: resourceType,
 	}
+	strPtr := func(s string) *string { return &s }
 	if actorID != "" {
-		al.ActorUserID = sql.NullString{String: actorID, Valid: true}
+		al.ActorUserID = strPtr(actorID)
 	}
 	if actorRole != "" {
-		al.ActorRole = sql.NullString{String: actorRole, Valid: true}
+		al.ActorRole = strPtr(actorRole)
 	}
 	if resourceID != "" {
-		al.ResourceID = sql.NullString{String: resourceID, Valid: true}
+		al.ResourceID = strPtr(resourceID)
 	}
 	if companyID != "" {
-		al.CompanyID = sql.NullString{String: companyID, Valid: true}
+		al.CompanyID = strPtr(companyID)
 	}
 	if ip != "" {
-		al.IPAddress = sql.NullString{String: ip, Valid: true}
+		al.IPAddress = strPtr(ip)
 	}
 
 	select {

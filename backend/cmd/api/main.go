@@ -60,6 +60,7 @@ func main() {
 	aiPromptRepo := repository.NewAIPromptRepository(db)
 	aiLogRepo := repository.NewAILogRepository(db)
 	scoreRepo := repository.NewScoreRepository(db.DB)
+	companyTemplateRepo := repository.NewCompanyTemplateRepository(db)
 
 	// AI Setup
 	promptSvc := service.NewPromptService(aiPromptRepo)
@@ -73,7 +74,8 @@ func main() {
 	// 4. Services
 	auditRepo := repository.NewAuditRepository(db)
 	auditSvc := service.NewAuditService(auditRepo)
-	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret)
+	emailSvc := service.NewEmailService(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass)
+	authSvc := service.NewAuthService(userRepo, refreshTokenRepo, cfg.JWTSecret, emailSvc)
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo, cvAnalyzer)
@@ -86,8 +88,12 @@ func main() {
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
 	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
+	adminSvc := service.NewAdminService(userRepo, companyRepo, auditRepo, db)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo)
+
+	questionSvc := service.NewQuestionService(questionRepo)
+	companyTemplateSvc := service.NewCompanyTemplateService(companyTemplateRepo)
 
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
@@ -100,10 +106,12 @@ func main() {
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
 	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
+	adminHandler := handler.NewAdminHandler(adminSvc, userRepo, companyRepo, auditRepo)
 	notificationHandler := handler.NewNotificationHandler(notificationRepo)
 	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
-
+	questionHandler := handler.NewQuestionHandler(questionSvc)
+	companyTemplateHandler := handler.NewCompanyTemplateHandler(companyTemplateSvc)
 	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
 
@@ -147,6 +155,8 @@ func main() {
 			r.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 			r.Use(middleware.AuditMiddleware(auditSvc))
 
+			// fileHandler handles /files
+
 			r.Route("/mock-interviews", func(r chi.Router) {
 				r.Post("/", mockHandler.Create)
 				r.Get("/me", mockHandler.ListMine)
@@ -163,6 +173,8 @@ func main() {
 			})
 
 			r.Route("/admin", func(r chi.Router) {
+				adminHandler.Routes(r)
+				r.Get("/ai-prompts", aiAdminHandler.ListPromptTemplates)
 				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
 			})
 
@@ -184,11 +196,19 @@ func main() {
 
 				r.Get("/audit-logs", auditHandler.ListAuditLogs)
 
+				r.Route("/question-bank", func(r chi.Router) {
+					questionHandler.Routes(r)
+				})
+
 				r.Route("/rubrics", func(r chi.Router) {
 					r.Post("/", rubricHandler.CreateRubric)
 					r.Get("/", rubricHandler.ListCompanyRubrics)
 					r.Get("/{rubric_id}", rubricHandler.GetRubric)
 					r.Delete("/{rubric_id}", rubricHandler.DeleteRubric)
+				})
+
+				r.Route("/templates", func(r chi.Router) {
+					companyTemplateHandler.Routes(r)
 				})
 
 				r.Route("/interviews", func(r chi.Router) {

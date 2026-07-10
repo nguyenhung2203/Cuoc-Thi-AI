@@ -6,6 +6,7 @@ import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { authStore } from '../../stores/auth.store'
+import { authService } from '../../services/auth.service'
 import { Save, Key, Bell, Shield, User, Monitor } from 'lucide-vue-next'
 
 const role = localStorage.getItem('role') || 'recruiter'
@@ -13,9 +14,111 @@ const activeTab = ref('account')
 const toast = ref(null)
 const showDeleteModal = ref(false)
 
-const handleSave = (e) => {
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const loading = ref(false)
+
+const notificationSettings = ref({
+  emailNewInterview: true,
+  emailReportDone: true,
+  emailReminder: true,
+  browserPush: true
+})
+
+const privacySettings = ref({
+  showProfile: true,
+  twoFactorAuth: false
+})
+
+import { onMounted, watch } from 'vue'
+
+onMounted(() => {
+  const savedNotif = localStorage.getItem('notificationSettings')
+  if (savedNotif) {
+    try { notificationSettings.value = { ...notificationSettings.value, ...JSON.parse(savedNotif) } } catch (e) {}
+  }
+  
+  const savedPriv = localStorage.getItem('privacySettings')
+  if (savedPriv) {
+    try { privacySettings.value = { ...privacySettings.value, ...JSON.parse(savedPriv) } } catch (e) {}
+  }
+})
+
+// Browser Push Notification Logic
+watch(() => notificationSettings.value.browserPush, async (newVal) => {
+  if (newVal) {
+    if (!('Notification' in window)) {
+      toast.value = { type: 'error', message: 'Trình duyệt của bạn không hỗ trợ Thông báo đẩy!' }
+      notificationSettings.value.browserPush = false
+      return
+    }
+    
+    if (Notification.permission === 'granted') {
+      toast.value = { type: 'success', message: 'Bạn đã bật thông báo đẩy thành công!' }
+      // Test notification
+      new Notification('AI Interview', { body: 'Thông báo đẩy đã hoạt động!' })
+    } else if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission()
+      if (permission === 'granted') {
+        toast.value = { type: 'success', message: 'Cấp quyền thành công! Bạn sẽ nhận được thông báo.' }
+        new Notification('AI Interview', { body: 'Cảm ơn bạn đã cấp quyền!' })
+      } else {
+        toast.value = { type: 'error', message: 'Bạn đã từ chối quyền gửi thông báo.' }
+        notificationSettings.value.browserPush = false
+      }
+    } else {
+      toast.value = { type: 'error', message: 'Bạn đã chặn thông báo trước đó. Vui lòng bật lại trong cài đặt trình duyệt.' }
+      notificationSettings.value.browserPush = false
+    }
+  }
+})
+
+const handleChangePassword = async (e) => {
   if (e && e.preventDefault) e.preventDefault()
-  toast.value = { type: 'success', message: 'Các thay đổi đã được lưu thành công!' }
+  
+  if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
+    toast.value = { type: 'error', message: 'Vui lòng điền đầy đủ các trường mật khẩu!' }
+    return
+  }
+  
+  if (newPassword.value !== confirmPassword.value) {
+    toast.value = { type: 'error', message: 'Mật khẩu mới và xác nhận không khớp!' }
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    toast.value = { type: 'error', message: 'Mật khẩu mới phải dài ít nhất 6 ký tự!' }
+    return
+  }
+
+  loading.value = true
+  try {
+    await authService.changePassword(oldPassword.value, newPassword.value)
+    toast.value = { type: 'success', message: 'Đổi mật khẩu thành công!' }
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+  } catch (error) {
+    console.error(error)
+    toast.value = { type: 'error', message: error.response?.data?.message || 'Không thể đổi mật khẩu, vui lòng kiểm tra lại mật khẩu cũ.' }
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSaveSettings = () => {
+  loading.value = true
+  setTimeout(() => {
+    if (activeTab.value === 'notifications') {
+      localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings.value))
+      toast.value = { type: 'success', message: 'Tùy chọn thông báo đã được lưu!' }
+    } else if (activeTab.value === 'privacy') {
+      localStorage.setItem('privacySettings', JSON.stringify(privacySettings.value))
+      toast.value = { type: 'success', message: 'Cài đặt quyền riêng tư đã được lưu!' }
+    }
+    loading.value = false
+  }, 400)
 }
 
 const handleDeleteAccount = () => {
@@ -76,7 +179,7 @@ const confirmDeleteAccount = () => {
         
         <div v-if="activeTab === 'account'">
           <Card title="Thông tin tài khoản">
-            <form @submit="handleSave">
+            <form @submit="handleChangePassword">
               <div style="display: flex; flex-direction: column; gap: 16px">
                 <Input label="Tên người dùng" :modelValue="authStore.user?.full_name || ''" disabled />
                 <Input label="Email đăng nhập" type="email" :modelValue="authStore.user?.email || ''" disabled />
@@ -86,14 +189,14 @@ const confirmDeleteAccount = () => {
                     <Key size="16" /> Đổi mật khẩu
                   </h3>
                   <div style="display: flex; flex-direction: column; gap: 16px">
-                    <Input label="Mật khẩu hiện tại" type="password" />
-                    <Input label="Mật khẩu mới" type="password" />
-                    <Input label="Xác nhận mật khẩu mới" type="password" />
+                    <Input label="Mật khẩu hiện tại" type="password" v-model="oldPassword" />
+                    <Input label="Mật khẩu mới" type="password" v-model="newPassword" />
+                    <Input label="Xác nhận mật khẩu mới" type="password" v-model="confirmPassword" />
                   </div>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-                  <Button><Save size="16" /> Lưu thay đổi</Button>
+                  <Button type="submit" :disabled="loading"><Save size="16" /> {{ loading ? 'Đang lưu...' : 'Lưu thay đổi' }}</Button>
                 </div>
               </div>
             </form>
@@ -106,17 +209,17 @@ const confirmDeleteAccount = () => {
               <div>
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Qua Email</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email thông báo khi có lịch phỏng vấn mới</span>
+                  <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Nhận email thông báo khi có lịch phỏng vấn mới <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
-                  <label v-if="role === 'recruiter'" style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email khi AI Report đã xử lý xong</span>
+                  <label v-if="role === 'recruiter'" style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Nhận email khi AI Report đã xử lý xong <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
-                  <label v-if="role === 'candidate'" style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email nhắc nhở trước 1 tiếng khi diễn ra phỏng vấn</span>
+                  <label v-if="role === 'candidate'" style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Nhận email nhắc nhở trước 1 tiếng khi diễn ra phỏng vấn <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
                 </div>
               </div>
@@ -125,14 +228,14 @@ const confirmDeleteAccount = () => {
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Thông báo đẩy (Push Notifications)</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
                   <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="notificationSettings.browserPush" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Hiển thị thông báo trên trình duyệt (Browser push)</span>
                   </label>
                 </div>
               </div>
 
               <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-                <Button @click="handleSave"><Save size="16" /> Lưu tùy chọn</Button>
+                <Button @click="handleSaveSettings" :disabled="loading"><Save size="16" /> {{ loading ? 'Đang lưu...' : 'Lưu tùy chọn' }}</Button>
               </div>
             </div>
           </Card>
@@ -145,13 +248,13 @@ const confirmDeleteAccount = () => {
               <div v-if="role === 'candidate'">
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Hiển thị hồ sơ</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Cho phép các nhà tuyển dụng khác xem hồ sơ của tôi (Public Profile)</span>
+                  <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Cho phép các nhà tuyển dụng khác xem hồ sơ của tôi (Public Profile) <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Chia sẻ ẩn danh kết quả Mock Interview để cải thiện AI</span>
+                  <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Chia sẻ ẩn danh kết quả Mock Interview để cải thiện AI <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
                 </div>
               </div>
@@ -159,13 +262,13 @@ const confirmDeleteAccount = () => {
               <div v-if="role === 'recruiter'">
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Bảo mật dữ liệu công ty</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Mã hóa ghi âm/video các cuộc phỏng vấn (E2E Encryption)</span>
+                  <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Mã hóa ghi âm/video các cuộc phỏng vấn (E2E Encryption) <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Yêu cầu xác thực 2 bước (2FA) khi đăng nhập nội bộ</span>
+                  <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; opacity: 0.6">
+                    <input type="checkbox" disabled style="width: 16px; height: 16px;" />
+                    <span class="text-body flex items-center gap-2">Yêu cầu xác thực 2 bước (2FA) khi đăng nhập nội bộ <span class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-medium">Đang phát triển</span></span>
                   </label>
                 </div>
               </div>
