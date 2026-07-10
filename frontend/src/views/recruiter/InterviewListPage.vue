@@ -103,7 +103,7 @@ const formatDate = (isoString) => {
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Lịch phỏng vấn</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Quản lý các buổi phỏng vấn trực tiếp với ứng viên.</p>
       </div>
-      <Button @click="router.push('/interviews/new')" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+      <Button @click="router.push('/interviews/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Tạo lịch phỏng vấn
       </Button>
     </div>
@@ -112,7 +112,7 @@ const formatDate = (isoString) => {
     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải lịch phỏng vấn...</span>
       </div>
       
@@ -121,7 +121,7 @@ const formatDate = (isoString) => {
           <template #candidate="{ row }">
             <div class="flex flex-col">
               <div class="font-semibold text-slate-800 dark:text-slate-200">{{ row.candidateName }}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Ứng tuyển: <span class="text-indigo-600 dark:text-indigo-400">{{ row.jobTitle }}</span></div>
+              <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Ứng tuyển: <span class="text-blue-600 dark:text-blue-400">{{ row.jobTitle }}</span></div>
             </div>
           </template>
           
@@ -136,7 +136,7 @@ const formatDate = (isoString) => {
             <span 
               class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border"
               :class="[
-                row.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20' : 
+                row.status === 'Scheduled' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' : 
                 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
               ]"
             >
@@ -146,7 +146,7 @@ const formatDate = (isoString) => {
           
           <template #room="{ row }">
             <div class="flex items-center gap-2">
-              <button @click.prevent="openEnterRoomModal(row)" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-semibold text-xs rounded-lg transition-colors border border-indigo-100 dark:border-indigo-500/20">
+              <button @click.prevent="openEnterRoomModal(row)" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold text-xs rounded-lg transition-colors border border-blue-100 dark:border-blue-500/20">
                 <Video size="14" /> Vào phòng
               </button>
               <button @click="copyLink(row.link)" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors" title="Copy Link">
@@ -156,7 +156,7 @@ const formatDate = (isoString) => {
           </template>
           
           <template #action="{ row }">
-            <button @click="router.push(`/interviews/${row.id}`)" class="inline-flex items-center gap-1 px-3 py-1.5 text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors font-medium text-xs">
+            <button @click="router.push(`/interviews/${row.id}`)" class="inline-flex items-center gap-1 px-3 py-1.5 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors font-medium text-xs">
               <ExternalLink size="14" /> Chi tiết
             </button>
           </template>
@@ -170,7 +170,7 @@ const formatDate = (isoString) => {
         <p class="text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">Bạn có chắc chắn muốn tham gia phòng phỏng vấn này ngay bây giờ không? Camera và Microphone sẽ được kích hoạt.</p>
         <div class="flex justify-end gap-3">
           <Button variant="ghost" @click="showEnterRoomModal = false" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
-          <Button variant="primary" @click="confirmEnterRoom" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">Vào phòng</Button>
+          <Button variant="primary" @click="confirmEnterRoom" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">Vào phòng</Button>
         </div>
       </div>
     </Modal>

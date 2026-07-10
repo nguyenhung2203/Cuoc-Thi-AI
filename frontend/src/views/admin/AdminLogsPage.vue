@@ -53,7 +53,7 @@ const getActionColor = (action) => {
   if (a.includes('APPROVE') || a.includes('VERIFY') || a.includes('CREATE')) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
   if (a.includes('DELETE') || a.includes('BLOCK') || a.includes('REJECT')) return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-200 dark:border-red-800'
   if (a.includes('UPDATE') || a.includes('EDIT')) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-  return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
 }
 
 onMounted(() => {
@@ -67,7 +67,7 @@ onMounted(() => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-          <Activity size="26" class="text-indigo-600 dark:text-indigo-400" />
+          <Activity size="26" class="text-blue-600 dark:text-blue-400" />
           Audit Logs - Nhật ký Hoạt động Hệ thống
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
@@ -91,14 +91,14 @@ onMounted(() => {
           type="text" 
           v-model="searchQuery"
           placeholder="Tìm theo thao tác, ID tài nguyên, IP..." 
-          class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
       </div>
 
       <div class="flex items-center gap-3">
         <select 
           v-model="actionFilter"
-          class="px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+          class="px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
         >
           <option value="all">Tất cả hành động</option>
           <option value="LOGIN">Đăng nhập (Auth)</option>
@@ -108,7 +108,7 @@ onMounted(() => {
           <option value="DELETE">Xóa</option>
         </select>
         <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">
-          Hiển thị: <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm">{{ displayedLogs.length }}</span> dòng
+          Hiển thị: <span class="text-blue-600 dark:text-blue-400 font-bold text-sm">{{ displayedLogs.length }}</span> dòng
         </div>
       </div>
     </div>
@@ -117,7 +117,7 @@ onMounted(() => {
     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <!-- Loading Skeleton -->
       <div v-if="loading" class="p-12 text-center space-y-4">
-        <div class="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang truy xuất dữ liệu nhật ký hệ thống...</p>
       </div>
 
@@ -150,7 +150,7 @@ onMounted(() => {
               <!-- Actor -->
               <td class="py-4 px-6">
                 <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-xs shrink-0">
+                  <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-xs shrink-0">
                     <User size="14" />
                   </div>
                   <div>
@@ -186,7 +186,7 @@ onMounted(() => {
               <!-- IP Address / Device -->
               <td class="py-4 px-6 text-right font-mono text-xs text-slate-500 dark:text-slate-400">
                 <div class="flex items-center justify-end gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
-                  <Globe size="13" class="text-indigo-500" />
+                  <Globe size="13" class="text-blue-500" />
                   {{ log.ip_address || 'localhost' }}
                 </div>
                 <div class="text-[11px] text-slate-400 truncate max-w-[200px] ml-auto mt-0.5" :title="log.user_agent">

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
-import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
 import { apiService } from '../../services/api.service'
 
@@ -78,145 +78,157 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in pb-12 max-w-6xl mx-auto">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-      <div class="flex items-center gap-4">
-        <button @click="router.push('/mock-results')" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm text-gray-600">
-          <ArrowLeft class="w-5 h-5" />
-        </button>
-        <div>
-          <h1 class="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-teal-600">Báo cáo kết quả</h1>
-          <p v-if="sessionData" class="text-gray-500 mt-2 font-medium flex items-center gap-2">
-            <span class="bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-lg text-sm">{{ sessionData.role }}</span>
-            <span class="bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-lg text-sm">Cấp độ: {{ sessionData.level }}</span>
-            <span class="bg-gray-100 text-gray-700 px-2.5 py-0.5 rounded-lg text-sm">{{ sessionData.date }}</span>
-          </p>
-        </div>
+  <div class="space-y-8 pb-12 max-w-6xl mx-auto">
+    <div class="flex items-center gap-4 mb-2 animate-rise">
+      <button @click="router.push('/mock-results')" class="back-btn"><ArrowLeft :size="20" /></button>
+      <div>
+        <h1 class="page-title">Báo cáo kết quả</h1>
+        <p v-if="sessionData" class="result-tags">
+          <span class="tag">{{ sessionData.role }}</span>
+          <span class="tag">Cấp độ: {{ sessionData.level }}</span>
+          <span class="tag">{{ sessionData.date }}</span>
+        </p>
       </div>
     </div>
 
     <div v-if="loading" class="flex flex-col items-center justify-center py-20">
-      <div class="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
-      <p class="text-gray-500 font-medium animate-pulse">Đang tải kết quả đánh giá...</p>
+      <div class="mr-spinner mb-4"></div>
+      <p class="text-helper">Đang tải kết quả đánh giá...</p>
     </div>
 
-    <div v-else-if="!sessionData" class="bg-rose-50 border border-rose-200 rounded-2xl p-8 text-center text-rose-600 flex flex-col items-center justify-center shadow-sm">
-      <AlertCircle class="w-12 h-12 mb-3 opacity-80" />
-      <p class="font-bold text-lg">Không thể tải kết quả bài luyện tập.</p>
+    <div v-else-if="!sessionData" class="mr-error">
+      <AlertCircle :size="42" />
+      <p>Không thể tải kết quả bài luyện tập.</p>
     </div>
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-      
+
       <!-- Overall Score Sidebar -->
-      <div class="lg:col-span-1 space-y-6 sticky top-6">
-        <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl p-8 relative overflow-hidden text-center">
-          <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-emerald-100 to-transparent rounded-bl-full opacity-50"></div>
-          
-          <h2 class="text-lg font-bold text-gray-800 mb-6 relative z-10">Điểm tổng kết</h2>
-          
-          <!-- Circular Progress (CSS based) -->
-          <div class="relative w-40 h-40 mx-auto mb-6 z-10 drop-shadow-md">
-            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-              <circle class="text-gray-100 stroke-current" stroke-width="8" cx="50" cy="50" r="40" fill="transparent"></circle>
-              <circle class="text-emerald-500 stroke-current drop-shadow" stroke-width="8" stroke-linecap="round" cx="50" cy="50" r="40" fill="transparent" :stroke-dasharray="251.2" :stroke-dashoffset="251.2 - (251.2 * (parseFloat(sessionData.overallScore) * 10)) / 100"></circle>
+      <div class="lg:col-span-1 space-y-6 sticky top-6 animate-rise">
+        <Card class="card-elevate score-card">
+          <h2 class="score-title">Điểm tổng kết</h2>
+
+          <div class="score-ring">
+            <svg class="score-svg" viewBox="0 0 100 100">
+              <circle class="ring-bg" stroke-width="8" cx="50" cy="50" r="40" fill="transparent"></circle>
+              <circle class="ring-fg" stroke-width="8" stroke-linecap="round" cx="50" cy="50" r="40" fill="transparent" :stroke-dasharray="251.2" :stroke-dashoffset="251.2 - (251.2 * (parseFloat(sessionData.overallScore) * 10)) / 100"></circle>
             </svg>
-            <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-4xl font-black text-emerald-600">{{ sessionData.overallScore }}</span>
-              <span class="text-sm font-bold text-gray-400">/10</span>
+            <div class="score-center">
+              <span class="score-val">{{ sessionData.overallScore }}</span>
+              <span class="score-max">/10</span>
             </div>
           </div>
-          
-          <div class="pt-6 border-t border-gray-100 relative z-10 text-left">
-            <h3 class="font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <Sparkles class="w-5 h-5 text-amber-500" /> Nhận xét chung
-            </h3>
-            <p class="text-gray-600 text-sm leading-relaxed">{{ sessionData.summaryFeedback }}</p>
+
+          <div class="score-note">
+            <h3 class="score-note-title"><Sparkles :size="18" /> Nhận xét chung</h3>
+            <p class="score-note-text">{{ sessionData.summaryFeedback }}</p>
           </div>
         </Card>
       </div>
 
       <!-- Detailed Questions List -->
       <div class="lg:col-span-2 space-y-6">
-        <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl p-8">
-          <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2 border-b border-gray-100 pb-4">
-            <MessageCircle class="w-6 h-6 text-emerald-600" />
+        <Card class="card-elevate qa-card animate-rise">
+          <h2 class="qa-head">
+            <MessageCircle :size="22" />
             Đánh giá chi tiết từng câu hỏi
           </h2>
-          
-          <div class="space-y-12">
-            <div v-for="(q, index) in sessionData.questions" :key="q.id" class="group">
+
+          <div class="space-y-10">
+            <div v-for="(q, index) in sessionData.questions" :key="q.id">
               <div class="flex items-start gap-4 mb-4">
-                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center shrink-0 border border-emerald-100 mt-1 shadow-sm">
-                  Q{{ index + 1 }}
-                </div>
+                <div class="q-badge">Q{{ index + 1 }}</div>
                 <div class="flex-1">
-                  <h4 class="text-lg font-bold text-gray-800 leading-snug mb-3">{{ q.question }}</h4>
-                  
-                  <div class="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-5 relative">
-                    <div class="absolute -top-3 left-4 bg-white px-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Câu trả lời của bạn</div>
-                    <p class="text-gray-700 italic">"{{ q.candidateAnswer }}"</p>
+                  <h4 class="q-text">{{ q.question }}</h4>
+                  <div class="q-answer">
+                    <div class="q-answer-label">Câu trả lời của bạn</div>
+                    <p class="q-answer-text">"{{ q.candidateAnswer }}"</p>
                   </div>
                 </div>
               </div>
 
-              <div class="ml-14">
+              <div class="qa-body">
                 <div class="flex justify-between items-center mb-4">
-                  <h5 class="font-bold text-gray-800 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-                    AI Feedback
-                  </h5>
-                  <div :class="q.score >= 8 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" class="px-3 py-1 rounded-lg font-bold text-sm shadow-sm border" :style="q.score >= 8 ? 'border-color: #a7f3d0;' : 'border-color: #fde68a;'">
+                  <h5 class="fb-title"><CheckCircle2 :size="18" /> AI Feedback</h5>
+                  <span class="score-pill" :class="q.score >= 8 ? 'is-high' : q.score >= 7 ? 'is-mid' : 'is-low'">
                     Điểm: {{ q.score }}/10
-                  </div>
+                  </span>
                 </div>
-                
-                <p class="text-gray-600 leading-relaxed mb-6">{{ q.feedback }}</p>
-                
+
+                <p class="fb-text">{{ q.feedback }}</p>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <!-- Good Points Card -->
-                  <div class="bg-emerald-50 border border-emerald-100 rounded-xl p-5 hover:shadow-md transition-shadow">
-                    <p class="text-emerald-800 font-bold flex items-center gap-2 mb-3">
-                      <CheckCircle class="w-5 h-5 text-emerald-600" /> Điểm tốt
-                    </p>
-                    <ul class="space-y-2">
-                      <li v-for="(p, i) in q.goodPoints" :key="i" class="flex items-start gap-2 text-emerald-700 text-sm">
-                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-1.5 shrink-0"></span>
-                        {{ p }}
-                      </li>
+                  <div class="pt-box is-good">
+                    <p class="pt-head"><CheckCircle :size="18" /> Điểm tốt</p>
+                    <ul>
+                      <li v-for="(p, i) in q.goodPoints" :key="i"><span class="pt-dot is-good"></span>{{ p }}</li>
                     </ul>
                   </div>
-                  
-                  <!-- Improve Points Card -->
-                  <div class="bg-amber-50 border border-amber-100 rounded-xl p-5 hover:shadow-md transition-shadow">
-                    <p class="text-amber-800 font-bold flex items-center gap-2 mb-3">
-                      <AlertCircle class="w-5 h-5 text-amber-600" /> Cần cải thiện
-                    </p>
-                    <ul class="space-y-2">
-                      <li v-for="(p, i) in q.improvePoints" :key="i" class="flex items-start gap-2 text-amber-700 text-sm">
-                        <span class="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 shrink-0"></span>
-                        {{ p }}
-                      </li>
+                  <div class="pt-box is-improve">
+                    <p class="pt-head"><AlertCircle :size="18" /> Cần cải thiện</p>
+                    <ul>
+                      <li v-for="(p, i) in q.improvePoints" :key="i"><span class="pt-dot is-improve"></span>{{ p }}</li>
                     </ul>
                   </div>
                 </div>
               </div>
-              
-              <hr v-if="index < sessionData.questions.length - 1" class="my-8 border-gray-100" />
+
+              <hr v-if="index < sessionData.questions.length - 1" class="qa-divider" />
             </div>
           </div>
         </Card>
       </div>
-      
+
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
-}
+.back-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; flex-shrink: 0; }
+.back-btn:hover { color: var(--primary); border-color: var(--primary-light); }
+.result-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tag { background: var(--surface-soft); color: var(--text-secondary); padding: 3px 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
+
+.mr-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--primary-light); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.mr-error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px; text-align: center; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.2); border-radius: var(--radius-lg); color: var(--danger); font-weight: 600; }
+
+.score-card { padding: 28px; text-align: center; }
+.score-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 22px; }
+.score-ring { position: relative; width: 160px; height: 160px; margin: 0 auto 8px; }
+.score-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { stroke: var(--surface-soft); }
+.ring-fg { stroke: var(--success); transition: stroke-dashoffset 1s cubic-bezier(0.2,0.8,0.2,1); }
+.score-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.score-val { font-size: 40px; font-weight: 800; color: var(--success); line-height: 1; }
+.score-max { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+.score-note { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--border); text-align: left; }
+.score-note-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-main); margin-bottom: 10px; }
+.score-note-title :deep(svg) { color: var(--accent); }
+.score-note-text { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+.qa-card { padding: 28px; }
+.qa-head { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: var(--text-main); padding-bottom: 18px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.qa-head :deep(svg) { color: var(--primary); }
+.q-badge { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius); background: var(--primary-light); color: var(--primary); font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.q-text { font-size: 16px; font-weight: 700; color: var(--text-main); line-height: 1.4; margin-bottom: 12px; }
+.q-answer { position: relative; background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.q-answer-label { position: absolute; top: -10px; left: 14px; background: var(--surface); padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.q-answer-text { color: var(--text-secondary); font-style: italic; }
+.qa-body { margin-left: 56px; }
+.fb-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-main); }
+.fb-title :deep(svg) { color: var(--accent); }
+.fb-text { color: var(--text-secondary); line-height: 1.6; margin: 16px 0 20px; }
+.pt-box { padding: 18px; border-radius: var(--radius); }
+.pt-box.is-good { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); }
+.pt-box.is-improve { background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); }
+.pt-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 12px; }
+.pt-box.is-good .pt-head { color: var(--success); }
+.pt-box.is-improve .pt-head { color: var(--warning); }
+.pt-box ul { display: flex; flex-direction: column; gap: 8px; }
+.pt-box li { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+.pt-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+.pt-dot.is-good { background: var(--success); }
+.pt-dot.is-improve { background: var(--warning); }
+.qa-divider { margin: 28px 0; border: none; border-top: 1px solid var(--border); }
 </style>

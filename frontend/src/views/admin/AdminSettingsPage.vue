@@ -140,7 +140,7 @@ onMounted(() => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-          <Settings size="26" class="text-indigo-600 dark:text-indigo-400" />
+          <Settings size="26" class="text-blue-600 dark:text-blue-400" />
           Cài đặt & Cấu hình Hệ thống
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
@@ -171,7 +171,7 @@ onMounted(() => {
       <button 
         @click="activeTab = 'general'"
         class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
-        :class="activeTab === 'general' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+        :class="activeTab === 'general' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
       >
         <Sliders size="18" />
         <span>Cấu hình chung</span>
@@ -180,11 +180,11 @@ onMounted(() => {
       <button 
         @click="activeTab = 'ai'"
         class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
-        :class="activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+        :class="activeTab === 'ai' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
       >
         <Bot size="18" />
         <span>Cấu hình AI & Prompts</span>
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
           {{ promptTemplates.length }}
         </span>
       </button>
@@ -192,7 +192,7 @@ onMounted(() => {
       <button 
         @click="activeTab = 'security'"
         class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
-        :class="activeTab === 'security' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+        :class="activeTab === 'security' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
       >
         <Shield size="18" />
         <span>Bảo mật & Phiên làm việc</span>
@@ -201,7 +201,7 @@ onMounted(() => {
       <button 
         @click="activeTab = 'notifications'"
         class="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all"
-        :class="activeTab === 'notifications' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+        :class="activeTab === 'notifications' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
       >
         <Bell size="18" />
         <span>Cấu hình Thông báo</span>
@@ -212,7 +212,7 @@ onMounted(() => {
     <div v-if="activeTab === 'general'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-          <Sliders class="text-indigo-600 dark:text-indigo-400" size="20" />
+          <Sliders class="text-blue-600 dark:text-blue-400" size="20" />
           Thông số hoạt động nền tảng
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -229,7 +229,7 @@ onMounted(() => {
           <input 
             type="text" 
             v-model="settings.system_name"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
 
@@ -240,7 +240,7 @@ onMounted(() => {
           </label>
           <select 
             v-model="settings.default_ai_model"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           >
             <option value="gemini-2.5-flash">Gemini 2.5 Flash (Tốc độ siêu nhanh - Khuyên dùng)</option>
             <option value="gemini-2.5-pro">Gemini 2.5 Pro (Phân tích chuyên sâu cao cấp)</option>
@@ -257,7 +257,7 @@ onMounted(() => {
             type="number" 
             v-model.number="settings.max_upload_size_mb"
             min="1" max="100"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
 
@@ -270,7 +270,7 @@ onMounted(() => {
             type="number" 
             v-model.number="settings.default_passing_score"
             min="10" max="100"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
       </div>
@@ -294,7 +294,7 @@ onMounted(() => {
         <button 
           @click="saveSettings" 
           :disabled="saving"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+          class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
         >
           <Save size="18" />
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Cấu hình' }}
@@ -308,7 +308,7 @@ onMounted(() => {
       <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Cpu class="text-indigo-600 dark:text-indigo-400" size="20" />
+            <Cpu class="text-blue-600 dark:text-blue-400" size="20" />
             Thư viện Prompt Templates AI
           </h3>
           <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -317,7 +317,7 @@ onMounted(() => {
         </div>
         <button 
           @click="openNewPromptModal"
-          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 shrink-0"
+          class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-2 shrink-0"
         >
           <Plus size="18" /> Thêm Prompt Template mới
         </button>
@@ -325,7 +325,7 @@ onMounted(() => {
 
       <!-- Prompts Grid -->
       <div v-if="loadingPrompts" class="py-12 text-center text-slate-500">
-        <RefreshCw size="24" class="animate-spin mx-auto mb-2 text-indigo-600" />
+        <RefreshCw size="24" class="animate-spin mx-auto mb-2 text-blue-600" />
         Đang tải danh sách Prompt Templates...
       </div>
 
@@ -333,18 +333,18 @@ onMounted(() => {
         <Bot size="36" class="mx-auto mb-3 text-slate-400" />
         <h4 class="font-bold text-slate-800 dark:text-white">Chưa có Prompt Template nào được tùy biến</h4>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">Hệ thống đang sử dụng Prompt AI mặc định được nạp từ mã nguồn.</p>
-        <button @click="openNewPromptModal" class="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl">Tạo Prompt mẫu ngay</button>
+        <button @click="openNewPromptModal" class="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl">Tạo Prompt mẫu ngay</button>
       </div>
 
       <div v-else class="grid grid-cols-1 gap-4">
         <div 
           v-for="tmpl in promptTemplates" 
           :key="tmpl.id"
-          class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-indigo-400/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+          class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
         >
           <div class="space-y-2 flex-1">
             <div class="flex items-center gap-3">
-              <span class="px-3 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-extrabold font-mono text-xs">
+              <span class="px-3 py-1 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-extrabold font-mono text-xs">
                 v{{ tmpl.version || 1 }}
               </span>
               <h4 class="text-base font-extrabold text-slate-800 dark:text-white">{{ tmpl.name }}</h4>
@@ -374,7 +374,7 @@ onMounted(() => {
     <div v-if="activeTab === 'security'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-          <Shield class="text-indigo-600 dark:text-indigo-400" size="20" />
+          <Shield class="text-blue-600 dark:text-blue-400" size="20" />
           Chính sách bảo mật phiên làm việc (Sessions & Auth)
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -386,13 +386,13 @@ onMounted(() => {
         <!-- JWT Expiry -->
         <div>
           <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-            <Key size="14" class="text-indigo-500" /> Thời gian hiệu lực JWT Token (Giờ)
+            <Key size="14" class="text-blue-500" /> Thời gian hiệu lực JWT Token (Giờ)
           </label>
           <input 
             type="number" 
             v-model.number="settings.jwt_token_expiry_hours"
             min="1" max="168"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
           <span class="text-[11px] text-slate-400 mt-1.5 block">Mặc định: 24 giờ. Token hết hạn sẽ tự động làm mới bằng Refresh Cookie.</span>
         </div>
@@ -409,7 +409,7 @@ onMounted(() => {
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="settings.admin_2fa_required" class="sr-only peer">
-            <div class="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+            <div class="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
           </label>
         </div>
       </div>
@@ -418,7 +418,7 @@ onMounted(() => {
         <button 
           @click="saveSettings" 
           :disabled="saving"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+          class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
         >
           <Save size="18" />
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Bảo mật' }}
@@ -430,7 +430,7 @@ onMounted(() => {
     <div v-if="activeTab === 'notifications'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6 animate-fade-in">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-          <Bell class="text-indigo-600 dark:text-indigo-400" size="20" />
+          <Bell class="text-blue-600 dark:text-blue-400" size="20" />
           Cấu hình Thông báo & Vòng đời trên Redis
         </h3>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -448,7 +448,7 @@ onMounted(() => {
             type="number" 
             v-model.number="settings.notification_ttl_days"
             min="1" max="365"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
           <span class="text-[11px] text-slate-400 mt-1.5 block">Mặc định: 30 ngày. Thông báo cũ hơn TTL sẽ tự động được xóa khỏi bộ nhớ Redis.</span>
         </div>
@@ -462,7 +462,7 @@ onMounted(() => {
             type="number" 
             v-model.number="settings.notification_max_per_user"
             min="20" max="1000"
-            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
           <span class="text-[11px] text-slate-400 mt-1.5 block">Mặc định: 200 thông báo gần nhất. Dùng lệnh LTRIM để tối ưu dung lượng RAM Redis.</span>
         </div>
@@ -480,7 +480,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.notify_on_new_applicant" class="sr-only peer">
-              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
@@ -492,7 +492,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.notify_on_report_ready" class="sr-only peer">
-              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
@@ -504,7 +504,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.notify_on_interview_cancelled" class="sr-only peer">
-              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
 
@@ -516,7 +516,7 @@ onMounted(() => {
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" v-model="settings.enable_email_notifications" class="sr-only peer">
-              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-indigo-600"></div>
+              <div class="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
         </div>
@@ -526,7 +526,7 @@ onMounted(() => {
         <button 
           @click="saveSettings" 
           :disabled="saving"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+          class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
         >
           <Save size="18" />
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Cấu hình Thông báo' }}
@@ -539,7 +539,7 @@ onMounted(() => {
       <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-8 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
           <h3 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <Cpu class="text-indigo-600 dark:text-indigo-400" size="24" />
+            <Cpu class="text-blue-600 dark:text-blue-400" size="24" />
             Cấu hình Prompt Template AI
           </h3>
           <button @click="showPromptModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold">✕ Đóng</button>
@@ -552,7 +552,7 @@ onMounted(() => {
               type="text" 
               v-model="editingPrompt.name" 
               placeholder="e.g. RUBRIC_EVALUATION, INTERVIEW_CONDUCTOR"
-              class="w-full px-4 py-3 font-mono text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="w-full px-4 py-3 font-mono text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -576,7 +576,7 @@ onMounted(() => {
               v-model="editingPrompt.content" 
               rows="8"
               placeholder="Nhập hướng dẫn chi tiết cho mô hình AI..."
-              class="w-full p-4 font-mono text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+              class="w-full p-4 font-mono text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
             ></textarea>
           </div>
         </div>
@@ -585,7 +585,7 @@ onMounted(() => {
           <button @click="showPromptModal = false" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold text-sm rounded-xl transition-colors">
             Hủy bỏ
           </button>
-          <button @click="savePromptTemplate" :disabled="saving" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 flex items-center gap-2">
+          <button @click="savePromptTemplate" :disabled="saving" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2">
             <Save size="16" /> {{ saving ? 'Đang lưu phiên bản mới...' : 'Lưu & Khởi tạo Version mới' }}
           </button>
         </div>

@@ -94,7 +94,7 @@ onMounted(() => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-          <Users size="26" class="text-indigo-600 dark:text-indigo-400" />
+          <Users size="26" class="text-blue-600 dark:text-blue-400" />
           Quản lý Tài khoản & Người dùng
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
@@ -117,11 +117,11 @@ onMounted(() => {
         <button 
           @click="activeTab = 'pending'"
           class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
-          :class="activeTab === 'pending' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+          :class="activeTab === 'pending' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
         >
           <Clock size="16" />
           <span>Chờ duyệt</span>
-          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'pending' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
+          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'pending' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
             {{ pendingUsers.length }}
           </span>
         </button>
@@ -129,11 +129,11 @@ onMounted(() => {
         <button 
           @click="activeTab = 'all'"
           class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
-          :class="activeTab === 'all' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+          :class="activeTab === 'all' ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
         >
           <Users size="16" />
           <span>Tất cả thành viên</span>
-          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'all' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
+          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'all' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
             {{ allUsers.length }}
           </span>
         </button>
@@ -147,14 +147,14 @@ onMounted(() => {
             type="text" 
             v-model="searchQuery"
             placeholder="Tìm theo tên, email..." 
-            class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+            class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
 
         <select 
           v-if="activeTab === 'all'"
           v-model="roleFilter"
-          class="px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+          class="px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
         >
           <option value="all">Tất cả vai trò</option>
           <option value="recruiter">Nhà tuyển dụng</option>
@@ -168,7 +168,7 @@ onMounted(() => {
     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
       <!-- Loading Skeleton -->
       <div v-if="loading" class="p-12 text-center space-y-4">
-        <div class="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+        <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang tải danh sách người dùng...</p>
       </div>
 
@@ -194,11 +194,11 @@ onMounted(() => {
               <!-- Name & Avatar -->
               <td class="py-4 px-6">
                 <div class="flex items-center gap-3.5">
-                  <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
                     {{ user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U' }}
                   </div>
                   <div>
-                    <div class="font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    <div class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {{ user.full_name || 'Chưa đặt tên' }}
                     </div>
                     <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ user.email }}</div>
@@ -210,7 +210,7 @@ onMounted(() => {
               <td class="py-4 px-6">
                 <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide"
                   :class="{
-                    'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40': user.role === 'recruiter',
+                    'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40': user.role === 'recruiter',
                     'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40': user.role === 'candidate',
                     'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40': user.role === 'admin'
                   }">
@@ -248,7 +248,7 @@ onMounted(() => {
                   v-if="user.verification_file_id" 
                   :href="getFileUrl(user.verification_file_id)" 
                   target="_blank" 
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-colors border border-indigo-200/60 dark:border-indigo-800/40"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 rounded-lg text-xs font-semibold transition-colors border border-blue-200/60 dark:border-blue-800/40"
                 >
                   <FileText size="14" /> Xem giấy phép
                 </a>

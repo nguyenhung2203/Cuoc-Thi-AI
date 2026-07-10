@@ -5,7 +5,7 @@ import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { Upload, FileText, CheckCircle, Save, Trash2, Eye, X, Bot, Loader2 } from 'lucide-vue-next'
+import { Upload, FileText, CheckCircle, Save, Trash2, Eye, X, Bot, Loader2, UserRound, Target, Code2, Info } from 'lucide-vue-next'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 
 const profile = ref({
@@ -170,24 +170,24 @@ const handleSave = async (e) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in pb-12 max-w-6xl mx-auto">
-    <div class="mb-8">
-      <h1 class="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">Hồ sơ cá nhân & CV</h1>
-      <p class="text-gray-500 mt-2 text-lg">Cập nhật thông tin để AI có thể đưa ra bài luyện tập chính xác nhất.</p>
+  <div class="space-y-8 pb-12 max-w-6xl mx-auto">
+    <div class="mb-2 animate-rise">
+      <h1 class="page-title">Hồ sơ cá nhân & CV</h1>
+      <p class="page-subtitle">Cập nhật thông tin để AI có thể đưa ra bài luyện tập chính xác nhất.</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      
+
       <!-- Left Column: Forms -->
       <div class="lg:col-span-2 space-y-8">
-        <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl overflow-hidden">
-          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 border-b border-indigo-100">
-            <h3 class="text-xl font-bold text-indigo-900 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+        <Card class="card-elevate pf-card animate-rise">
+          <div class="pf-card-head">
+            <h3 class="pf-card-title">
+              <span class="kpi-icon"><UserRound :size="18" /></span>
               Thông tin cơ bản
             </h3>
           </div>
-          
+
           <div class="p-6">
             <form @submit="handleSave" class="space-y-6">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -208,15 +208,15 @@ const handleSave = async (e) => {
               </div>
 
               <div class="pt-6 mt-6 border-t border-gray-100">
-                <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <h3 class="pf-sub-title">
+                  <span class="kpi-icon is-accent"><Target :size="18" /></span>
                   Định hướng nghề nghiệp
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input label="Vị trí mục tiêu (Target Role)" v-model="profile.targetRole" />
                   <div class="flex flex-col gap-2">
-                    <label class="text-sm font-semibold text-gray-700">Cấp độ hiện tại</label>
-                    <select class="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all bg-white text-gray-800" v-model="profile.level">
+                    <label class="pf-label">Cấp độ hiện tại</label>
+                    <select class="pf-select" v-model="profile.level">
                       <option value="Intern">Intern</option>
                       <option value="Fresher">Fresher</option>
                       <option value="Junior">Junior</option>
@@ -228,8 +228,8 @@ const handleSave = async (e) => {
               </div>
 
               <div class="flex justify-end pt-6">
-                <button type="submit" :disabled="saving" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none flex items-center gap-2">
-                  <Save class="w-5 h-5" /> 
+                <button type="submit" :disabled="saving" class="btn btn-primary sheen">
+                  <Save :size="18" />
                   {{ saving ? 'Đang lưu...' : 'Lưu hồ sơ' }}
                 </button>
               </div>
@@ -237,83 +237,72 @@ const handleSave = async (e) => {
           </div>
         </Card>
 
-        <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl overflow-hidden">
-          <div class="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 border-b border-emerald-100">
-            <h3 class="text-xl font-bold text-emerald-900 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+        <Card class="card-elevate pf-card animate-rise">
+          <div class="pf-card-head">
+            <h3 class="pf-card-title">
+              <span class="kpi-icon is-accent"><Code2 :size="18" /></span>
               Kỹ năng chuyên môn
             </h3>
           </div>
           <div class="p-6">
-            <textarea class="w-full p-4 border border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all text-gray-800 font-medium resize-none" rows="4" placeholder="Ví dụ: ReactJS, NodeJS, TypeScript..." v-model="profile.skills"></textarea>
-            <p class="text-sm text-gray-500 mt-2">Phân cách các kỹ năng bằng dấu phẩy (,)</p>
+            <textarea class="pf-textarea" rows="4" placeholder="Ví dụ: ReactJS, NodeJS, TypeScript..." v-model="profile.skills"></textarea>
+            <p class="text-helper mt-2">Phân cách các kỹ năng bằng dấu phẩy (,)</p>
           </div>
         </Card>
       </div>
 
       <!-- Right Column: CV Upload -->
       <div class="space-y-8">
-        <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl overflow-hidden sticky top-6">
-          <div class="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 border-b border-blue-100">
-            <h3 class="text-xl font-bold text-blue-900 flex items-center gap-2">
-              <FileText class="w-6 h-6 text-blue-600" />
+        <Card class="card-elevate pf-card sticky top-6 animate-rise">
+          <div class="pf-card-head">
+            <h3 class="pf-card-title">
+              <span class="kpi-icon"><FileText :size="18" /></span>
               CV của bạn
             </h3>
           </div>
-          
+
           <div class="p-6 space-y-4">
             <!-- Hidden File Input -->
             <input type="file" ref="fileInput" @change="handleFileUpload" accept=".pdf,.doc,.docx" multiple class="hidden" style="display: none;" />
 
             <!-- Upload Area -->
-            <div class="group border-2 border-dashed border-gray-200 hover:border-blue-400 bg-gray-50 hover:bg-blue-50/50 rounded-xl p-6 text-center cursor-pointer transition-all duration-300 relative overflow-hidden" @click="fileInput.click()">
-              <div class="absolute inset-0 bg-gradient-to-br from-blue-400/0 to-indigo-400/0 group-hover:from-blue-400/10 group-hover:to-indigo-400/10 transition-all duration-500"></div>
-              <div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3 group-hover:-translate-y-2 group-hover:shadow-md transition-all duration-300">
-                <Upload class="w-6 h-6 text-blue-500" />
-              </div>
-              <p class="text-gray-900 font-bold mb-1 group-hover:text-blue-700 transition-colors">Tải CV lên (Nhiều file)</p>
-              <p class="text-gray-500 text-sm font-medium">PDF, DOCX (Tối đa 5MB/file)</p>
+            <div class="pf-dropzone" @click="fileInput.click()">
+              <div class="pf-dz-icon"><Upload :size="22" /></div>
+              <p class="pf-dz-title">Tải CV lên (Nhiều file)</p>
+              <p class="text-helper">PDF, DOCX (Tối đa 5MB/file)</p>
             </div>
 
             <!-- List of Current CVs -->
             <div v-if="uploadedCvs.length > 0" class="space-y-3 mt-6">
-              <h4 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Danh sách CV đã tải lên</h4>
-              
-              <div v-for="cv in uploadedCvs" :key="cv.id" @click="cv.status === 'done' && viewCv(cv)" class="bg-blue-50/40 p-4 rounded-xl border border-blue-100 flex items-center gap-4 transition-all group" :class="cv.status === 'done' ? 'hover:shadow-md hover:bg-blue-50/80 cursor-pointer' : 'opacity-80 cursor-wait'">
-                <div class="w-12 h-12 bg-white rounded-lg shadow-sm flex items-center justify-center flex-shrink-0" :class="cv.status === 'done' ? 'group-hover:scale-105 transition-transform' : ''">
-                  <FileText class="w-6 h-6" :class="cv.status === 'done' ? 'text-blue-600' : 'text-slate-400'" />
+              <h4 class="pf-list-title">Danh sách CV đã tải lên</h4>
+
+              <div v-for="cv in uploadedCvs" :key="cv.id" @click="cv.status === 'done' && viewCv(cv)" class="pf-cv-item group" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
+                <div class="pf-cv-icon" :class="cv.status === 'done' ? '' : 'is-muted'">
+                  <FileText :size="20" />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="font-bold text-gray-800 truncate">{{ cv.name }}</p>
-                  <p v-if="cv.status === 'done'" class="text-xs text-emerald-600 flex items-center gap-1 mt-1 font-medium">
-                    <CheckCircle class="w-3 h-3" /> Tải lên: {{ cv.date }} • {{ cv.size }}
+                  <p class="pf-cv-name truncate">{{ cv.name }}</p>
+                  <p v-if="cv.status === 'done'" class="pf-cv-meta is-ok">
+                    <CheckCircle :size="13" /> Tải lên: {{ cv.date }} • {{ cv.size }}
                   </p>
-                  <p v-else class="text-xs text-amber-600 flex items-center gap-1 mt-1 font-medium">
-                    AI đang đọc thông tin...
-                  </p>
+                  <p v-else class="pf-cv-meta is-wait">AI đang đọc thông tin...</p>
                 </div>
-                
-                <div class="flex gap-2">
-                  <div v-if="cv.status === 'analyzing'" class="px-3 py-1.5 bg-amber-100/50 text-amber-700 rounded-lg font-medium text-xs flex items-center gap-2">
-                    <Loader2 class="w-4 h-4 animate-spin" /> Đang phân tích
+
+                <div class="flex gap-1">
+                  <div v-if="cv.status === 'analyzing'" class="pf-analyzing">
+                    <Loader2 :size="15" class="pf-spin" /> Đang phân tích
                   </div>
                   <template v-else>
-                    <button type="button" @click.stop="viewCv(cv)" class="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Xem chi tiết">
-                      <Eye class="w-5 h-5" />
-                    </button>
-                    <button type="button" @click.stop="deleteCv(cv.id)" class="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Xóa CV">
-                      <Trash2 class="w-5 h-5" />
-                    </button>
+                    <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="18" /></button>
+                    <button type="button" @click.stop="deleteCv(cv.id)" class="pf-icon-btn is-danger" title="Xóa CV"><Trash2 :size="18" /></button>
                   </template>
                 </div>
               </div>
             </div>
-            
-            <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <p class="text-amber-800 text-sm leading-relaxed font-medium">
-                CV của bạn sẽ được AI dùng làm ngữ cảnh (context) để đặt câu hỏi sát với kinh nghiệm thực tế của bạn trong phần Luyện phỏng vấn Mock Interview.
-              </p>
+
+            <div class="ai-block pf-note">
+              <Info :size="20" />
+              <p>CV của bạn sẽ được AI dùng làm ngữ cảnh (context) để đặt câu hỏi sát với kinh nghiệm thực tế của bạn trong phần Luyện phỏng vấn Mock Interview.</p>
             </div>
           </div>
         </Card>
@@ -364,7 +353,7 @@ const handleSave = async (e) => {
           <div class="w-full lg:w-[400px] space-y-6 shrink-0">
             <div>
               <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4 flex items-center gap-2">
-                <Bot class="w-5 h-5 text-indigo-500" /> Thông tin AI đã trích xuất
+                <Bot class="w-5 h-5" style="color: var(--accent);" /> Thông tin AI đã trích xuất
               </h4>
               <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 text-sm">
                 <div class="flex flex-col gap-1 border-b border-slate-100 pb-3">
@@ -387,7 +376,7 @@ const handleSave = async (e) => {
             <div>
               <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-4">Kỹ năng phát hiện được</h4>
               <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-2.5">
-                <span v-for="skill in (selectedCv.parsedData?.skills || [])" :key="skill" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold border border-indigo-100">
+                <span v-for="skill in (selectedCv.parsedData?.skills || [])" :key="skill" class="modal-skill-chip">
                   {{ skill }}
                 </span>
               </div>
@@ -410,11 +399,45 @@ const handleSave = async (e) => {
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
-}
+.pf-card { padding: 0; overflow: hidden; }
+.pf-card-head { padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--surface-soft); }
+.pf-card-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--text-main); }
+.pf-sub-title { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 22px; }
+.pf-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.pf-select { width: 100%; height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text-main); outline: none; transition: all 0.2s ease; font-family: var(--sans); }
+.pf-select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+.pf-textarea { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); outline: none; resize: none; color: var(--text-main); font-family: var(--sans); font-size: 14px; transition: all 0.2s ease; }
+.pf-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+
+.pf-dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 24px; text-align: center; cursor: pointer; transition: all 0.3s ease; }
+.pf-dropzone:hover { border-color: var(--primary); background: var(--primary-light); }
+.pf-dz-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; margin: 0 auto 12px; border-radius: 50%; background: var(--primary-light); color: var(--primary); transition: transform 0.3s ease; }
+.pf-dropzone:hover .pf-dz-icon { transform: translateY(-3px); }
+.pf-dz-title { font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+.pf-list-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.pf-cv-item { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); transition: all 0.25s ease; }
+.pf-cv-item.is-done { cursor: pointer; }
+.pf-cv-item.is-done:hover { box-shadow: var(--shadow-md); border-color: var(--primary-light); }
+.pf-cv-item.is-loading { opacity: 0.8; cursor: wait; }
+.pf-cv-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: var(--radius); background: var(--primary-light); color: var(--primary); flex-shrink: 0; }
+.pf-cv-icon.is-muted { background: var(--surface-soft); color: var(--text-muted); }
+.pf-cv-name { font-weight: 700; color: var(--text-main); }
+.pf-cv-meta { display: flex; align-items: center; gap: 5px; font-size: 12px; margin-top: 3px; font-weight: 500; }
+.pf-cv-meta.is-ok { color: var(--success); }
+.pf-cv-meta.is-wait { color: var(--warning); }
+.pf-analyzing { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--radius); background: rgba(217,119,6,0.12); color: var(--warning); font-size: 12px; font-weight: 600; }
+.pf-icon-btn { padding: 8px; border: none; background: transparent; border-radius: var(--radius); color: var(--primary); cursor: pointer; opacity: 0; transition: all 0.2s ease; }
+.pf-cv-item:hover .pf-icon-btn { opacity: 1; }
+.pf-icon-btn:hover { background: var(--primary-light); }
+.pf-icon-btn.is-danger { color: var(--danger); }
+.pf-icon-btn.is-danger:hover { background: rgba(220,38,38,0.1); }
+.pf-spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pf-note { display: flex; gap: 10px; padding: 14px 16px; }
+.pf-note :deep(svg) { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.pf-note p { color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+
+.modal-skill-chip { padding: 6px 12px; border-radius: var(--radius); background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(8,145,178,0.2); font-size: 13px; font-weight: 600; }
 </style>

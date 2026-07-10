@@ -126,7 +126,7 @@ const copyCareerLink = async () => {
         </p>
       </div>
       <div class="flex gap-3">
-        <Button @click="router.push('/interviews/new')" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+        <Button @click="router.push('/interviews/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
           <Plus size="16" /> Tạo lịch phỏng vấn
         </Button>
       </div>
@@ -136,10 +136,10 @@ const copyCareerLink = async () => {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" v-if="!loading">
       <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md transition-shadow">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-          <Briefcase size="64" class="text-indigo-500" />
+          <Briefcase size="64" class="text-blue-500" />
         </div>
         <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">
-          <div class="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400">
+          <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400">
             <Briefcase size="18" />
           </div>
           Jobs đang mở
@@ -204,7 +204,7 @@ const copyCareerLink = async () => {
                 <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ i.job.title || 'Unknown Job' }}</div>
               </div>
               <div class="text-right">
-                <div class="font-bold text-indigo-600 dark:text-indigo-400">{{ formatTime(i.dt) }}</div>
+                <div class="font-bold text-blue-600 dark:text-blue-400">{{ formatTime(i.dt) }}</div>
                 <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 bg-white dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 inline-block">{{ formatDate(i.dt) }}</div>
               </div>
             </div>
@@ -235,14 +235,14 @@ const copyCareerLink = async () => {
 
       <div class="space-y-6">
         <!-- AI Insights -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
-          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 relative z-10">AI Insights</h2>
           <div class="space-y-5 relative z-10" v-if="!loading">
             <div class="flex gap-3">
-              <div class="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg text-indigo-600 dark:text-indigo-400 shrink-0 h-min">
+              <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400 shrink-0 h-min">
                 <Sparkles size="18" />
               </div>
               <div>

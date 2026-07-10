@@ -97,26 +97,24 @@ const handleSave = () => {
 
 <template>
   <div class="space-y-8 animate-fade-in pb-12 max-w-6xl mx-auto">
-    <div class="flex items-center gap-4 mb-8">
-      <button class="p-2 bg-white hover:bg-gray-50 text-gray-600 rounded-full shadow-sm transition-colors border border-gray-100" @click="router.back()">
-        <ArrowLeft class="w-6 h-6" />
+    <div class="flex items-center gap-4 mb-8 animate-rise">
+      <button class="back-btn" @click="router.back()">
+        <ArrowLeft :size="20" />
       </button>
       <div>
-        <h1 class="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Cập nhật CV / Hồ sơ</h1>
-        <p class="text-gray-500 mt-1">Upload CV của bạn để AI phân tích kỹ năng và kinh nghiệm.</p>
+        <h1 class="page-title">Cập nhật CV / Hồ sơ</h1>
+        <p class="page-subtitle">Upload CV của bạn để AI phân tích kỹ năng và kinh nghiệm.</p>
       </div>
     </div>
 
     <div class="flex flex-col lg:flex-row gap-8 min-h-[500px]">
       <!-- Upload Zone -->
-      <Card class="flex-1 flex flex-col bg-white/80 backdrop-blur-xl border border-white/20 shadow-xl rounded-3xl overflow-hidden relative group">
-        <div class="absolute inset-0 bg-gradient-to-br from-blue-50/50 to-indigo-50/50 pointer-events-none"></div>
-        
-        <div 
-          class="flex-1 flex flex-col items-center justify-center p-12 text-center transition-all duration-500 relative z-10 m-6 rounded-2xl border-2 border-dashed"
+      <Card class="flex-1 flex flex-col card-elevate overflow-hidden relative group animate-rise">
+        <div
+          class="dropzone"
           :class="[
-            isDragging ? 'border-blue-500 bg-blue-50/50 scale-[1.02] shadow-inner' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50/30',
-            file ? 'border-solid border-blue-400 bg-white/60' : 'cursor-pointer'
+            isDragging ? 'is-dragging' : '',
+            file ? 'has-file' : 'cursor-pointer'
           ]"
           @dragover="handleDragOver"
           @dragleave="handleDragLeave"
@@ -133,117 +131,100 @@ const handleSave = () => {
           
           <!-- State: Idle -->
           <template v-if="uploadStatus === 'idle'">
-            <div class="w-24 h-24 mb-6 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300 relative">
-              <div class="absolute inset-0 rounded-full bg-blue-400 opacity-20 animate-ping"></div>
-              <UploadCloud class="w-12 h-12 text-blue-600" />
+            <div class="dz-icon">
+              <span class="dz-icon-ping"></span>
+              <UploadCloud :size="44" />
             </div>
-            <h3 class="text-2xl font-bold text-gray-800 mb-2">Kéo thả file PDF vào đây</h3>
-            <p class="text-gray-500 mb-6 font-medium">Hoặc click để chọn từ thiết bị của bạn (Tối đa 5MB)</p>
-            <Button variant="secondary" class="pointer-events-none shadow-md">Chọn File</Button>
+            <h3 class="dz-title">Kéo thả file PDF vào đây</h3>
+            <p class="dz-sub">Hoặc click để chọn từ thiết bị của bạn (Tối đa 5MB)</p>
+            <Button variant="secondary" class="pointer-events-none">Chọn File</Button>
           </template>
           
           <!-- State: Uploading -->
           <template v-else-if="uploadStatus === 'uploading'">
-            <div class="w-24 h-24 mb-6 rounded-full bg-blue-100 flex items-center justify-center shadow-lg animate-pulse">
-              <FileText class="w-12 h-12 text-blue-600" />
+            <div class="dz-icon is-soft"><FileText :size="44" /></div>
+            <h3 class="dz-title-sm">Đang tải lên: {{ file.name }}</h3>
+            <div class="dz-progress">
+              <div class="dz-progress-bar" :style="{ width: `${uploadProgress}%` }"></div>
             </div>
-            <h3 class="text-xl font-bold text-gray-800 mb-6 truncate max-w-full px-4">Đang tải lên: {{ file.name }}</h3>
-            
-            <div class="w-full max-w-xs bg-gray-100 rounded-full h-2.5 mb-3 overflow-hidden shadow-inner">
-              <div class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full transition-all duration-200 ease-out relative" :style="{ width: `${uploadProgress}%` }">
-                <div class="absolute inset-0 bg-white/20 animate-[shimmer_1s_infinite]"></div>
-              </div>
-            </div>
-            <p class="text-blue-600 font-bold text-sm">{{ uploadProgress }}% hoàn tất</p>
+            <p class="dz-percent">{{ uploadProgress }}% hoàn tất</p>
           </template>
-          
+
           <!-- State: Parsing -->
           <template v-else-if="uploadStatus === 'parsing'">
-            <div class="w-24 h-24 mb-6 rounded-full bg-indigo-100 flex items-center justify-center shadow-[0_0_30px_rgba(79,70,229,0.3)] relative">
-              <div class="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
-              <Search class="w-10 h-10 text-indigo-600 animate-pulse" />
+            <div class="dz-icon is-accent-icon">
+              <span class="dz-spin-ring"></span>
+              <Search :size="40" />
             </div>
-            <h3 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-2">AI đang đọc và phân tích...</h3>
-            <p class="text-gray-500 font-medium">Hệ thống đang trích xuất kỹ năng và kinh nghiệm của bạn. Vui lòng đợi nhé!</p>
+            <h3 class="dz-title" style="color: var(--accent);">AI đang đọc và phân tích...</h3>
+            <p class="dz-sub">Hệ thống đang trích xuất kỹ năng và kinh nghiệm của bạn. Vui lòng đợi nhé!</p>
           </template>
-          
+
           <!-- State: Success -->
           <template v-else-if="uploadStatus === 'success'">
-            <div class="w-24 h-24 mb-6 rounded-full bg-emerald-100 flex items-center justify-center shadow-lg relative">
-              <div class="absolute inset-0 rounded-full bg-emerald-400 opacity-20 animate-[ping_2s_ease-out_1]"></div>
-              <CheckCircle class="w-12 h-12 text-emerald-600" />
+            <div class="dz-icon is-success-icon">
+              <span class="dz-icon-ping is-success-ping"></span>
+              <CheckCircle :size="44" />
             </div>
-            <h3 class="text-2xl font-bold text-gray-800 mb-2">Phân tích thành công!</h3>
-            <div class="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200 mb-6">
-              <FileText class="w-5 h-5 text-gray-400" />
-              <span class="text-gray-600 font-medium truncate max-w-[200px]">{{ file.name }}</span>
+            <h3 class="dz-title">Phân tích thành công!</h3>
+            <div class="dz-file-chip">
+              <FileText :size="18" />
+              <span class="truncate">{{ file.name }}</span>
             </div>
-            <Button variant="ghost" @click.stop="uploadStatus = 'idle'; file = null; parsedData = null" class="text-gray-500 hover:text-blue-600">
+            <Button variant="ghost" @click.stop="uploadStatus = 'idle'; file = null; parsedData = null">
               Tải lên file khác
             </Button>
           </template>
-          
+
           <!-- State: Error -->
           <template v-else-if="uploadStatus === 'error'">
-            <div class="w-24 h-24 mb-6 rounded-full bg-rose-100 flex items-center justify-center shadow-lg">
-              <FileText class="w-12 h-12 text-rose-600" />
-            </div>
-            <h3 class="text-2xl font-bold text-rose-600 mb-2">Lỗi tải lên</h3>
-            <p class="text-gray-500 mb-6 font-medium">Chỉ hỗ trợ định dạng PDF. Vui lòng kiểm tra lại file.</p>
-            <Button variant="secondary" @click.stop="uploadStatus = 'idle'" class="shadow-sm border-rose-200 hover:border-rose-300 hover:text-rose-600">
-              Thử lại
-            </Button>
+            <div class="dz-icon is-error-icon"><FileText :size="44" /></div>
+            <h3 class="dz-title" style="color: var(--danger);">Lỗi tải lên</h3>
+            <p class="dz-sub">Chỉ hỗ trợ định dạng PDF. Vui lòng kiểm tra lại file.</p>
+            <Button variant="secondary" @click.stop="uploadStatus = 'idle'">Thử lại</Button>
           </template>
         </div>
       </Card>
 
       <!-- Results Panel -->
-      <div v-if="parsedData" class="lg:w-96 animate-[slideInRight_0.5s_ease-out]">
-        <Card class="bg-white/95 backdrop-blur-xl border-t-4 border-t-indigo-500 shadow-xl rounded-2xl p-6 h-full flex flex-col">
-          <h3 class="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-            <Sparkles class="w-5 h-5 text-indigo-500" /> Kết quả AI Trích xuất
+      <div v-if="parsedData" class="lg:w-96 result-panel">
+        <Card class="card-elevate result-card">
+          <h3 class="section-heading mb-2">
+            <span class="kpi-icon is-accent"><Sparkles :size="18" /></span>
+            Kết quả AI Trích xuất
           </h3>
-          <p class="text-gray-500 text-sm mb-6 pb-4 border-b border-gray-100">
-            Vui lòng kiểm tra lại thông tin AI đã nhận diện bên dưới.
-          </p>
-          
-          <div class="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <p class="result-hint">Vui lòng kiểm tra lại thông tin AI đã nhận diện bên dưới.</p>
+
+          <div class="space-y-4 flex-1 overflow-y-auto pr-1 custom-scrollbar">
             <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Họ và Tên</label>
-              <div class="bg-gray-50/80 border border-gray-100 rounded-lg p-3 text-gray-800 font-medium shadow-sm">{{ parsedData.name }}</div>
+              <label class="result-label">Họ và Tên</label>
+              <div class="result-value">{{ parsedData.name }}</div>
             </div>
-            
             <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Email</label>
-              <div class="bg-gray-50/80 border border-gray-100 rounded-lg p-3 text-gray-800 font-medium shadow-sm">{{ parsedData.email }}</div>
+              <label class="result-label">Email</label>
+              <div class="result-value">{{ parsedData.email }}</div>
             </div>
-            
             <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Số điện thoại</label>
-              <div class="bg-gray-50/80 border border-gray-100 rounded-lg p-3 text-gray-800 font-medium shadow-sm">{{ parsedData.phone }}</div>
+              <label class="result-label">Số điện thoại</label>
+              <div class="result-value">{{ parsedData.phone }}</div>
             </div>
-            
             <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Kỹ năng chính</label>
-              <div class="flex flex-wrap gap-2 mt-2">
-                <span v-for="skill in parsedData.skills" :key="skill"
-                  class="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-sm font-semibold shadow-sm hover:bg-indigo-100 transition-colors cursor-default">
-                  {{ skill }}
-                </span>
-                <span v-if="!parsedData.skills || parsedData.skills.length === 0" class="text-sm text-gray-400 italic">
+              <label class="result-label">Kỹ năng chính</label>
+              <div class="flex flex-wrap gap-2 mt-1">
+                <span v-for="skill in parsedData.skills" :key="skill" class="skill-chip">{{ skill }}</span>
+                <span v-if="!parsedData.skills || parsedData.skills.length === 0" class="result-empty">
                   AI chưa trích xuất được kỹ năng từ CV.
                 </span>
               </div>
             </div>
-            
             <div>
-              <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Kinh nghiệm tóm tắt</label>
-              <div class="bg-gray-50/80 border border-gray-100 rounded-lg p-3 text-gray-800 font-medium shadow-sm leading-relaxed text-sm">{{ parsedData.experience }}</div>
+              <label class="result-label">Kinh nghiệm tóm tắt</label>
+              <div class="result-value result-value-text">{{ parsedData.experience }}</div>
             </div>
           </div>
-          
-          <div class="mt-6 pt-4 border-t border-gray-100">
-            <button @click="handleSave" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 transform hover:-translate-y-0.5">
+
+          <div class="result-foot">
+            <button @click="handleSave" class="btn btn-primary sheen w-full">
               Xác nhận & Cập nhật Hồ sơ
             </button>
           </div>
@@ -254,34 +235,51 @@ const handleSave = () => {
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
-}
+.back-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; flex-shrink: 0; }
+.back-btn:hover { color: var(--primary); border-color: var(--primary-light); }
 
-@keyframes slideInRight {
-  from { transform: translateX(30px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+.dropzone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 48px; margin: 22px; border: 2px dashed var(--border); border-radius: var(--radius-lg); transition: all 0.35s ease; }
+.dropzone.cursor-pointer { cursor: pointer; }
+.dropzone.cursor-pointer:hover { border-color: var(--primary); background: var(--primary-light); }
+.dropzone.is-dragging { border-color: var(--primary); background: var(--primary-light); transform: scale(1.01); }
+.dropzone.has-file { border-style: solid; border-color: var(--primary); }
 
-@keyframes shimmer {
-  100% { transform: translateX(100%); }
-}
+.dz-icon { position: relative; width: 88px; height: 88px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--primary-light); color: var(--primary); margin-bottom: 22px; box-shadow: var(--shadow-md); }
+.dz-icon.is-soft { animation: softPulse 1.4s ease-in-out infinite; }
+.dz-icon.is-accent-icon { background: var(--accent-bg); color: var(--accent); }
+.dz-icon.is-success-icon { background: rgba(22,163,74,0.12); color: var(--success); }
+.dz-icon.is-error-icon { background: rgba(220,38,38,0.12); color: var(--danger); }
+.dz-icon-ping { position: absolute; inset: 0; border-radius: 50%; background: var(--primary); opacity: 0.18; animation: dzping 1.8s ease-out infinite; }
+.dz-icon-ping.is-success-ping { background: var(--success); }
+.dz-spin-ring { position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--accent); border-top-color: transparent; animation: spin 0.9s linear infinite; }
+@keyframes dzping { 0% { transform: scale(1); opacity: 0.18; } 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes softPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
-  border-radius: 4px;
-}
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+.dz-title { font-size: 20px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+.dz-title-sm { font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 20px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 12px; }
+.dz-sub { color: var(--text-secondary); margin-bottom: 22px; }
+.dz-progress { width: 100%; max-width: 20rem; height: 8px; border-radius: 999px; background: var(--surface-soft); overflow: hidden; margin-bottom: 10px; }
+.dz-progress-bar { height: 100%; border-radius: 999px; background: var(--gradient-brand); transition: width 0.2s ease; }
+.dz-percent { color: var(--primary); font-weight: 700; font-size: 13px; }
+.dz-file-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: var(--radius); background: var(--surface-soft); border: 1px solid var(--border); color: var(--text-secondary); font-weight: 500; margin-bottom: 22px; max-width: 260px; }
+
+.result-panel { animation: riseIn 0.5s cubic-bezier(0.2,0.8,0.2,1) both; }
+.result-card { display: flex; flex-direction: column; height: 100%; padding: 24px; border-top: 3px solid var(--accent); }
+.result-hint { color: var(--text-secondary); font-size: 14px; margin: 8px 0 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.result-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.result-value { background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; color: var(--text-main); font-weight: 500; }
+.result-value-text { font-size: 14px; line-height: 1.55; font-weight: 400; }
+.result-empty { font-size: 14px; color: var(--text-muted); font-style: italic; }
+.skill-chip { padding: 6px 12px; border-radius: var(--radius-full); background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(8,145,178,0.2); font-size: 13px; font-weight: 600; }
+.result-foot { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dz-icon.is-soft, .dz-icon-ping, .dz-spin-ring { animation: none !important; }
+  .result-panel { animation: none !important; }
 }
 </style>

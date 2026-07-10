@@ -138,7 +138,7 @@ const handleAiAnalyze = async () => {
 
 <template>
   <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
-    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+    <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
     <span class="font-medium">Đang tải chi tiết công việc...</span>
   </div>
   <div v-else class="animate-fade-in space-y-6">
@@ -173,7 +173,7 @@ const handleAiAnalyze = async () => {
                 v-model="job.title" 
                 required 
                 minlength="2"
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
                 placeholder="Ví dụ: Frontend Developer"
               />
             </div>
@@ -183,7 +183,7 @@ const handleAiAnalyze = async () => {
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
               <select 
                 v-model="job.status" 
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
               >
                 <option value="Open">Đang mở (Open)</option>
                 <option value="Closed">Đã đóng (Closed)</option>
@@ -199,7 +199,7 @@ const handleAiAnalyze = async () => {
                 placeholder="Nhập mô tả tổng quan về công việc (tối thiểu 10 ký tự)..."
                 required
                 minlength="10"
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
@@ -211,7 +211,7 @@ const handleAiAnalyze = async () => {
                 v-model="job.requirements"
                 placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
@@ -223,13 +223,13 @@ const handleAiAnalyze = async () => {
                 v-model="job.benefits"
                 placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
               ></textarea>
             </div>
 
             <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
               <Button type="button" variant="ghost" @click="router.push('/jobs')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
-              <Button type="submit" :disabled="saving" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+              <Button type="submit" :disabled="saving" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
                 <Save size="16" class="mr-2" v-if="!saving" /> 
                 <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
                 {{ saving ? 'Đang lưu...' : 'Lưu thông tin' }}
@@ -250,8 +250,8 @@ const handleAiAnalyze = async () => {
       <!-- Right Column -->
       <div class="space-y-6">
         <!-- AI Analysis Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
-          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 relative z-10">AI Phân tích JD</h2>
@@ -265,21 +265,21 @@ const handleAiAnalyze = async () => {
             :class="[
               aiAnalyzing || !job.description 
                 ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'
-                : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400'
+                : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400'
             ]"
             @click="handleAiAnalyze"
             :disabled="aiAnalyzing || !job.description"
           >
             <Sparkles size="16" v-if="!aiAnalyzing" />
-            <div v-else class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+            <div v-else class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
             {{ aiAnalyzing ? 'Đang phân tích...' : 'Phân tích JD bằng AI' }}
           </button>
 
           <!-- AI result: Summary -->
           <div v-if="aiResult" class="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-5 relative z-10 animate-fade-in">
             <!-- Summary Box -->
-            <div v-if="aiResult.summary" class="bg-indigo-50/50 dark:bg-indigo-500/5 rounded-xl p-4 border border-indigo-100/50 dark:border-indigo-500/10">
-              <p class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">Tóm tắt AI</p>
+            <div v-if="aiResult.summary" class="bg-blue-50/50 dark:bg-blue-500/5 rounded-xl p-4 border border-blue-100/50 dark:border-blue-500/10">
+              <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Tóm tắt AI</p>
               <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ aiResult.summary }}</p>
             </div>
 
@@ -288,7 +288,7 @@ const handleAiAnalyze = async () => {
               <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Kỹ năng bắt buộc</p>
               <div class="flex flex-wrap gap-2">
                 <span v-for="s in aiResult.required_skills" :key="s"
-                  class="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-500/20">
+                  class="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold border border-blue-100 dark:border-blue-500/20">
                   {{ s }}
                 </span>
               </div>
@@ -315,7 +315,7 @@ const handleAiAnalyze = async () => {
                 <div v-for="(r, i) in rubric" :key="i"
                   class="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg">
                   <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.criterion }}</span>
-                  <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded">{{ r.weight }}</span>
+                  <span class="text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded">{{ r.weight }}</span>
                 </div>
               </div>
             </div>

@@ -99,7 +99,7 @@ const confirmDelete = async () => {
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Việc làm</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Quản lý các vị trí tuyển dụng và pipeline ứng viên.</p>
       </div>
-      <Button @click="router.push('/jobs/new')" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+      <Button @click="router.push('/jobs/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Tạo job mới
       </Button>
     </div>
@@ -109,11 +109,11 @@ const confirmDelete = async () => {
       <!-- Toolbar -->
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
-          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
           <input 
             type="text" 
             placeholder="Tìm kiếm công việc..." 
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
             v-model="filters.keyword"
             @keyup.enter="fetchJobs"
           />
@@ -125,14 +125,14 @@ const confirmDelete = async () => {
 
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải dữ liệu...</span>
       </div>
       
       <div v-else class="w-full overflow-x-auto">
         <Table :columns="columns" :data="jobs" class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
           <template #title="{ row }">
-            <div class="font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px] cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" :title="row.title" @click="router.push(`/jobs/${row.id}`)">
+            <div class="font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" :title="row.title" @click="router.push(`/jobs/${row.id}`)">
               {{ row.title }}
             </div>
           </template>
@@ -152,13 +152,13 @@ const confirmDelete = async () => {
             <div class="text-slate-500 dark:text-slate-400 font-medium">{{ row.created }}</div>
           </template>
           <template #applicants="{ row }">
-            <div class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold border border-indigo-100 dark:border-indigo-500/20">
+            <div class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 font-semibold border border-blue-100 dark:border-blue-500/20">
               {{ row.applicants }}
             </div>
           </template>
           <template #action="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors" title="Xem chi tiết">
+              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
                 <Eye size="18" />
               </button>
               <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Chỉnh sửa">
@@ -189,7 +189,7 @@ const confirmDelete = async () => {
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái công việc</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
             v-model="filters.status"
           >
             <option value="">Tất cả trạng thái</option>
@@ -202,7 +202,7 @@ const confirmDelete = async () => {
       </div>
       <div class="flex justify-end gap-3 p-1">
         <Button variant="ghost" @click="clearFilter" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="applyFilter" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">Áp dụng</Button>
+        <Button variant="primary" @click="applyFilter" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">Áp dụng</Button>
       </div>
     </Modal>
   </div>

@@ -18,16 +18,18 @@ body, #app, .candidate-layout, .public-layout, .landing-page {
   /* Primary Colors */
   --primary: #2563EB;
   --primary-hover: #1D4ED8;
+  --primary-light: #DBEAFE;
   --accent: #0891B2;
-  
+  --accent-bg: #ECFEFF;
+
   /* Background & Surface */
   --background: #F8FAFC;
   --surface: #FFFFFF;
   --surface-soft: #F1F5F9;
-  
+
   /* Borders */
   --border: #E2E8F0;
-  
+
   /* Text */
   --text-main: #0F172A;
   --text-secondary: #475569;
@@ -39,12 +41,21 @@ body, #app, .candidate-layout, .public-layout, .landing-page {
   --danger: #DC2626;
   --info: #2563EB;
 
+  /* Typography */
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
   /* Spacing & Layout */
   --radius: 12px;
   --radius-lg: 16px;
   --radius-full: 9999px;
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+  --shadow-glow: 0 8px 24px -6px rgba(37, 99, 235, 0.35);
+
+  /* Brand gradients (blue -> cyan only, no purple) */
+  --gradient-brand: linear-gradient(135deg, var(--primary), var(--accent));
+  --gradient-brand-soft: linear-gradient(135deg, rgba(37,99,235,0.10), rgba(8,145,178,0.10));
 }
 
 * {
@@ -509,3 +520,155 @@ textarea.input-field {
 .toast-error .toast-icon { color: var(--danger); }
 .toast-warning .toast-icon { color: var(--warning); }
 .toast-info .toast-icon { color: var(--info); }
+
+/* =====================================================================
+   PREMIUM VISUAL LAYER (candidate side) — token-based, reusable.
+   Goal: hiện đại, bắt mắt, có chiều sâu 3D "vừa phải", không lố.
+   Tất cả hiệu ứng đều tôn trọng prefers-reduced-motion.
+   ===================================================================== */
+
+/* Section heading — thay cho gradient text khổng lồ */
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-top: 6px;
+}
+
+/* Card có chiều sâu + nâng nhẹ khi hover (elevate) */
+.card-elevate {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.35s ease;
+  will-change: transform;
+}
+.card-elevate:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-light);
+}
+
+/* Tilt 3D nhẹ — dùng cho card nổi bật (KPI, CTA). Rất tinh tế: 2-3deg. */
+.tilt-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.4s ease;
+}
+.tilt-3d:hover {
+  transform: perspective(900px) rotateX(2.5deg) rotateY(-2.5deg) translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+.tilt-3d > * { transform: translateZ(0); }
+
+/* Icon "chip" cho KPI — thay cho vòng tròn màu loè loẹt */
+.kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  background: var(--primary-light);
+  color: var(--primary);
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+.kpi-icon.is-accent { background: var(--accent-bg); color: var(--accent); }
+.kpi-icon.is-success { background: rgba(22,163,74,0.12); color: var(--success); }
+.kpi-icon.is-warning { background: rgba(217,119,6,0.12); color: var(--warning); }
+.card-elevate:hover .kpi-icon,
+.tilt-3d:hover .kpi-icon { transform: scale(1.06); }
+
+/* Viền sáng bên trái khi hover (dùng cho item danh sách) */
+.hover-rail { position: relative; overflow: hidden; }
+.hover-rail::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--gradient-brand);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.3s ease;
+}
+.hover-rail:hover::before { transform: scaleY(1); }
+
+/* Banner/CTA nền brand gradient (blue->cyan) */
+.brand-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+.brand-banner::after {
+  content: '';
+  position: absolute;
+  top: -40%; right: -10%;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
+  pointer-events: none;
+}
+
+/* Sheen: vệt sáng lướt qua khi hover (dùng cho nút/banner nổi bật) */
+.sheen { position: relative; overflow: hidden; }
+.sheen::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 60%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.sheen:hover::before { left: 140%; }
+
+/* AI accent block */
+.ai-block {
+  background: var(--accent-bg);
+  border: 1px solid rgba(8,145,178,0.20);
+  border-radius: var(--radius);
+}
+
+/* Score pill theo ngưỡng điểm */
+.score-pill {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px; border-radius: var(--radius-full);
+  font-size: 13px; font-weight: 700;
+}
+.score-pill.is-high { background: rgba(22,163,74,0.12); color: var(--success); }
+.score-pill.is-mid  { background: rgba(217,119,6,0.12); color: var(--warning); }
+.score-pill.is-low  { background: rgba(220,38,38,0.12); color: var(--danger); }
+
+/* Entrance animations */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: riseIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.stagger > * { animation: riseIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.stagger > *:nth-child(4) { animation-delay: 0.22s; }
+.stagger > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger > *:nth-child(6) { animation-delay: 0.34s; }
+
+/* Tôn trọng người dùng tắt hiệu ứng chuyển động */
+@media (prefers-reduced-motion: reduce) {
+  .card-elevate, .tilt-3d, .kpi-icon, .hover-rail::before, .sheen::before {
+    transition: none !important;
+  }
+  .tilt-3d:hover { transform: translateY(-2px); }
+  .card-elevate:hover { transform: none; }
+  .animate-rise, .stagger > * { animation: none !important; }
+}

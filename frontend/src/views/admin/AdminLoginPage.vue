@@ -43,18 +43,18 @@ const handleLogin = async (e) => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-4 relative overflow-hidden font-sans">
+  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-4 relative overflow-hidden font-sans">
     <!-- Background Glow -->
-    <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -top-40 -left-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
     <div class="w-full max-w-md relative z-10">
       <!-- Brand & Title -->
       <div class="text-center mb-8">
-        <div class="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-500/30 border border-indigo-400/20">
+        <div class="w-16 h-16 bg-gradient-to-tr from-blue-600 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-500/30 border border-blue-400/20">
           <ShieldCheck size="36" class="text-white" />
         </div>
-        <h1 class="text-3xl font-extrabold text-white tracking-tight">WeMake <span class="text-indigo-400">Admin</span></h1>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">WeMake <span class="text-blue-400">Admin</span></h1>
         <p class="text-slate-400 text-sm mt-1">Cổng Quản trị Hệ sinh thái Tuyển dụng AI</p>
       </div>
       
@@ -69,7 +69,7 @@ const handleLogin = async (e) => {
                 type="email" 
                 v-model="email" 
                 required
-                class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
+                class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 placeholder="admin@wemake.vn"
               />
             </div>
@@ -83,7 +83,7 @@ const handleLogin = async (e) => {
                 type="password" 
                 v-model="password" 
                 required
-                class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm transition-all"
+                class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 placeholder="••••••••"
               />
             </div>
@@ -97,7 +97,7 @@ const handleLogin = async (e) => {
           <button 
             type="submit" 
             :disabled="loading"
-            class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm rounded-xl transition-all duration-200 disabled:opacity-70 flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50"
+            class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold text-sm rounded-xl transition-all duration-200 disabled:opacity-70 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 hover:shadow-blue-600/50"
           >
             <RefreshCw v-if="loading" size="18" class="animate-spin" />
             {{ loading ? 'Đang xác thực bảo mật...' : 'Đăng nhập vào Hệ thống' }}

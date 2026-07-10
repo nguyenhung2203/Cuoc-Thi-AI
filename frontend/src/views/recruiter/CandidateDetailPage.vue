@@ -226,7 +226,7 @@ const handleParseCV = async () => {
 <template>
   <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" class="fixed top-5 right-5 z-[9999]" />
   <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
-    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+    <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
     <span class="font-medium">Đang tải chi tiết ứng viên...</span>
   </div>
   <div v-else class="animate-fade-in space-y-6">
@@ -257,9 +257,9 @@ const handleParseCV = async () => {
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
       <!-- Loading Overlay -->
-      <div v-if="uploading || isAiParsing" class="absolute inset-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center border border-indigo-100 dark:border-indigo-900 shadow-2xl">
-        <div class="w-16 h-16 mb-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shadow-lg relative animate-bounce">
-           <Sparkles size="32" class="text-indigo-600 dark:text-indigo-400" />
+      <div v-if="uploading || isAiParsing" class="absolute inset-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center border border-blue-100 dark:border-blue-900 shadow-2xl">
+        <div class="w-16 h-16 mb-6 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-lg relative animate-bounce">
+           <Sparkles size="32" class="text-blue-600 dark:text-blue-400" />
         </div>
         <h3 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
           {{ uploading ? 'Đang tải CV lên hệ thống...' : 'AI đang đọc và phân tích CV...' }}
@@ -269,9 +269,9 @@ const handleParseCV = async () => {
         </p>
         <div v-if="uploading" class="w-64 mt-6">
           <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div class="h-full bg-indigo-600 transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
+            <div class="h-full bg-blue-600 transition-all duration-300" :style="`width: ${uploadProgress}%`"></div>
           </div>
-          <p class="text-center text-sm font-bold text-indigo-600 mt-2">{{ uploadProgress }}%</p>
+          <p class="text-center text-sm font-bold text-blue-600 mt-2">{{ uploadProgress }}%</p>
         </div>
       </div>
 
@@ -285,7 +285,7 @@ const handleParseCV = async () => {
               v-model="candidate.name" 
               required 
               minlength="2"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
             />
           </div>
           
@@ -295,7 +295,7 @@ const handleParseCV = async () => {
               type="email"
               v-model="candidate.email" 
               required 
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
             />
           </div>
           
@@ -305,7 +305,7 @@ const handleParseCV = async () => {
               v-model="candidate.job_id" 
               required 
               :disabled="!isNew"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="" disabled>-- Chọn vị trí ứng tuyển --</option>
               <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
@@ -317,7 +317,7 @@ const handleParseCV = async () => {
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
             <select 
               v-model="candidate.status"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
             >
               <option value="new">Mới (New)</option>
               <option value="interviewing">Đang phỏng vấn (Interviewing)</option>
@@ -328,7 +328,7 @@ const handleParseCV = async () => {
 
           <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
             <Button type="button" variant="ghost" @click="router.push('/candidates')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
-            <Button type="submit" :disabled="saving" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+            <Button type="submit" :disabled="saving" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
               <Save size="16" class="mr-2" v-if="!saving" /> 
               <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
               {{ saving ? 'Đang lưu...' : 'Lưu ứng viên' }}
@@ -343,10 +343,10 @@ const handleParseCV = async () => {
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Hồ sơ (CV & Resume)</h2>
           <div v-if="candidate.cv || selectedFile" class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900">
             <div class="flex items-center gap-4 mb-3">
-              <FileText size="32" class="text-indigo-500" />
+              <FileText size="32" class="text-blue-500" />
               <div class="flex-1">
                 <p v-if="selectedFile" class="font-medium text-slate-800 dark:text-slate-200">{{ selectedFile.name }}</p>
-                <p v-else class="font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer hover:underline" @click="handleViewCV" title="Nhấn để xem CV">{{ candidate.cv }}</p>
+                <p v-else class="font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" @click="handleViewCV" title="Nhấn để xem CV">{{ candidate.cv }}</p>
                 <p class="text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-1 mt-1 font-medium">
                   <CheckCircle size="14" /> {{ selectedFile ? 'Sẵn sàng tải lên' : 'Đã lưu trên hệ thống' }}
                 </p>
@@ -366,7 +366,7 @@ const handleParseCV = async () => {
               <Button type="button" variant="secondary" @click="handleViewCV" class="flex-1 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
                 Xem CV
               </Button>
-              <Button type="button" :disabled="uploading || isAiParsing" @click="handleParseCV" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white border-none">
+              <Button type="button" :disabled="uploading || isAiParsing" @click="handleParseCV" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none">
                 <Sparkles size="16" class="mr-2" v-if="!isAiParsing" />
                 {{ isAiParsing ? 'Đang phân tích...' : 'Phân tích CV' }}
               </Button>
@@ -377,7 +377,7 @@ const handleParseCV = async () => {
             class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-10 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"
             @click="fileInputRef?.click()"
           >
-            <Upload size="36" class="text-slate-400 group-hover:text-indigo-500 mx-auto mb-3 transition-colors" />
+            <Upload size="36" class="text-slate-400 group-hover:text-blue-500 mx-auto mb-3 transition-colors" />
             <p class="font-semibold text-slate-700 dark:text-slate-300 mb-1">Click để tải CV lên</p>
             <p class="text-sm text-slate-500 dark:text-slate-400">Hỗ trợ PDF, DOCX, PNG, JPG (tối đa 5MB)</p>
           </div>
@@ -391,13 +391,13 @@ const handleParseCV = async () => {
         </div>
 
         <!-- AI Parsing Card -->
-        <div v-if="parsedData" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
-          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+        <div v-if="parsedData" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 relative z-10">AI Bóc tách dữ liệu CV</h2>
           <div class="flex flex-col gap-6 relative z-10">
-            <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-lg border border-indigo-100 dark:border-indigo-500/20">
+            <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg border border-blue-100 dark:border-blue-500/20">
               <Sparkles size="18" /> <span class="text-sm font-semibold">Hoàn tất phân tích tự động</span>
             </div>
             

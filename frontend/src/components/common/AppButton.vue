@@ -59,15 +59,15 @@ defineProps({
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--text-h);
+  color: var(--text-main);
   border-color: var(--border);
   box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--primary-light);
+  border-color: var(--primary);
   color: var(--primary);
-  background: var(--bg);
+  background: var(--surface-soft);
 }
 
 .btn-danger {
@@ -81,11 +81,22 @@ defineProps({
 
 .btn-ghost {
   background: transparent;
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--accent-bg);
+  background: var(--surface-soft);
   color: var(--primary);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary-light);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
 }
 </style>

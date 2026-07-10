@@ -141,7 +141,7 @@ const columns = [
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Ứng viên</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Theo dõi ứng viên, điểm phù hợp và lịch sử phỏng vấn.</p>
       </div>
-      <Button @click="router.push('/candidates/new')" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+      <Button @click="router.push('/candidates/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Thêm ứng viên
       </Button>
     </div>
@@ -151,11 +151,11 @@ const columns = [
       <!-- Toolbar -->
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
-          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
           <input 
             type="text" 
             placeholder="Tìm tên, email..." 
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
             v-model="filters.keyword"
             @keyup.enter="fetchCandidates"
           />
@@ -172,7 +172,7 @@ const columns = [
 
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải dữ liệu...</span>
       </div>
       
@@ -180,7 +180,7 @@ const columns = [
         <Table :columns="columns" :data="candidates" class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
           <template #candidate="{ row }">
             <div class="cursor-pointer group flex flex-col" @click="router.push(`/candidates/${row.id}`)">
-              <div class="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <div class="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 {{ row.name }}
               </div>
               <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ row.email }}</div>
@@ -208,7 +208,7 @@ const columns = [
           
           <template #action="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors" title="Xem chi tiết">
+              <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
                 <Eye size="18" />
               </button>
               <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Chỉnh sửa">
@@ -264,7 +264,7 @@ const columns = [
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí ứng tuyển (Job)</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
             v-model="filters.job_id"
           >
             <option value="">Tất cả vị trí</option>
@@ -274,7 +274,7 @@ const columns = [
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái hồ sơ</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
             v-model="filters.status"
           >
             <option value="">Tất cả trạng thái</option>
@@ -287,7 +287,7 @@ const columns = [
       </div>
       <div class="flex justify-end gap-3 p-1">
         <Button variant="ghost" @click="clearFilter" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="applyFilter" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">Áp dụng</Button>
+        <Button variant="primary" @click="applyFilter" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">Áp dụng</Button>
       </div>
     </Modal>
   </div>

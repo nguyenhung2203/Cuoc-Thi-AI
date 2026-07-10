@@ -9,7 +9,7 @@ const loading = ref(true)
 
 const stats = ref([
   { title: 'Tổng người dùng', value: 0, icon: Users, colorClass: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/30', badge: '+Mới' },
-  { title: 'Doanh nghiệp & Cty', value: 0, icon: Building, colorClass: 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800/30', badge: 'Hoạt động' },
+  { title: 'Doanh nghiệp & Cty', value: 0, icon: Building, colorClass: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/30', badge: 'Hoạt động' },
   { title: 'Lượt phỏng vấn AI', value: 0, icon: Video, colorClass: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/30', badge: 'Thực tế' },
   { title: 'Tài khoản chờ duyệt', value: 0, icon: Clock, colorClass: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800/30', badge: 'Khẩn cấp' },
 ])
@@ -64,12 +64,12 @@ onMounted(() => {
 <template>
   <div class="space-y-8 animate-fade-in">
     <!-- Hero Banner -->
-    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-8 text-white shadow-xl border border-slate-800">
+    <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 p-8 text-white shadow-xl border border-slate-800">
       <div class="absolute -right-10 -bottom-10 opacity-10 pointer-events-none">
         <ShieldCheck size="240" />
       </div>
       <div class="relative z-10 max-w-3xl space-y-3">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-semibold uppercase tracking-wider">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold uppercase tracking-wider">
           <Sparkles size="14" /> Trung tâm điều khiển WeMake AI
         </div>
         <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
@@ -86,7 +86,7 @@ onMounted(() => {
       <div 
         v-for="stat in stats" 
         :key="stat.title" 
-        class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md hover:border-indigo-500/50 transition-all duration-300"
+        class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md hover:border-blue-500/50 transition-all duration-300"
       >
         <div class="flex items-center justify-between mb-4">
           <div :class="`w-12 h-12 rounded-xl flex items-center justify-center border ${stat.colorClass} shadow-sm group-hover:scale-110 transition-transform duration-300`">
@@ -112,14 +112,14 @@ onMounted(() => {
           <div class="flex items-center justify-between mb-6">
             <div>
               <h2 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <UserCheck size="20" class="text-indigo-600 dark:text-indigo-400" />
+                <UserCheck size="20" class="text-blue-600 dark:text-blue-400" />
                 Nhà tuyển dụng cần phê duyệt
               </h2>
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Xác minh giấy phép kinh doanh trước khi cho phép đăng tuyển</p>
             </div>
             <button 
               @click="router.push('/admin/users')" 
-              class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 hover:underline"
+              class="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 hover:underline"
             >
               Xem tất cả <ArrowRight size="14" />
             </button>
@@ -146,10 +146,10 @@ onMounted(() => {
             <div 
               v-for="user in pendingUsersList" 
               :key="user.id"
-              class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-200/80 dark:border-slate-700 hover:border-indigo-500/40 transition-all gap-4"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-200/80 dark:border-slate-700 hover:border-blue-500/40 transition-all gap-4"
             >
               <div class="flex items-center gap-3.5">
-                <div class="w-11 h-11 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center text-base shrink-0 shadow-inner">
+                <div class="w-11 h-11 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-base shrink-0 shadow-inner">
                   {{ user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U' }}
                 </div>
                 <div>
@@ -191,10 +191,10 @@ onMounted(() => {
           <div class="grid grid-cols-1 gap-3">
             <button 
               @click="router.push('/admin/users')" 
-              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-indigo-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
+              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
             >
               <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Users size="18" />
                 </div>
                 <div class="text-left">
@@ -202,15 +202,15 @@ onMounted(() => {
                   <div class="text-xs text-slate-500 dark:text-slate-400">Khóa, phân quyền, phê duyệt</div>
                 </div>
               </div>
-              <ArrowRight size="16" class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight size="16" class="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
             </button>
 
             <button 
               @click="router.push('/admin/companies')" 
-              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-indigo-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
+              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
             >
               <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <div class="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Building size="18" />
                 </div>
                 <div class="text-left">
@@ -218,15 +218,15 @@ onMounted(() => {
                   <div class="text-xs text-slate-500 dark:text-slate-400">Xem doanh nghiệp tham gia</div>
                 </div>
               </div>
-              <ArrowRight size="16" class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight size="16" class="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
             </button>
 
             <button 
               @click="router.push('/admin/logs')" 
-              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-indigo-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
+              class="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-blue-50/50 dark:bg-slate-700/50 dark:hover:bg-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 group transition-all"
             >
               <div class="flex items-center gap-3">
-                <div class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <div class="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Activity size="18" />
                 </div>
                 <div class="text-left">
@@ -234,13 +234,13 @@ onMounted(() => {
                   <div class="text-xs text-slate-500 dark:text-slate-400">Theo dõi bảo mật & lịch sử</div>
                 </div>
               </div>
-              <ArrowRight size="16" class="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+              <ArrowRight size="16" class="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
             </button>
           </div>
         </div>
 
         <!-- System Health Widget -->
-        <div class="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-2xl p-6 text-white shadow-md border border-slate-800 relative overflow-hidden">
+        <div class="bg-gradient-to-br from-slate-900 to-blue-950 rounded-2xl p-6 text-white shadow-md border border-slate-800 relative overflow-hidden">
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-bold text-base flex items-center gap-2">
               <Activity size="18" class="text-emerald-400 animate-pulse" />
@@ -259,7 +259,7 @@ onMounted(() => {
             </div>
             <div class="flex justify-between items-center py-1">
               <span>AI Evaluation Service</span>
-              <span class="font-semibold text-indigo-300">Ready</span>
+              <span class="font-semibold text-blue-300">Ready</span>
             </div>
           </div>
         </div>

@@ -41,7 +41,7 @@ onMounted(() => {
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
-          <Building size="26" class="text-indigo-600 dark:text-indigo-400" />
+          <Building size="26" class="text-blue-600 dark:text-blue-400" />
           Quản lý Doanh nghiệp & Công ty
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
@@ -65,17 +65,17 @@ onMounted(() => {
           type="text" 
           v-model="searchQuery"
           placeholder="Tìm theo tên công ty, ngành nghề, website..." 
-          class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          class="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
         />
       </div>
       <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">
-        Tổng số: <span class="text-indigo-600 dark:text-indigo-400 font-bold text-sm">{{ displayedCompanies.length }}</span> doanh nghiệp
+        Tổng số: <span class="text-blue-600 dark:text-blue-400 font-bold text-sm">{{ displayedCompanies.length }}</span> doanh nghiệp
       </div>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
-      <div class="inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang tải hồ sơ các doanh nghiệp...</p>
     </div>
 
@@ -84,11 +84,11 @@ onMounted(() => {
       <div 
         v-for="company in displayedCompanies" 
         :key="company.id"
-        class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-indigo-500/40 transition-all flex flex-col justify-between group"
+        class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-blue-500/40 transition-all flex flex-col justify-between group"
       >
         <div class="space-y-4">
           <div class="flex items-start justify-between gap-3">
-            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500/10 to-purple-500/10 dark:from-indigo-500/20 dark:to-purple-500/20 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center justify-center text-lg shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-500/10 to-blue-500/10 dark:from-blue-500/20 dark:to-blue-500/20 border border-blue-500/20 text-blue-600 dark:text-blue-400 font-extrabold flex items-center justify-center text-lg shrink-0 shadow-sm group-hover:scale-105 transition-transform">
               {{ company.name ? company.name.charAt(0).toUpperCase() : 'C' }}
             </div>
             <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1">
@@ -97,7 +97,7 @@ onMounted(() => {
           </div>
 
           <div>
-            <h3 class="font-bold text-slate-800 dark:text-white text-base group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-1" :title="company.name">
+            <h3 class="font-bold text-slate-800 dark:text-white text-base group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1" :title="company.name">
               {{ company.name || 'Công ty chưa đặt tên' }}
             </h3>
             <div class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-1">
@@ -110,7 +110,7 @@ onMounted(() => {
             <div class="bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
               <div class="text-slate-400 text-[10px] uppercase font-bold tracking-wider mb-0.5">Quy mô nhân sự</div>
               <div class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                <Users size="13" class="text-indigo-500" />
+                <Users size="13" class="text-blue-500" />
                 {{ company.size || '1 - 50' }} nhân viên
               </div>
             </div>
@@ -128,7 +128,7 @@ onMounted(() => {
             v-if="company.website" 
             :href="company.website.startsWith('http') ? company.website : `https://${company.website}`" 
             target="_blank" 
-            class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]"
+            class="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]"
           >
             <Globe size="13" class="shrink-0" />
             <span class="truncate">{{ company.website }}</span>
