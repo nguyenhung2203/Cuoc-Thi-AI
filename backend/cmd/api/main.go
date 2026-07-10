@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -16,6 +17,7 @@ import (
 	"backend/internal/config"
 	"backend/internal/handler"
 	"backend/internal/middleware"
+	"backend/internal/queue"
 	"backend/internal/repository"
 	"backend/internal/service"
 )
@@ -57,6 +59,7 @@ func main() {
 	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
 	rubricRepo := repository.NewRubricRepository(db.DB)
 	questionRepo := repository.NewQuestionRepository(db.DB)
+	interviewTemplateRepo := repository.NewInterviewTemplateRepository(db.DB)
 	aiPromptRepo := repository.NewAIPromptRepository(db)
 	aiLogRepo := repository.NewAILogRepository(db)
 	scoreRepo := repository.NewScoreRepository(db.DB)
@@ -89,6 +92,25 @@ func main() {
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo)
 
+	// 4b. Async queue (Redis/asynq). Best-effort: if Redis is unavailable the
+	// platform still runs, with heavy jobs processed inline instead.
+	redisDB := 0
+	if v, convErr := strconv.Atoi(cfg.RedisDB); convErr == nil {
+		redisDB = v
+	}
+	if dispatcher, derr := queue.NewDispatcher(cfg.RedisAddr(), cfg.RedisPassword, redisDB); derr != nil {
+		log.Printf("queue: Redis unavailable (%v) — reports will run inline", derr)
+	} else {
+		reportSvc.SetEnqueuer(dispatcher.EnqueueGenerateReport)
+		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc)
+		go func() {
+			log.Println("queue: async worker started")
+			if werr := worker.Run(); werr != nil {
+				log.Printf("queue: worker stopped: %v", werr)
+			}
+		}()
+	}
+
 	// 5. Handlers
 	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
 	companyHandler := handler.NewCompanyHandler(companySvc)
@@ -106,6 +128,9 @@ func main() {
 
 	questionBankSvc := service.NewQuestionBankService(questionRepo)
 	questionBankHandler := handler.NewQuestionBankHandler(questionBankSvc)
+
+	interviewTemplateSvc := service.NewInterviewTemplateService(interviewTemplateRepo)
+	interviewTemplateHandler := handler.NewInterviewTemplateHandler(interviewTemplateSvc)
 
 	aiHandler := handler.NewAiHandler(scoreSvc, reportSvc, suggestionSvc)
 	auditHandler := handler.NewAuditHandler(auditSvc)
@@ -158,6 +183,7 @@ func main() {
 				r.Post("/{id}/end", mockHandler.End)
 				r.Post("/{id}/messages", mockHandler.SendMessage)
 				r.Get("/{id}/messages", mockHandler.GetMessages)
+				r.Post("/{id}/save-live-transcript", mockHandler.SaveLiveTranscript)
 				r.Get("/{id}/report", mockHandler.GetReport)
 			})
 
@@ -191,9 +217,11 @@ func main() {
 					r.Post("/", rubricHandler.CreateRubric)
 					r.Get("/", rubricHandler.ListCompanyRubrics)
 					r.Get("/{rubric_id}", rubricHandler.GetRubric)
+					r.Put("/{rubric_id}", rubricHandler.UpdateRubric)
 					r.Delete("/{rubric_id}", rubricHandler.DeleteRubric)
 				})
 					questionBankHandler.Routes(r)
+					interviewTemplateHandler.Routes(r)
 
 				r.Route("/interviews", func(r chi.Router) {
 					interviewHandler.ProtectedRoutes(r)

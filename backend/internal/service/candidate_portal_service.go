@@ -89,6 +89,14 @@ func (s *CandidatePortalService) GetInterviews(ctx context.Context, userID strin
 	return interviews, nil
 }
 
+// UpdateProfile updates the candidate's editable profile fields (name, avatar).
+func (s *CandidatePortalService) UpdateProfile(ctx context.Context, userID, fullName, avatarURL string) error {
+	if fullName == "" {
+		return errors.NewValidation("full_name", []string{"full_name is required"})
+	}
+	return s.userRepo.UpdateProfile(ctx, userID, fullName, avatarURL)
+}
+
 func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) (*response.CandidatePortalProfile, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {

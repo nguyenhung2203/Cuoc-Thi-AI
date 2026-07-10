@@ -196,15 +196,73 @@ func (s *InterviewService) GetInterview(ctx context.Context, interviewID, compan
 	return i, nil
 }
 
+// GetRoom returns room metadata for an interview (after verifying company scope).
+func (s *InterviewService) GetRoom(ctx context.Context, interviewID, companyID string) (*models.InterviewRoom, error) {
+	if _, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID); err != nil {
+		return nil, errors.NewNotFound("interview not found")
+	}
+	room, err := s.repo.GetRoomByInterviewID(ctx, interviewID)
+	if err != nil || room == nil {
+		return nil, errors.NewNotFound("room not found")
+	}
+	return room, nil
+}
+
+// CancelInterview marks an interview cancelled (only if not already ended).
+func (s *InterviewService) CancelInterview(ctx context.Context, interviewID, companyID string) error {
+	i, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
+	if err != nil {
+		return errors.NewNotFound("interview not found")
+	}
+	if i.Status == "completed" || i.Status == "cancelled" {
+		return errors.NewBadRequest("cannot cancel an interview in state: " + i.Status)
+	}
+	if err := s.repo.UpdateStatus(ctx, interviewID, "cancelled"); err != nil {
+		return err
+	}
+	if i.RoomID.Valid {
+		_ = s.repo.UpdateRoomStatus(ctx, i.RoomID.String, "closed")
+	}
+	return nil
+}
+
 func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, interviewID, companyID, userID string) (string, error) {
-	// Verify recruiter access
-	_, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
+	// Verify access + load interview for role/display resolution.
+	interview, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
 	if err != nil {
 		return "", errors.NewNotFound("interview not found")
 	}
 
-	// Stub: return a dummy token instead of a real LiveKit token
-	return "mock_livekit_token_" + userID + "_for_" + interviewID, nil
+	// Resolve the LiveKit room name from the room record; fall back to the
+	// deterministic "room-<interviewID>" convention used elsewhere.
+	roomName := "room-" + interviewID
+	if room, rerr := s.repo.GetRoomByInterviewID(ctx, interviewID); rerr == nil && room != nil && room.RoomCode != "" {
+		roomName = room.RoomCode
+	}
+
+	// The recruiter who owns the interview gets the recruiter role; everyone
+	// else joining via this endpoint is treated as a participant.
+	role := "participant"
+	displayName := "Participant"
+	if interview.RecruiterID.Valid && interview.RecruiterID.String == userID {
+		role = "recruiter"
+		displayName = "Recruiter"
+	}
+
+	livekitKey := os.Getenv("LIVEKIT_API_KEY")
+	if livekitKey == "" {
+		livekitKey = "devkey"
+	}
+	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
+	if livekitSecret == "" {
+		livekitSecret = "devsecret"
+	}
+
+	token, err := livekit.GenerateToken(livekitKey, livekitSecret, roomName, userID, displayName, role, interviewID)
+	if err != nil {
+		return "", errors.NewInternal("failed to generate room access token")
+	}
+	return token, nil
 }
 
 func (s *InterviewService) StartInterview(ctx context.Context, interviewID, companyID string) error {

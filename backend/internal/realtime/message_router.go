@@ -58,7 +58,7 @@ func (r *MessageRouter) GetTranscriptSaver() *TranscriptBatchSaver {
 }
 
 // registerHandlers wires every client→server event to its handler.
-// Handlers are implemented in backend/internal/realtime/handlers/*.go
+// Handlers are implemented in the *_handler.go files of this package.
 func (r *MessageRouter) registerHandlers() {
 	// Room lifecycle
 	r.register(events.EventRoomJoin, r.handleRoomJoin)
@@ -77,8 +77,8 @@ func (r *MessageRouter) registerHandlers() {
 
 	// Chat & notes
 	r.register(events.EventChatSend, r.handleChatSend)
-	r.register(events.EventNoteCreate, r.stubHandler("note:create"))
-	r.register(events.EventQuestionMarkAsked, r.stubHandler("question:mark_asked"))
+	r.register(events.EventNoteCreate, r.handleNoteCreate)
+	r.register(events.EventQuestionMarkAsked, r.handleQuestionMarkAsked)
 
 	// Transcript (from STT pipeline)
 	r.register(events.EventTranscriptPartial, r.handleTranscriptPartial)
@@ -103,13 +103,4 @@ func (r *MessageRouter) Route(conn *ClientConnection, env *events.Envelope) {
 		return
 	}
 	h(conn, env)
-}
-
-// stubHandler returns a placeholder HandlerFunc that logs the event.
-// Sprint 1–4 tasks will replace each stub with a real implementation.
-func (r *MessageRouter) stubHandler(name string) HandlerFunc {
-	return func(conn *ClientConnection, env *events.Envelope) {
-		log.Printf("[router] stub handler for event=%q connID=%s requestID=%s",
-			name, conn.ID, env.RequestID)
-	}
 }

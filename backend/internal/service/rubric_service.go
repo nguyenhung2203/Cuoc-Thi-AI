@@ -37,6 +37,29 @@ func (s *RubricService) DeleteRubric(ctx context.Context, companyID, rubricID st
 	return s.repo.Delete(ctx, companyID, rubricID)
 }
 
+func (s *RubricService) UpdateRubric(ctx context.Context, rubric *models.Rubric, criteria []models.RubricCriteria) error {
+	if rubric.ID == "" {
+		return apierrors.NewValidation("rubric id", []string{"id is required"})
+	}
+	if rubric.Name == "" {
+		return apierrors.NewValidation("rubric name", []string{"name is required"})
+	}
+	if len(criteria) == 0 {
+		return apierrors.NewValidation("criteria", []string{"at least one criterion is required"})
+	}
+
+	var totalWeight float64
+	for _, c := range criteria {
+		totalWeight += c.Weight
+		if c.MinScore >= c.MaxScore {
+			return apierrors.NewValidation("score bounds", []string{fmt.Sprintf("min_score must be less than max_score for criterion %s", c.Name)})
+		}
+	}
+	rubric.TotalWeight = totalWeight
+
+	return s.repo.UpdateRubricWithCriteria(ctx, rubric, criteria)
+}
+
 func (s *RubricService) CreateRubric(ctx context.Context, rubric *models.Rubric, criteria []models.RubricCriteria) error {
 	// Simple validation
 	if rubric.Name == "" {

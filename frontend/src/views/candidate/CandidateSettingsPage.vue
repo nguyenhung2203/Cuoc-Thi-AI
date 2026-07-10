@@ -1,21 +1,49 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { authStore } from '../../stores/auth.store'
+import { authService } from '../../services/auth.service'
 import { Save, Key, Bell, Shield, User, Monitor } from 'lucide-vue-next'
 
 const role = localStorage.getItem('role') || 'recruiter'
 const activeTab = ref('account')
 const toast = ref(null)
 const showDeleteModal = ref(false)
+const saving = ref(false)
+const settings = ref({
+  notify_email_interview: true,
+  notify_email_reminder: true,
+  notify_push: true,
+  public_profile: true,
+  share_anon_results: true
+})
 
-const handleSave = (e) => {
+onMounted(async () => {
+  try {
+    const res = await authService.getSettings()
+    if (res?.settings) {
+      settings.value = { ...settings.value, ...res.settings }
+    }
+  } catch (error) {
+    console.error('Failed to load settings:', error)
+  }
+})
+
+const handleSave = async (e) => {
   if (e && e.preventDefault) e.preventDefault()
-  toast.value = { type: 'success', message: 'Các thay đổi đã được lưu thành công!' }
+  saving.value = true
+  try {
+    await authService.saveSettings(settings.value)
+    toast.value = { type: 'success', message: 'Cài đặt đã được lưu thành công!' }
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Lỗi lưu cài đặt: ' + (error.message || 'Không xác định') }
+  } finally {
+    saving.value = false
+  }
 }
 
 const handleDeleteAccount = () => {
@@ -107,15 +135,11 @@ const confirmDeleteAccount = () => {
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Qua Email</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
                   <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="settings.notify_email_interview" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Nhận email thông báo khi có lịch phỏng vấn mới</span>
                   </label>
-                  <label v-if="role === 'recruiter'" style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email khi AI Report đã xử lý xong</span>
-                  </label>
                   <label v-if="role === 'candidate'" style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="settings.notify_email_reminder" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Nhận email nhắc nhở trước 1 tiếng khi diễn ra phỏng vấn</span>
                   </label>
                 </div>
@@ -125,14 +149,14 @@ const confirmDeleteAccount = () => {
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Thông báo đẩy (Push Notifications)</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
                   <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="settings.notify_push" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Hiển thị thông báo trên trình duyệt (Browser push)</span>
                   </label>
                 </div>
               </div>
 
               <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-                <Button @click="handleSave"><Save size="16" /> Lưu tùy chọn</Button>
+                <Button @click="handleSave" :disabled="saving"><Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu tùy chọn' }}</Button>
               </div>
             </div>
           </Card>
@@ -141,31 +165,17 @@ const confirmDeleteAccount = () => {
         <div v-if="activeTab === 'privacy'">
           <Card title="Quyền riêng tư & Bảo mật">
             <div style="display: flex; flex-direction: column; gap: 20px">
-              
+
               <div v-if="role === 'candidate'">
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Hiển thị hồ sơ</h3>
                 <div style="display: flex; flex-direction: column; gap: 12px">
                   <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="settings.public_profile" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Cho phép các nhà tuyển dụng khác xem hồ sơ của tôi (Public Profile)</span>
                   </label>
                   <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
+                    <input type="checkbox" v-model="settings.share_anon_results" style="width: 16px; height: 16px; accent-color: var(--primary)" />
                     <span class="text-body">Chia sẻ ẩn danh kết quả Mock Interview để cải thiện AI</span>
-                  </label>
-                </div>
-              </div>
-
-              <div v-if="role === 'recruiter'">
-                <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Bảo mật dữ liệu công ty</h3>
-                <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" defaultChecked style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Mã hóa ghi âm/video các cuộc phỏng vấn (E2E Encryption)</span>
-                  </label>
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Yêu cầu xác thực 2 bước (2FA) khi đăng nhập nội bộ</span>
                   </label>
                 </div>
               </div>
@@ -173,13 +183,12 @@ const confirmDeleteAccount = () => {
               <div style="border-top: 1px solid var(--border); padding-top: 20px">
                 <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px; color: var(--danger)">Quản lý dữ liệu</h3>
                 <div style="display: flex; gap: 12px">
-                  <Button variant="secondary" @click="toast = { type: 'info', message: 'Đang chuẩn bị dữ liệu xuất...' }">Xuất toàn bộ dữ liệu (Export Data)</Button>
                   <Button variant="ghost" style="color: var(--danger); border-color: var(--danger)" @click="handleDeleteAccount">Xóa tài khoản</Button>
                 </div>
               </div>
 
               <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-                <Button @click="handleSave"><Save size="16" /> Lưu tùy chọn</Button>
+                <Button @click="handleSave" :disabled="saving"><Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu tùy chọn' }}</Button>
               </div>
             </div>
           </Card>

@@ -1,4 +1,4 @@
-.PHONY: help dev stop logs migrate seed lint test
+.PHONY: help dev stop logs migrate seed lint test test-all load-rest load-ws load-ai
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -58,6 +58,20 @@ lint: ## Lint all projects
 	cd backend && golangci-lint run ./...
 	cd frontend && npm run lint
 	cd ai-service && flake8 app/
+
+# ===== TEST (ALL LAYERS) =====
+test-all: ## Run backend + AI + frontend test suites
+	bash scripts/test-all.sh
+
+# ===== LOAD / STABILITY (requires k6: https://k6.io) =====
+load-rest: ## Load test REST API (k6). Vars: API, VUS, DURATION
+	k6 run tests/load/k6_rest_smoke.js
+
+load-ws: ## Load test realtime WebSocket gateway (k6). Vars: WS, TOKEN, VUS
+	k6 run tests/load/k6_ws_room.js
+
+load-ai: ## Load test AI service in mock mode (k6). Vars: AI, VUS
+	k6 run tests/load/k6_ai_generate.js
 
 # ===== CLEAN =====
 clean: ## Remove all containers and volumes

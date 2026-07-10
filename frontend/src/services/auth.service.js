@@ -37,5 +37,31 @@ export const authService = {
    */
   logout: () => {
     return apiService.post('/auth/logout');
+  },
+
+  /**
+   * Cập nhật thông tin profile user
+   * @param {Object} data { full_name, avatar_url }
+   * @returns {Promise<Object>}
+   */
+  updateProfile: (data) => {
+    return apiService.put('/auth/me', data);
+  },
+
+  /**
+   * Lấy cài đặt user hiện tại
+   * @returns {Promise<Object>} { settings: {...} }
+   */
+  getSettings: () => {
+    return apiService.get('/auth/me/settings');
+  },
+
+  /**
+   * Lưu cài đặt user
+   * @param {Object} settings
+   * @returns {Promise<Object>}
+   */
+  saveSettings: (settings) => {
+    return apiService.put('/auth/me/settings', { settings });
   }
 };

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -24,6 +25,7 @@ func (h *CandidatePortalHandler) Routes(r chi.Router) {
 	r.Get("/dashboard", h.GetDashboardStats)
 	r.Get("/interviews", h.GetInterviews)
 	r.Get("/profile", h.GetProfile)
+	r.Put("/profile", h.UpdateProfile)
 	r.Post("/cv", h.UploadCV)
 	r.Post("/jobs/{jobID}/apply", h.ApplyJob)
 }
@@ -111,6 +113,30 @@ func (h *CandidatePortalHandler) GetProfile(w http.ResponseWriter, r *http.Reque
 	}
 
 	response.JSON(w, http.StatusOK, profile, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+
+	var body struct {
+		FullName  string `json:"full_name"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		response.Error(w, errors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+
+	if err := h.svc.UpdateProfile(r.Context(), userID, body.FullName, body.AvatarURL); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "updated"}, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request) {

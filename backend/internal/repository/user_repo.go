@@ -42,6 +42,24 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 	return &user, nil
 }
 
+// UpdateProfile updates editable profile fields for a user.
+func (r *UserRepository) UpdateProfile(ctx context.Context, id, fullName, avatarURL string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET full_name = $1, avatar_url = NULLIF($2, ''), updated_at = NOW()
+		 WHERE id = $3 AND deleted_at IS NULL`,
+		fullName, avatarURL, id)
+	return err
+}
+
+// UpdateSettings replaces the user's settings JSON blob.
+func (r *UserRepository) UpdateSettings(ctx context.Context, id string, settings models.JSONB) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET settings = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		settings, id)
+	return err
+}
+
 type UserCompanyRow struct {
 	CompanyID   string `db:"company_id"`
 	CompanyName string `db:"company_name"`

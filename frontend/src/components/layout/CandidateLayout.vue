@@ -2,56 +2,32 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
+import { useNotificationStore } from '../../stores/notification.store'
 import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe } from 'lucide-vue-next'
-
-import { notificationService } from '../../services/notification.service'
 
 const router = useRouter()
 const route = useRoute()
 const showNotifications = ref(false)
 const showProfileMenu = ref(false)
-const notifications = ref([])
+const notificationStore = useNotificationStore()
+
+const notifications = computed(() => notificationStore.notifications)
+const unreadCount = computed(() => notificationStore.unreadCount)
 
 onMounted(async () => {
-  try {
-    if (authStore.user) {
-      const data = await notificationService.getNotifications()
-      if (data && data.notifications) {
-        notifications.value = data.notifications
-      } else if (Array.isArray(data)) {
-        notifications.value = data
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load notifications:', error)
+  if (authStore.user) {
+    await notificationStore.fetch()
   }
 })
 
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
-
 const handleMarkAllAsRead = async (e) => {
   e.stopPropagation()
-  try {
-    if (authStore.user) {
-      await notificationService.markAllAsRead()
-      notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
-    }
-  } catch (error) {
-    console.error(error)
-  }
+  await notificationStore.markAllRead()
 }
 
 const handleMarkAsRead = async (e, id) => {
   e.stopPropagation()
-  try {
-    if (authStore.user) {
-      await notificationService.markAsRead(id)
-      const notif = notifications.value.find(n => n.id === id)
-      if (notif) notif.is_read = true
-    }
-  } catch (error) {
-    console.error(error)
-  }
+  await notificationStore.markRead(id)
 }
 
 const formatTimeAgo = (isoStr) => {

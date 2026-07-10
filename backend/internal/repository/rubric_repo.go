@@ -10,6 +10,7 @@ import (
 
 type RubricRepository interface {
 	CreateRubricWithCriteria(ctx context.Context, rubric *models.Rubric, criteria []models.RubricCriteria) error
+	UpdateRubricWithCriteria(ctx context.Context, rubric *models.Rubric, criteria []models.RubricCriteria) error
 	GetByID(ctx context.Context, companyID, rubricID string) (*models.Rubric, []models.RubricCriteria, error)
 	ListByCompany(ctx context.Context, companyID, jobID string) ([]models.Rubric, error)
 	Delete(ctx context.Context, companyID, rubricID string) error
@@ -66,6 +67,53 @@ func (r *rubricRepository) CreateRubricWithCriteria(ctx context.Context, rubric 
 		)
 		if err != nil {
 			return fmt.Errorf("insert criteria: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// UpdateRubricWithCriteria updates a rubric's fields and replaces its criteria
+// atomically. Scoped by company_id to prevent cross-tenant edits.
+func (r *rubricRepository) UpdateRubricWithCriteria(ctx context.Context, rubric *models.Rubric, criteria []models.RubricCriteria) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Update rubric row (only if it belongs to the company).
+	res, err := tx.ExecContext(ctx, `
+		UPDATE rubrics SET name = $1, description = $2, job_id = $3, total_weight = $4, updated_at = NOW()
+		WHERE id = $5 AND company_id = $6`,
+		rubric.Name, rubric.Description, rubric.JobID, rubric.TotalWeight, rubric.ID, rubric.CompanyID,
+	)
+	if err != nil {
+		return fmt.Errorf("update rubric: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+
+	// Replace criteria: delete existing, insert the new set.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM rubric_criteria WHERE rubric_id = $1`, rubric.ID); err != nil {
+		return fmt.Errorf("clear criteria: %w", err)
+	}
+
+	if len(criteria) > 0 {
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO rubric_criteria (rubric_id, name, description, weight, min_score, max_score, scoring_guide, order_index)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`)
+		if err != nil {
+			return fmt.Errorf("prepare criteria: %w", err)
+		}
+		defer stmt.Close()
+		for _, c := range criteria {
+			if _, err := stmt.ExecContext(ctx,
+				rubric.ID, c.Name, c.Description, c.Weight, c.MinScore, c.MaxScore, c.ScoringGuide, c.OrderIndex,
+			); err != nil {
+				return fmt.Errorf("insert criteria: %w", err)
+			}
 		}
 	}
 

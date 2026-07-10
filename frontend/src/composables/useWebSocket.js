@@ -35,12 +35,17 @@ export function useWebSocket() {
   const connect = (token) => {
     if (ws.value?.readyState === WebSocket.OPEN) return
 
-    // TODO: Determine backend WS URL properly. 
-    // Assuming backend runs on port 8080 locally for now, 
-    // or proxy via Vite if configured (e.g. wss://domain.com/ws/interview-room)
-    const host = window.location.hostname === 'localhost' ? 'localhost:8081' : window.location.host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${protocol}//${host}/ws/interview-room?token=${token}`
+    // Resolve the realtime gateway base from env (VITE_WS_URL), e.g.
+    // ws://localhost:8081. Falls back to deriving from the current origin so
+    // it still works behind a reverse proxy without extra config.
+    let base = import.meta.env.VITE_WS_URL
+    if (!base) {
+      const host = window.location.hostname === 'localhost' ? 'localhost:8081' : window.location.host
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      base = `${protocol}//${host}`
+    }
+    base = base.replace(/\/+$/, '')
+    const url = `${base}/ws/interview-room?token=${token}`
 
     ws.value = new WebSocket(url)
 

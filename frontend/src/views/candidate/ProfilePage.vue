@@ -15,6 +15,7 @@ const profile = ref({
   linkedin: '',
   targetRole: '',
   level: 'Middle',
+  skills: '',
 })
 
 const uploadedCvs = ref([])
@@ -54,10 +55,12 @@ const handleFileUpload = async (e) => {
             if (res.data && res.data.cv_url) {
               targetCv.url = res.data.cv_url
             }
-            targetCv.parsedData = {
-              role: profile.value.targetRole || 'Chưa cập nhật',
-              level: profile.value.level || 'Chưa cập nhật',
-              skills: ['ReactJS', 'VueJS', 'NodeJS', 'TypeScript', '+3 kỹ năng khác']
+            // Use real parsed data from CV upload response, if available
+            // Otherwise show empty state instead of fake data
+            if (res.data && res.data.parsed_data) {
+              targetCv.parsedData = res.data.parsed_data
+            } else {
+              targetCv.parsedData = null
             }
             localStorage.setItem('candidate_cvs', JSON.stringify(uploadedCvs.value))
           }
@@ -112,11 +115,8 @@ onMounted(async () => {
             date: 'Từ hệ thống',
             status: 'done',
             url: res.data.cv_url,
-            parsedData: {
-              role: 'Chưa cập nhật',
-              level: 'Chưa cập nhật',
-              skills: ['ReactJS', 'VueJS', 'NodeJS', 'TypeScript']
-            }
+            // Use real parsed CV data if available, otherwise null (empty state)
+            parsedData: res.data.parsed_data || null
           })
         }
       }
@@ -133,6 +133,7 @@ onMounted(async () => {
     profile.value.level = parsed.level || profile.value.level
     profile.value.phone = parsed.phone || profile.value.phone
     profile.value.linkedin = parsed.linkedin || profile.value.linkedin
+    profile.value.skills = parsed.skills || profile.value.skills
   }
 
   const savedCvs = localStorage.getItem('candidate_cvs')
@@ -150,14 +151,21 @@ onMounted(async () => {
 const saving = ref(false)
 const toast = ref(null)
 
-const handleSave = (e) => {
+const handleSave = async (e) => {
   e.preventDefault()
   saving.value = true
-  setTimeout(() => {
-    saving.value = false
+  try {
+    await candidatePortalService.updateProfile({
+      full_name: profile.value.name,
+      avatar_url: profile.value.avatar_url || ''
+    })
     localStorage.setItem('candidate_profile', JSON.stringify(profile.value))
     toast.value = { type: 'success', message: 'Hồ sơ cá nhân đã được lưu thành công! Dữ liệu này sẽ được đồng bộ với AI.' }
-  }, 800)
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Lỗi lưu hồ sơ: ' + (error.message || 'Không xác định') }
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 
@@ -237,7 +245,7 @@ const handleSave = (e) => {
             </h3>
           </div>
           <div class="p-6">
-            <textarea class="w-full p-4 border border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all text-gray-800 font-medium resize-none" rows="4" placeholder="Ví dụ: ReactJS, NodeJS, TypeScript..." defaultValue="ReactJS, Redux, JavaScript, HTML, CSS, Git"></textarea>
+            <textarea class="w-full p-4 border border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all text-gray-800 font-medium resize-none" rows="4" placeholder="Ví dụ: ReactJS, NodeJS, TypeScript..." v-model="profile.skills"></textarea>
             <p class="text-sm text-gray-500 mt-2">Phân cách các kỹ năng bằng dấu phẩy (,)</p>
           </div>
         </Card>

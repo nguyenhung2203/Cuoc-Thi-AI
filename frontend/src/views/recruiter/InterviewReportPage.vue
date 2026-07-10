@@ -39,10 +39,9 @@ onMounted(async () => {
       report.value.weaknesses = parsed.weaknesses || []
       report.value.transcript_highlights = parsed.evidence_json || []
       report.value.ai_reasoning_summary = parsed.ai_reasoning_summary
-      // Create some fake rubric scores based on overall score, as AI doesn't generate them yet
-      report.value.rubric_scores = [
-        { name: 'Overall AI Score', score: report.value.overall_score, color: 'var(--primary)' }
-      ]
+      // Use real rubric scores from parsed report if available
+      // If the AI has not generated rubric scores yet, show empty state
+      report.value.rubric_scores = parsed.scores || []
     }
   } catch (error) {
     toast.value = { type: 'error', message: 'Lỗi tải báo cáo' }
@@ -173,6 +172,9 @@ const handleRetryReport = async () => {
           <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5">Điểm chi tiết (Rubric)</h2>
             <div class="space-y-5">
+              <div v-if="!report.rubric_scores || report.rubric_scores.length === 0" class="text-center py-8 text-slate-500 dark:text-slate-400">
+                <p class="text-sm font-medium">AI chưa tạo rubric scores. Vui lòng chờ hoặc tạo lại báo cáo.</p>
+              </div>
               <div v-for="item in report.rubric_scores" :key="item.name" class="space-y-2">
                 <div class="flex justify-between items-center text-sm">
                   <span class="font-semibold text-slate-700 dark:text-slate-300">{{ item.name }}</span>

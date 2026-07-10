@@ -2,15 +2,17 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
+import { useNotificationStore } from '../../stores/notification.store'
 import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight } from 'lucide-vue-next'
-import { notificationService } from '../../services/notification.service'
 
 const router = useRouter()
 const route = useRoute()
+const notificationStore = useNotificationStore()
 const showNotifications = ref(false)
 const isCollapsed = ref(false)
-const notifications = ref([])
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+
+const notifications = computed(() => notificationStore.notifications)
+const unreadCount = computed(() => notificationStore.unreadCount)
 
 watch(() => route.path, (newPath) => {
   if (newPath.includes('/recruiter-room')) {
@@ -25,39 +27,19 @@ onMounted(async () => {
   document.documentElement.classList.remove('dark')
   localStorage.setItem('theme', 'light')
 
-  try {
-    if (authStore.user) {
-      const data = await notificationService.getNotifications()
-      notifications.value = data
-    }
-  } catch (error) {
-    console.error('Failed to load notifications:', error)
+  if (authStore.user) {
+    await notificationStore.fetch()
   }
 })
 
 const handleMarkAllAsRead = async (e) => {
   e.stopPropagation();
-  try {
-    if (authStore.user) {
-      await notificationService.markAllAsRead()
-      notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
-    }
-  } catch (error) {
-    console.error('Failed to mark all as read:', error)
-  }
+  await notificationStore.markAllRead()
 }
 
 const handleMarkAsRead = async (e, id) => {
   e.stopPropagation();
-  try {
-    if (authStore.user) {
-      await notificationService.markAsRead(id)
-      const notif = notifications.value.find(n => n.id === id)
-      if (notif) notif.is_read = true
-    }
-  } catch (error) {
-    console.error('Failed to mark as read:', error)
-  }
+  await notificationStore.markRead(id)
 }
 
 const formatTimeAgo = (isoStr) => {

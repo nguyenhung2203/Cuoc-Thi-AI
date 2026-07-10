@@ -34,8 +34,35 @@ func (h *InterviewHandler) ProtectedRoutes(r chi.Router) {
 	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}", h.GetInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/start", h.StartInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/end", h.EndInterview)
+	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/cancel", h.CancelInterview)
+	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room", h.GetRoom)
 	r.Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
 	r.Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
+}
+
+func (h *InterviewHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	room, err := h.svc.GetRoom(r.Context(), interviewID, companyID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, room, nil, requestID)
+}
+
+func (h *InterviewHandler) CancelInterview(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	if err := h.svc.CancelInterview(r.Context(), interviewID, companyID); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "cancelled"}, nil, requestID)
 }
 
 func (h *InterviewHandler) ListInterviews(w http.ResponseWriter, r *http.Request) {

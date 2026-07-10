@@ -1,334 +1,205 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import Button from '../../components/common/AppButton.vue'
-import Card from '../../components/common/AppCard.vue'
-import Badge from '../../components/common/AppBadge.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { Mic, ArrowRight, Play, Square, RefreshCw, Send, CheckCircle } from 'lucide-vue-next'
+import { Mic, Square, PhoneOff, Loader2, Type, Send } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
+import { useGeminiLive } from '../../composables/useGeminiLive'
 
 const router = useRouter()
 const route = useRoute()
 const mockId = route.query.mock_id
+const role = route.query.role || 'Software Developer'
+const level = route.query.level || 'middle'
 
-const recording = ref(false)
-const questionIndex = ref(1)
-const analyzing = ref(false)
-const feedback = ref(null)
-const textAnswer = ref('')
+const {
+  connected, aiSpeaking, listening, error, transcript, audioLevel,
+  start, stop, commitTurn, sendText,
+} = useGeminiLive()
+
+// Mouth opening (px) lip-synced to the AI voice loudness.
+const mouthOpen = computed(() => 3 + audioLevel.value * 26)
+const mouthWidth = computed(() => 34 - audioLevel.value * 6)
+const mouthRadius = computed(() => Math.min(mouthOpen.value / 2, mouthWidth.value / 2))
+
+const speaking = ref(false)     // candidate is holding the talk button
 const showEndModal = ref(false)
-const messages = ref([])
+const showText = ref(false)
+const textAnswer = ref('')
+const ending = ref(false)
+const toast = ref(null)
+const transcriptBox = ref(null)
 
-const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
-
-// Lấy câu hỏi hiện tại (message AI cuối chưa có câu trả lời)
-const currentQuestion = computed(() => {
-  const aiMsgs = messages.value.filter(m => m.sender_type === 'ai' && !m.is_feedback)
-  return aiMsgs.length > 0 ? aiMsgs[aiMsgs.length - 1] : null
+const statusLabel = computed(() => {
+  if (error.value) return error.value
+  if (!connected.value) return 'Đang kết nối...'
+  if (aiSpeaking.value) return 'AI đang nói...'
+  if (speaking.value) return 'Đang nghe bạn nói...'
+  if (listening.value) return 'Sẵn sàng — nhấn giữ để trả lời'
+  return 'Đang chuẩn bị...'
 })
 
-const loadMessages = async () => {
-  if (!mockId) return
-  try {
-    const msgs = await mockService.getMessages(mockId)
-    messages.value = Array.isArray(msgs) ? msgs : []
-    // Parse feedback từ message AI có score_json
-    const feedbackMsg = [...messages.value].reverse().find(m => m.sender_type === 'ai' && m.score_json)
-    if (feedbackMsg) {
-      try {
-        const parsed = typeof feedbackMsg.score_json === 'string'
-          ? JSON.parse(feedbackMsg.score_json)
-          : feedbackMsg.score_json
-        feedback.value = {
-          score: `${parsed.score ?? '?'}/10`,
-          message: feedbackMsg.content || 'AI đã đánh giá câu trả lời của bạn.',
-          improvement: parsed.improvements ? parsed.improvements.join(', ') : ''
-        }
-      } catch { feedback.value = null }
-    } else {
-      feedback.value = null
-    }
-  } catch (err) {
-    console.error('Lỗi tải tin nhắn', err)
-  }
-}
+// Auto-scroll transcript to the latest line.
+watch(transcript, async () => {
+  await nextTick()
+  if (transcriptBox.value) transcriptBox.value.scrollTop = transcriptBox.value.scrollHeight
+}, { deep: true })
 
-onMounted(() => {
-  if (history.state?.message) {
-    window.history.replaceState({}, document.title)
+onMounted(async () => {
+  if (!mockId) {
+    toast.value = { type: 'error', message: 'Thiếu mã phiên luyện tập.' }
+    return
   }
-  loadMessages()
+  try {
+    await start({ role, level })
+  } catch {
+    // error surfaced via `error` ref
+  }
 })
 
-const handleRecord = () => {
-  // Mock recording logic for now since voice parsing is not requested yet
-  if (!recording.value) {
-    recording.value = true
-    feedback.value = null
-  } else {
-    recording.value = false
-    handleSendText() // Fallback to text send for now
-  }
+onBeforeUnmount(() => stop())
+
+// Push-to-talk: hold to speak, release to commit the turn to the AI.
+const startTalk = () => {
+  if (!connected.value || aiSpeaking.value) return
+  speaking.value = true
+}
+const stopTalk = () => {
+  if (!speaking.value) return
+  speaking.value = false
+  commitTurn()
 }
 
-const handleSendText = async () => {
-  if (!textAnswer.value && !recording.value) return
-  analyzing.value = true
-  feedback.value = null
-  const answerText = textAnswer.value || 'Câu trả lời ghi âm (chức năng voice chưa tích hợp)'
-  // Lấy question_id từ câu hỏi hiện tại
-  const questionId = currentQuestion.value?.id || currentQuestion.value?.question_id || null
+const handleSendText = () => {
+  if (!textAnswer.value.trim()) return
+  sendText(textAnswer.value.trim())
+  textAnswer.value = ''
+}
 
+const handleEnd = async () => {
+  ending.value = true
   try {
-    // API_SPEC §11.3 — POST /mock-interviews/:id/answer
-    const result = await mockService.submitAnswer(mockId, {
-      question_id: questionId,
-      answer_text: answerText
-    })
-    textAnswer.value = ''
-    questionIndex.value++
-
-    // Reload messages để có câu hỏi tiếp theo + feedback
-    await loadMessages()
-
-    // Parse feedback từ response trực tiếp
-    if (result?.feedback) {
-      const fb = result.feedback
-      feedback.value = {
-        score: `${fb.score ?? '?'}/10`,
-        message: Array.isArray(fb.strengths) ? fb.strengths.join('. ') : 'AI đã đánh giá.',
-        improvement: Array.isArray(fb.improvements) ? fb.improvements.join('. ') : ''
-      }
-    }
-  } catch (error) {
-    console.error('Lỗi gửi câu trả lời', error)
+    // Persist the spoken conversation as mock messages, then finalize.
+    const turns = transcript.value.filter(t => t.text && t.text.trim())
+    await mockService.saveLiveTranscript(mockId, turns).catch(() => {})
+    await mockService.endMockInterview(mockId)
+  } catch (e) {
+    console.error('Lỗi kết thúc phiên', e)
   } finally {
-    analyzing.value = false
+    stop()
+    router.push({ path: '/mock-results', query: { mock_id: mockId } })
   }
-}
-
-const handleNext = async () => {
-  // API_SPEC §11.4 — POST /mock-interviews/:id/end
-  await mockService.endMockInterview(mockId)
-  router.push({ path: '/mock-results', query: { mock_id: mockId } })
 }
 </script>
-
 <template>
-  <div class="h-screen flex flex-col bg-slate-50 font-sans overflow-hidden">
+  <div class="h-screen flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 font-sans overflow-hidden text-white">
     <!-- Header -->
-    <div class="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-20">
-      <div class="flex items-center gap-4">
-        <div>
-          <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Luyện tập AI: Frontend Developer</h1>
-          <p class="text-sm font-medium text-gray-500 mt-0.5">Câu hỏi {{ questionIndex }} / 5</p>
-        </div>
+    <div class="h-16 bg-slate-900/70 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 shrink-0">
+      <div>
+        <h1 class="text-lg font-bold">Luyện tập AI · {{ role }}</h1>
+        <p class="text-xs text-slate-400 capitalize">Trình độ: {{ level }}</p>
       </div>
-      <button @click="showEndModal = true" class="text-rose-500 hover:text-rose-600 font-semibold px-4 py-2 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-2">
-        <Square class="w-4 h-4" /> Kết thúc sớm
+      <button @click="showEndModal = true"
+        class="text-rose-300 hover:text-white hover:bg-rose-500/80 font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+        <PhoneOff class="w-4 h-4" /> Kết thúc
       </button>
     </div>
 
-    <Modal :isOpen="showEndModal" @close="showEndModal = false" title="Kết thúc sớm">
-      <p class="text-gray-600 mb-6">Bạn có chắc chắn muốn kết thúc bài thi sớm? Kết quả sẽ được tính trên những câu bạn đã trả lời.</p>
-      <div class="flex justify-end gap-3">
-        <button class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors" @click="showEndModal = false">Huỷ</button>
-        <button class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-lg shadow-sm transition-colors" @click="router.push({ path: '/home', state: { message: 'Đã hủy bài thi thử' } })">Xác nhận</button>
-      </div>
-    </Modal>
+    <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
 
-    <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
-
-    <!-- Main Content -->
-    <div class="flex flex-1 overflow-hidden relative">
-      
-      <!-- Left: AI Interviewer -->
-      <div class="w-[400px] flex flex-col bg-white border-r border-gray-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 relative">
-        <!-- AI Avatar Area -->
-        <div class="p-8 flex flex-col items-center justify-center border-b border-gray-100 relative overflow-hidden bg-gradient-to-b from-slate-900 to-slate-800 shrink-0">
-          <!-- Animated glowing background -->
-          <div class="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-500 via-transparent to-transparent animate-pulse" style="animation-duration: 3s;"></div>
-          
-          <div class="relative z-10 w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white mb-6 shadow-[0_0_40px_rgba(99,102,241,0.5)] border-4 border-slate-700">
-            <span class="text-3xl font-black tracking-wider">AI</span>
-            <!-- Speaking ripples -->
-            <div v-if="!analyzing" class="absolute inset-0 rounded-full border-2 border-indigo-400 opacity-0 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-            <div v-if="!analyzing" class="absolute inset-0 rounded-full border-2 border-purple-400 opacity-0 animate-[ping_2.5s_cubic-bezier(0,0,0.2,1)_infinite]" style="animation-delay: 0.5s;"></div>
-          </div>
-          
-          <h3 class="text-xl font-bold text-white mb-4 relative z-10">AI Interviewer</h3>
-          
-          <div class="relative z-10 flex items-center gap-2 px-5 py-2 rounded-full border shadow-inner backdrop-blur-md transition-all duration-300"
-               :class="analyzing ? 'bg-indigo-500/20 border-indigo-400/30' : 'bg-emerald-500/20 border-emerald-400/30'">
-            <template v-if="analyzing">
-              <RefreshCw class="w-4 h-4 text-indigo-300 animate-spin" /> 
-              <span class="text-sm font-semibold text-indigo-200">Đang phân tích...</span>
-            </template>
-            <template v-else>
-              <div class="relative flex h-2.5 w-2.5 mr-1">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </div>
-              <span class="text-sm font-semibold text-emerald-200">Đang lắng nghe</span>
-            </template>
+    <!-- Main -->
+    <div class="flex-1 flex flex-col items-center justify-center relative px-4 overflow-hidden">
+      <!-- AI Avatar -->
+      <div class="relative flex flex-col items-center mb-8">
+        <div class="relative">
+          <!-- Speaking ripples -->
+          <div v-if="aiSpeaking" class="absolute inset-0 rounded-full bg-indigo-500/30 animate-ping" style="animation-duration:1.2s"></div>
+          <div v-if="aiSpeaking" class="absolute -inset-4 rounded-full border-2 border-indigo-400/40 animate-pulse"></div>
+          <!-- Talking face: eyes + mouth lip-synced to the AI voice -->
+          <div class="relative z-10 w-40 h-40 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.6)] border-4 border-slate-700 transition-transform duration-150"
+               :class="aiSpeaking ? 'scale-105' : 'scale-100'">
+            <svg viewBox="0 0 120 120" class="w-32 h-32">
+              <!-- Eyes -->
+              <ellipse cx="44" cy="50" :rx="7" :ry="aiSpeaking ? 8 : 7" fill="#fff" />
+              <ellipse cx="76" cy="50" :rx="7" :ry="aiSpeaking ? 8 : 7" fill="#fff" />
+              <circle cx="44" cy="51" r="3.5" fill="#1e1b4b" />
+              <circle cx="76" cy="51" r="3.5" fill="#1e1b4b" />
+              <!-- Mouth: height follows audioLevel -->
+              <rect :x="60 - mouthWidth / 2" :y="78 - mouthOpen / 2"
+                    :width="mouthWidth" :height="mouthOpen"
+                    :rx="mouthRadius"
+                    fill="#1e1b4b" stroke="#fff" stroke-width="2" />
+            </svg>
           </div>
         </div>
-
-        <!-- Chat History -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-50/50">
-          <div v-if="messages.length === 0" class="text-center text-gray-400 text-sm mt-10">
-            Cuộc trò chuyện sẽ hiển thị tại đây...
-          </div>
-          <div v-for="(msg, idx) in messages" :key="idx" class="animate-fade-in-up">
-            <div v-if="msg.sender_type === 'ai'" class="flex gap-3">
-              <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200 mt-1">
-                <span class="text-xs font-bold text-indigo-700">AI</span>
-              </div>
-              <div class="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm p-4 text-gray-800 text-[15px] leading-relaxed">
-                {{ msg.content }}
-              </div>
-            </div>
-            <div v-else class="flex gap-3 justify-end">
-              <div class="bg-blue-600 text-white shadow-sm rounded-2xl rounded-tr-sm p-4 text-[15px] leading-relaxed max-w-[85%]">
-                {{ msg.content }}
-              </div>
-            </div>
-          </div>
+        <h3 class="mt-6 text-xl font-bold">AI Interviewer</h3>
+        <div class="mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold"
+             :class="error ? 'bg-rose-500/20 text-rose-300'
+               : aiSpeaking ? 'bg-indigo-500/20 text-indigo-200'
+               : speaking ? 'bg-emerald-500/20 text-emerald-200'
+               : 'bg-white/10 text-slate-300'">
+          <Loader2 v-if="!connected && !error" class="w-4 h-4 animate-spin" />
+          {{ statusLabel }}
         </div>
       </div>
 
-      <!-- Right: Candidate Answer & Interaction -->
-      <div class="flex-1 flex flex-col relative bg-slate-50/30">
-        
-        <div class="flex-1 overflow-y-auto p-8 pb-32">
-          <div class="max-w-3xl mx-auto space-y-8">
-            
-            <!-- Feedback Area -->
-            <div v-if="feedback" class="bg-white rounded-2xl shadow-xl border-t-4 border-t-emerald-500 overflow-hidden animate-fade-in-down">
-              <div class="p-6">
-                <div class="flex justify-between items-center mb-4">
-                  <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-                    <CheckCircle class="w-6 h-6 text-emerald-500" /> Phản hồi từ AI
-                  </h3>
-                  <div class="bg-emerald-100 text-emerald-700 font-bold px-3 py-1 rounded-lg text-sm">
-                    Điểm: {{ feedback.score }}
-                  </div>
-                </div>
-                <p class="text-gray-700 mb-6 leading-relaxed">{{ feedback.message }}</p>
-                <div class="bg-amber-50 rounded-xl p-4 border-l-4 border-amber-400">
-                  <p class="text-sm font-bold text-amber-800 mb-1 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" /></svg>
-                    Gợi ý cải thiện:
-                  </p>
-                  <p class="text-amber-700 text-sm leading-relaxed">{{ feedback.improvement || 'Nên cung cấp thêm các ví dụ thực tế cụ thể.' }}</p>
-                </div>
-                
-                <div class="flex justify-end mt-6">
-                  <button @click="handleNext" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center gap-2">
-                    {{ questionIndex < 5 ? 'Câu hỏi tiếp theo' : 'Xem báo cáo tổng hợp' }} <ArrowRight class="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Empty space filler when no feedback -->
-            <div v-else class="h-full flex items-center justify-center text-center opacity-50 mt-20">
-              <div>
-                <Mic class="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p class="text-gray-500 font-medium">Bắt đầu ghi âm hoặc nhập câu trả lời của bạn</p>
-              </div>
-            </div>
-
+      <!-- Live transcript -->
+      <div ref="transcriptBox" class="w-full max-w-2xl flex-1 max-h-[32vh] overflow-y-auto space-y-3 px-2 mb-4">
+        <div v-if="transcript.length === 0" class="text-center text-slate-500 text-sm mt-6">
+          Cuộc trò chuyện sẽ hiển thị tại đây khi AI bắt đầu nói...
+        </div>
+        <div v-for="(t, i) in transcript" :key="i"
+             class="flex" :class="t.role === 'ai' ? 'justify-start' : 'justify-end'">
+          <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed"
+               :class="t.role === 'ai' ? 'bg-white/10 text-slate-100 rounded-tl-sm' : 'bg-blue-600 text-white rounded-tr-sm'">
+            {{ t.text }}
           </div>
         </div>
-
-        <!-- Floating Action Bar for Controls -->
-        <div class="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-200 p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-20">
-          <div class="max-w-4xl mx-auto flex items-end gap-6">
-            
-            <!-- Voice Record Button -->
-            <div class="relative shrink-0 flex flex-col items-center group">
-              <button @click="handleRecord" 
-                 class="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl z-10"
-                 :class="recording ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/40 animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-indigo-500/30 hover:scale-105'">
-                <Square v-if="recording" class="w-6 h-6 text-white fill-current" />
-                <Mic v-else class="w-7 h-7 text-white" />
-              </button>
-              
-              <!-- Voice ripples -->
-              <div v-if="recording" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full border-2 border-rose-400 animate-ping" style="animation-duration: 1.5s;"></div>
-              
-              <div class="absolute -top-10 whitespace-nowrap text-xs font-bold text-gray-500 px-3 py-1 bg-white border border-gray-200 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {{ recording ? 'Dừng ghi âm' : 'Trả lời bằng giọng nói' }}
-              </div>
-            </div>
-
-            <!-- Text Input -->
-            <div class="flex-1 relative bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 focus-within:bg-white transition-all overflow-hidden flex shadow-inner">
-              <textarea 
-                class="w-full bg-transparent p-4 outline-none resize-none min-h-[60px] max-h-[160px] text-gray-800 placeholder-gray-400" 
-                placeholder="Hoặc nhập câu trả lời bằng văn bản tại đây..."
-                rows="2"
-                v-model="textAnswer"
-                :disabled="recording || analyzing"
-              ></textarea>
-              <div class="absolute bottom-3 right-3">
-                <button 
-                  @click="handleSendText"
-                  :disabled="!textAnswer || recording || analyzing"
-                  class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white p-2 rounded-xl transition-colors shadow-sm"
-                  title="Gửi câu trả lời"
-                >
-                  <Send class="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-          </div>
-          
-          <!-- Recording status indicator -->
-          <div v-if="recording" class="max-w-4xl mx-auto mt-4 pl-[88px] flex items-center gap-3">
-            <span class="relative flex h-3 w-3">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-            </span>
-            <span class="text-sm font-bold text-rose-600">Đang thu âm... (Tối đa 3 phút)</span>
-            
-            <!-- Fake Waveform -->
-            <div class="flex gap-1 ml-4 h-6 items-center">
-              <div v-for="(h, i) in [2, 5, 3, 7, 4, 8, 3, 6, 2, 5]" :key="i" 
-                   class="w-1 bg-rose-400 rounded-full" 
-                   :style="{ height: `${h * 10}%`, animation: `pulse-height ${0.3 + (i%4)*0.1}s ease-in-out infinite alternate` }"></div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
+
+    <!-- Control bar -->
+    <div class="shrink-0 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 p-6">
+      <div class="max-w-2xl mx-auto flex flex-col items-center gap-4">
+        <!-- Push to talk -->
+        <button
+          @mousedown="startTalk" @mouseup="stopTalk" @mouseleave="stopTalk"
+          @touchstart.prevent="startTalk" @touchend.prevent="stopTalk"
+          :disabled="!connected || aiSpeaking"
+          class="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-xl disabled:opacity-40 disabled:cursor-not-allowed select-none"
+          :class="speaking ? 'bg-rose-500 scale-110 shadow-rose-500/50' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 shadow-indigo-500/40'">
+          <Square v-if="speaking" class="w-7 h-7 fill-current" />
+          <Mic v-else class="w-8 h-8" />
+        </button>
+        <p class="text-xs text-slate-400">Nhấn giữ để nói, thả ra để AI trả lời</p>
+
+        <!-- Text fallback -->
+        <button @click="showText = !showText" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+          <Type class="w-3.5 h-3.5" /> Trả lời bằng văn bản
+        </button>
+        <div v-if="showText" class="w-full flex gap-2">
+          <input v-model="textAnswer" @keyup.enter="handleSendText"
+            placeholder="Nhập câu trả lời..."
+            class="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 outline-none focus:border-blue-400 text-white placeholder-slate-500" />
+          <button @click="handleSendText" :disabled="!textAnswer.trim()"
+            class="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 px-4 rounded-xl transition-colors">
+            <Send class="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- End modal -->
+    <Modal :isOpen="showEndModal" @close="showEndModal = false" title="Kết thúc buổi luyện tập">
+      <p class="text-gray-600 mb-6">Kết thúc và xem báo cáo tổng hợp? Cuộc trò chuyện sẽ được lưu lại.</p>
+      <div class="flex justify-end gap-3">
+        <button class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg" @click="showEndModal = false">Tiếp tục luyện</button>
+        <button class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-lg flex items-center gap-2 disabled:opacity-60"
+          :disabled="ending" @click="handleEnd">
+          <Loader2 v-if="ending" class="w-4 h-4 animate-spin" /> Kết thúc & xem báo cáo
+        </button>
+      </div>
+    </Modal>
   </div>
 </template>
-
-<style scoped>
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in-up {
-  animation: fade-in-up 0.4s ease-out forwards;
-}
-
-@keyframes fade-in-down {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in-down {
-  animation: fade-in-down 0.4s ease-out forwards;
-}
-
-@keyframes pulse-height {
-  from { transform: scaleY(0.3); }
-  to { transform: scaleY(1); }
-}
-</style>

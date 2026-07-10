@@ -30,6 +30,7 @@ type User struct {
 	AvatarURL       sql.NullString `db:"avatar_url"        json:"avatar_url,omitempty"`
 	Role            UserRole       `db:"role"              json:"role"`
 	Status          UserStatus     `db:"status"            json:"status"`
+	Settings        JSONB          `db:"settings"          json:"settings,omitempty"`
 	LastLoginAt     sql.NullTime   `db:"last_login_at"     json:"last_login_at,omitempty"`
 	EmailVerifiedAt sql.NullTime   `db:"email_verified_at" json:"email_verified_at,omitempty"`
 	CreatedAt       time.Time      `db:"created_at"        json:"created_at"`

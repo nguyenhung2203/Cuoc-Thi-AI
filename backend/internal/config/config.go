@@ -36,6 +36,12 @@ type Config struct {
 	// AI Service
 	AIServiceURL string
 
+	// Redis / async queue
+	RedisHost     string
+	RedisPort     string
+	RedisPassword string
+	RedisDB       string
+
 	// Object storage (S3-compatible)
 	StorageBucket    string
 	StorageRegion    string
@@ -69,6 +75,11 @@ func Load() (*Config, error) {
 		JWTRefreshTTL: getEnv("JWT_REFRESH_TTL", "168h"), // 7 days
 
 		AIServiceURL: getEnv("AI_SERVICE_URL", "http://localhost:8000"),
+
+		RedisHost:     getEnv("REDIS_HOST", "localhost"),
+		RedisPort:     getEnv("REDIS_PORT", "6379"),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		RedisDB:       getEnv("REDIS_DB", "0"),
 
 		StorageBucket:    getEnv("STORAGE_BUCKET", ""),
 		StorageRegion:    getEnv("STORAGE_REGION", ""),

@@ -62,6 +62,10 @@ const (
 	// Chat events
 	EventChatMessage = "chat:message"
 
+	// Note & question events (Recruiter only)
+	EventNoteCreated   = "note:created"
+	EventQuestionAsked = "question:asked"
+
 	// Transcript events
 	EventTranscriptUpdate = "transcript:update"
 

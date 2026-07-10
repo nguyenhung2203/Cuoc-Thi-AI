@@ -85,6 +85,65 @@ func (h *RubricHandler) CreateRubric(w http.ResponseWriter, r *http.Request) {
 	}, nil, requestID)
 }
 
+func (h *RubricHandler) UpdateRubric(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	rubricID := chi.URLParam(r, "rubric_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var req request.CreateRubricRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+	if errs := validator.Validate(req); len(errs) > 0 {
+		pkgresponse.Error(w, apierrors.NewValidation("payload", errs), requestID)
+		return
+	}
+
+	rubric := &models.Rubric{
+		ID:        rubricID,
+		CompanyID: companyID,
+		Name:      req.Name,
+	}
+	if req.JobID != nil {
+		rubric.JobID = sql.NullString{String: *req.JobID, Valid: true}
+	}
+	if req.Description != nil {
+		rubric.Description = sql.NullString{String: *req.Description, Valid: true}
+	}
+
+	var criteria []models.RubricCriteria
+	for _, cReq := range req.Criteria {
+		c := models.RubricCriteria{
+			Name:         cReq.Name,
+			Weight:       cReq.Weight,
+			MinScore:     cReq.MinScore,
+			MaxScore:     cReq.MaxScore,
+			ScoringGuide: models.JSONB([]byte(`"` + cReq.ScoringGuide + `"`)),
+			OrderIndex:   cReq.OrderIndex,
+		}
+		if cReq.Description != nil {
+			c.Description = sql.NullString{String: *cReq.Description, Valid: true}
+		}
+		criteria = append(criteria, c)
+	}
+
+	if err := h.rubricSvc.UpdateRubric(r.Context(), rubric, criteria); err != nil {
+		if err == sql.ErrNoRows {
+			pkgresponse.Error(w, apierrors.NewNotFound("rubric"), requestID)
+			return
+		}
+		if appErr, ok := apierrors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, requestID)
+		} else {
+			pkgresponse.Error(w, apierrors.NewInternal(err.Error()), requestID)
+		}
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"id": rubricID}, nil, requestID)
+}
+
 func (h *RubricHandler) ListCompanyRubrics(w http.ResponseWriter, r *http.Request) {
 	companyID := chi.URLParam(r, "company_id")
 	jobID := r.URL.Query().Get("job_id")

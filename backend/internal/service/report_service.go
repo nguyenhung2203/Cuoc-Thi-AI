@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"backend/internal/models"
 	apierrors "backend/internal/pkg/errors"
@@ -22,6 +23,7 @@ type ReportService struct {
 	interviewRepo  *repository.InterviewRepository
 	notifRepo      *repository.NotificationRepository
 	orchestrator   *AIOrchestratorService
+	enqueuer       ReportEnqueuer
 }
 
 func NewReportService(
@@ -155,44 +157,23 @@ func (s *ReportService) GenerateReport(ctx context.Context, companyID, interview
 
 	recruiterID := interview.RecruiterID.String
 
-	// Spin up goroutine to process async with timeout
+	// Report status is now locked to "generating". Hand the actual work to the
+	// async queue if one is configured; otherwise fall back to an in-process
+	// goroutine so the platform still works without Redis.
+	if s.enqueuer != nil {
+		if err := s.enqueuer(companyID, interviewID, jobID, generatedBy, recruiterID); err == nil {
+			return &models.InterviewReport{
+				InterviewID: interviewID,
+				Summary:     "Báo cáo đang được xử lý bởi AI...",
+			}, nil
+		}
+		// If enqueue fails, degrade to inline goroutine below.
+	}
+
 	go func(compID, intID, jobIDStr, genBy, recID string) {
-		// Timeout để tránh goroutine leak khi AI treo
-		bgCtx, cancel := context.WithTimeout(context.Background(), 10*60e9) // 10 minutes
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-
-		// Protect from panics
-		defer func() {
-			if r := recover(); r != nil {
-				_ = s.interviewRepo.UpdateReportStatus(bgCtx, intID, "failed")
-				s.notifyReportFailed(bgCtx, intID, recID, "panic")
-			}
-		}()
-
-		err := s.generateReportSync(bgCtx, compID, intID, jobIDStr, genBy)
-		if err != nil {
-			if !strings.Contains(err.Error(), "context deadline exceeded") {
-				_ = s.interviewRepo.UpdateReportStatus(bgCtx, intID, "failed")
-				s.notifyReportFailed(bgCtx, intID, recID, err.Error())
-			} else {
-				_ = s.interviewRepo.UpdateReportStatus(bgCtx, intID, "failed")
-				s.notifyReportFailed(bgCtx, intID, recID, "timeout")
-			}
-			return
-		}
-
-		_ = s.interviewRepo.UpdateReportStatus(bgCtx, intID, "ready")
-
-		// Send notification
-		if recID != "" {
-			_ = s.notifRepo.Create(bgCtx, &models.Notification{
-				UserID:  recID,
-				Title:   "Báo cáo AI đã hoàn thành",
-				Message: "Báo cáo phỏng vấn đã được AI tổng hợp xong. Vui lòng xem kết quả.",
-				Type:    "report_ready",
-				Link:    "/interviews/" + intID + "/report",
-			})
-		}
+		_ = s.RunReportGeneration(bgCtx, compID, intID, jobIDStr, genBy, recID)
 	}(companyID, interviewID, jobID, generatedBy, recruiterID)
 
 	// Return a stub report indicating generating status
@@ -200,6 +181,49 @@ func (s *ReportService) GenerateReport(ctx context.Context, companyID, interview
 		InterviewID: interviewID,
 		Summary:     "Báo cáo đang được xử lý bởi AI...",
 	}, nil
+}
+
+// ReportEnqueuer enqueues report generation onto an async queue. Returns an
+// error if the job could not be scheduled (caller then runs inline).
+type ReportEnqueuer func(companyID, interviewID, jobID, generatedBy, recruiterID string) error
+
+// SetEnqueuer wires an async queue. When nil, reports run in-process.
+func (s *ReportService) SetEnqueuer(fn ReportEnqueuer) { s.enqueuer = fn }
+
+// RunReportGeneration performs the full report lifecycle assuming report_status
+// is already "generating": generate → set final status → notify. It is safe to
+// call from an async worker (retries land here) and recovers from panics.
+// Returns an error only when the caller (worker) should retry.
+func (s *ReportService) RunReportGeneration(ctx context.Context, companyID, interviewID, jobID, generatedBy, recruiterID string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "failed")
+			s.notifyReportFailed(ctx, interviewID, recruiterID, "panic")
+			err = fmt.Errorf("report generation panicked: %v", r)
+		}
+	}()
+
+	if genErr := s.generateReportSync(ctx, companyID, interviewID, jobID, generatedBy); genErr != nil {
+		reason := genErr.Error()
+		if strings.Contains(reason, "context deadline exceeded") {
+			reason = "timeout"
+		}
+		_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "failed")
+		s.notifyReportFailed(ctx, interviewID, recruiterID, reason)
+		return genErr
+	}
+
+	_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "ready")
+	if recruiterID != "" {
+		_ = s.notifRepo.Create(ctx, &models.Notification{
+			UserID:  recruiterID,
+			Title:   "Báo cáo AI đã hoàn thành",
+			Message: "Báo cáo phỏng vấn đã được AI tổng hợp xong. Vui lòng xem kết quả.",
+			Type:    "report_ready",
+			Link:    "/interviews/" + interviewID + "/report",
+		})
+	}
+	return nil
 }
 
 func (s *ReportService) notifyReportFailed(ctx context.Context, interviewID, recruiterID, reason string) {

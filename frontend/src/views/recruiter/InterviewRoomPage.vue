@@ -5,6 +5,7 @@ import Button from '../../components/common/AppButton.vue'
 import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Modal from '../../components/common/AppModal.vue'
+import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, Send, LogOut, Play, Pause } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
 import { roomService } from '../../services/room.service'
@@ -174,9 +175,10 @@ const confirmEndCall = () => {
   showEndModal.value = false
   isEnding.value = true
   roomStore.endInterview() // Gửi event end
-  
+
   setTimeout(() => {
-    router.push({ path: '/reports', state: { message: 'Đã lưu kết quả phỏng vấn thành công' } })
+    const target = interviewId ? `/interviews/${interviewId}/report` : '/reports'
+    router.push({ path: target, state: { message: 'Đã lưu kết quả phỏng vấn thành công' } })
   }, 1500)
 }
 
@@ -190,6 +192,20 @@ const handlePauseCall = () => {
 
 const handleResumeCall = () => {
   roomStore.resumeInterview()
+}
+
+// Toggle chính cho nút Bắt đầu/Tạm dừng:
+// - Nếu đang diễn ra (active) -> tạm dừng
+// - Nếu đang tạm dừng (paused) -> tiếp tục
+// - Ngược lại (waiting) -> bắt đầu
+const handleToggleCallState = () => {
+  if (roomStore.status === 'active') {
+    handlePauseCall()
+  } else if (roomStore.status === 'paused') {
+    handleResumeCall()
+  } else {
+    handleStartCall()
+  }
 }
 
 const handleCancelCall = () => {

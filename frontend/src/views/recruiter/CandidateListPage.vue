@@ -20,6 +20,9 @@ const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
 const localToast = ref(null)
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalPages = ref(1)
 
 const jobs = ref([])
 const filters = ref({ job_id: '', status: '', keyword: '' })
@@ -29,21 +32,38 @@ const fetchCandidates = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     if (!companyId) return
-    
+
     // Clean up empty filters
-    const params = {}
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize.value
+    }
     if (filters.value.job_id) params.job_id = filters.value.job_id
     if (filters.value.status) params.status = filters.value.status
     if (filters.value.keyword) params.keyword = filters.value.keyword
 
     const response = await candidateService.getCandidates(companyId, params)
-    candidates.value = response.map(c => ({
-      id: c.id,
-      name: c.full_name,
-      email: c.email,
-      appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
-      status: c.status || 'New'
-    }))
+
+    // Handle both array and paginated response
+    if (Array.isArray(response)) {
+      candidates.value = response.map(c => ({
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
+        status: c.status || 'New'
+      }))
+      totalPages.value = 1
+    } else if (response.data && Array.isArray(response.data)) {
+      candidates.value = response.data.map(c => ({
+        id: c.id,
+        name: c.full_name,
+        email: c.email,
+        appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
+        status: c.status || 'New'
+      }))
+      totalPages.value = Math.ceil((response.meta?.total || 0) / pageSize.value)
+    }
   } catch (error) {
     localToast.value = { type: 'error', message: 'Lỗi tải danh sách ứng viên: ' + (error.message || 'Không xác định') }
     candidates.value = []
@@ -200,6 +220,31 @@ const columns = [
             </div>
           </template>
         </Table>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="!loading && candidates.length > 0" class="p-6 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+        <div class="text-sm text-slate-600 dark:text-slate-400">
+          Trang {{ currentPage }} / {{ totalPages || 1 }}
+        </div>
+        <div class="flex gap-2">
+          <Button
+            :disabled="currentPage <= 1"
+            variant="secondary"
+            @click="currentPage > 1 && (currentPage--, fetchCandidates())"
+            class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ← Trước
+          </Button>
+          <Button
+            :disabled="currentPage >= totalPages"
+            variant="secondary"
+            @click="currentPage < totalPages && (currentPage++, fetchCandidates())"
+            class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Tiếp →
+          </Button>
+        </div>
       </div>
     </div>
 

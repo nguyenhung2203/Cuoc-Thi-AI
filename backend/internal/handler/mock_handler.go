@@ -133,6 +133,40 @@ func (h *MockHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}, nil, requestID)
 }
 
+// SaveLiveTranscript persists a spoken (Gemini Live) mock conversation as
+// mock_interview_messages so the report generator has material to work with.
+func (h *MockHandler) SaveLiveTranscript(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+	id := chi.URLParam(r, "id")
+
+	var req struct {
+		Turns []struct {
+			Role string `json:"role"`
+			Text string `json:"text"`
+		} `json:"turns"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		pkgresponse.Error(w, apierrors.NewValidation("invalid json", []string{err.Error()}), requestID)
+		return
+	}
+
+	turns := make([]service.LiveTurn, 0, len(req.Turns))
+	for _, t := range req.Turns {
+		if t.Text == "" {
+			continue
+		}
+		turns = append(turns, service.LiveTurn{Role: t.Role, Text: t.Text})
+	}
+
+	if err := h.mockSvc.SaveLiveTranscript(r.Context(), id, userID, turns); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"saved": len(turns)}, nil, requestID)
+}
+
 func (h *MockHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)

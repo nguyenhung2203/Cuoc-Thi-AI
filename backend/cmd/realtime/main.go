@@ -8,10 +8,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/joho/godotenv"
+
 	"backend/internal/realtime"
 )
 
 func main() {
+	// Load .env so GEMINI_API_KEY / LIVEKIT_* are available to the gateway.
+	_ = godotenv.Load()
+	_ = godotenv.Load("../../.env")
+
 	port := os.Getenv("REALTIME_PORT")
 	if port == "" {
 		port = "8081"

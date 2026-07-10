@@ -52,6 +52,9 @@ func NewServer(addr string) *Server {
 	// WebSocket upgrade endpoint
 	mux.HandleFunc("/ws/interview-room", s.handleUpgrade)
 
+	// WebSocket voice mock-interview proxy (browser <-> Gemini Live)
+	mux.HandleFunc("/ws/mock-live", s.handleMockLive)
+
 	// REST endpoint for chat history
 	mux.HandleFunc("/api/v1/rooms/", s.handleGetChatHistory)
 

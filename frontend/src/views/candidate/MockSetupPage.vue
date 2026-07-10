@@ -31,8 +31,15 @@ const handleStart = async (e) => {
     })
     // Bước 2: Bắt đầu session → nhận câu hỏi đầu tiên — API_SPEC §11.2
     await mockService.startMockInterview(session.id)
-    // Chuyển vào phòng phỏng vấn mock
-    router.push({ path: '/mock-room', query: { mock_id: session.id } })
+    // Chuyển vào phòng phỏng vấn mock (kèm role/level cho phiên thoại AI)
+    router.push({
+      path: '/mock-room',
+      query: {
+        mock_id: session.id,
+        role: setup.value.jobRole,
+        level: setup.value.level,
+      },
+    })
   } catch (error) {
     console.error(error)
     toast.value = { type: 'error', message: 'Không thể khởi động phỏng vấn. Backend đang được kết nối.' }

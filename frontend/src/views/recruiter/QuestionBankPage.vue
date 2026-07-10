@@ -30,6 +30,7 @@ const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
+const editingId = ref(null)
 const saving = ref(false)
 const toast = ref(null)
 const newQuestion = ref({
@@ -71,6 +72,25 @@ const loadQuestions = async () => {
 
 onMounted(loadQuestions)
 
+// Open the shared modal in edit mode, prefilled from a row.
+const openEdit = (row) => {
+  editingId.value = row.id
+  newQuestion.value = {
+    text: row.question_text || row.text || '',
+    role: (row.skill_tags && row.skill_tags[0]) || row.role || 'All',
+    level: row.level ? row.level.charAt(0).toUpperCase() + row.level.slice(1) : 'Fresher',
+    type: row.question_type ? row.question_type.charAt(0).toUpperCase() + row.question_type.slice(1) : 'Technical',
+    expected_signals: Array.isArray(row.expected_signals) ? row.expected_signals.join(', ') : '',
+  }
+  showCreateModal.value = true
+}
+
+const openCreate = () => {
+  editingId.value = null
+  newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
+  showCreateModal.value = true
+}
+
 const handleCreate = async () => {
   if (!newQuestion.value.text) return
   saving.value = true
@@ -85,13 +105,19 @@ const handleCreate = async () => {
         ? newQuestion.value.expected_signals.split(',').map(s => s.trim())
         : []
     }
-    await questionBankService.createQuestion(companyId, payload)
-    toast.value = { type: 'success', message: 'Đã thêm câu hỏi vào kho!' }
+    if (editingId.value) {
+      await questionBankService.updateQuestion(companyId, editingId.value, payload)
+      toast.value = { type: 'success', message: 'Đã cập nhật câu hỏi!' }
+    } else {
+      await questionBankService.createQuestion(companyId, payload)
+      toast.value = { type: 'success', message: 'Đã thêm câu hỏi vào kho!' }
+    }
     showCreateModal.value = false
+    editingId.value = null
     newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
     await loadQuestions()
   } catch (err) {
-    toast.value = { type: 'error', message: 'Lưu thất bại. Backend đang được kết nối.' }
+    toast.value = { type: 'error', message: 'Lưu thất bại. Vui lòng thử lại.' }
   } finally {
     saving.value = false
   }
@@ -135,7 +161,7 @@ const handleGenerateAI = async () => {
         <h1 class="text-h1">Kho câu hỏi</h1>
         <p class="text-helper" style="margin-top: 4px">Quản lý ngân hàng câu hỏi dùng chung cho các buổi phỏng vấn.</p>
       </div>
-      <Button @click="showCreateModal = true"><Plus size="16" /> Thêm câu hỏi</Button>
+      <Button @click="openCreate"><Plus size="16" /> Thêm câu hỏi</Button>
     </div>
 
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
@@ -175,7 +201,7 @@ const handleGenerateAI = async () => {
         </template>
         <template #action="{ row }">
           <div style="display: flex; gap: 8px">
-            <Button variant="ghost" style="padding: 4px" @click="toast = { type: 'info', message: 'Tính năng chỉnh sửa đang phát triển' }"><Edit size="16" /></Button>
+            <Button variant="ghost" style="padding: 4px" @click="openEdit(row)"><Edit size="16" /></Button>
             <Button variant="ghost" style="padding: 4px; color: var(--danger)" @click="deletingId = row.id; showDeleteModal = true"><Trash2 size="16" /></Button>
           </div>
         </template>
@@ -266,7 +292,7 @@ const handleGenerateAI = async () => {
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 12px">
         <Button variant="ghost" @click="showFilterModal = false">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="showFilterModal = false; toast = { type: 'success', message: 'Đã áp dụng bộ lọc nâng cao!' }">Áp dụng</Button>
+        <Button variant="primary" @click="showFilterModal = false; loadQuestions()">Áp dụng</Button>
       </div>
     </Modal>
   </div>

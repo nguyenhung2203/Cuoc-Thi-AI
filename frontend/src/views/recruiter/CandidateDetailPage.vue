@@ -195,6 +195,32 @@ const handleViewCV = async () => {
     localToast.value = { type: 'error', message: 'Lỗi khi xem CV: ' + (error.message || '') }
   }
 }
+
+const handleParseCV = async () => {
+  if (!candidate.value.cv_file_id || isNew.value) {
+    localToast.value = { type: 'error', message: 'Vui lòng lưu ứng viên với CV trước' }
+    return
+  }
+  isAiParsing.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await candidateService.parseCV(companyId, id)
+
+    const updated = await candidateService.getCandidate(companyId, id)
+    if (updated.ai_cv_summary || updated.parsed_cv_json) {
+      parsedData.value = {
+        skills: updated.skills || [],
+        experience: updated.experience || updated.ai_cv_summary || '',
+        education: updated.education || ''
+      }
+    }
+    localToast.value = { type: 'success', message: 'Đã phân tích CV thành công!' }
+  } catch (error) {
+    localToast.value = { type: 'error', message: 'Lỗi phân tích CV: ' + (error.message || '') }
+  } finally {
+    isAiParsing.value = false
+  }
+}
 </script>
 
 <template>
@@ -335,7 +361,17 @@ const handleViewCV = async () => {
               <iframe v-else-if="selectedFile && selectedFile.type === 'application/pdf'" :src="cvPreviewUrl" width="100%" height="400px" class="border-none block"></iframe>
               <iframe v-else-if="!selectedFile && cvPreviewUrl" :src="cvPreviewUrl" width="100%" height="400px" class="border-none block"></iframe>
             </div>
-            
+
+            <div v-if="candidate.cv_file_id && !selectedFile" class="flex gap-2 mt-4">
+              <Button type="button" variant="secondary" @click="handleViewCV" class="flex-1 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+                Xem CV
+              </Button>
+              <Button type="button" :disabled="uploading || isAiParsing" @click="handleParseCV" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white border-none">
+                <Sparkles size="16" class="mr-2" v-if="!isAiParsing" />
+                {{ isAiParsing ? 'Đang phân tích...' : 'Phân tích CV' }}
+              </Button>
+            </div>
+
           </div>
           <div v-else 
             class="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-10 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group"

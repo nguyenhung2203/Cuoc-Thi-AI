@@ -216,6 +216,35 @@ func (s *MockService) SendMessage(ctx context.Context, id, userID, content strin
 	return userMsg, aiMsg, nil
 }
 
+// LiveTurn is one spoken exchange captured from a Gemini Live mock session.
+type LiveTurn struct {
+	Role string // "ai" or "candidate"
+	Text string
+}
+
+// SaveLiveTranscript persists a spoken mock conversation as messages. Called
+// once when a voice mock session ends so the report has conversation material.
+func (s *MockService) SaveLiveTranscript(ctx context.Context, id, userID string, turns []LiveTurn) error {
+	if _, err := s.getByIDAndCheckOwnership(ctx, id, userID); err != nil {
+		return err
+	}
+	for _, t := range turns {
+		sender := "candidate"
+		if t.Role == "ai" {
+			sender = "ai"
+		}
+		if err := s.mockRepo.CreateMessage(ctx, &models.MockInterviewMessage{
+			ID:              uuid.New().String(),
+			MockInterviewID: id,
+			SenderType:      sender,
+			Content:         t.Text,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // K-S6-03: Score answer
 func (s *MockService) ScoreAnswer(ctx context.Context, mockID, messageID, userID string) error {
 	return apierrors.NewValidation("not_implemented", []string{"scoring not yet implemented for mock interviews"})

@@ -59,21 +59,27 @@ const handleAnalyzeJD = async () => {
     errors.value.description = 'Vui lòng nhập mô tả công việc trước khi phân tích'
     return
   }
-  
+
+  // NOTE: AI Job Description analysis requires the job to be created first (to get job ID).
+  // This button currently only parses description locally for UX preview.
+  // Real analysis: call jobService.analyzeJD(companyId, jobId) AFTER job is created.
+  // For now, this button provides client-side suggestion feedback.
+
   isAnalyzing.value = true
-  
-  // Giả lập call API phân tích
-  await new Promise(resolve => setTimeout(resolve, 2000))
-  
+
+  // Simulate extracting requirements from description text (client-side hint)
+  // Real AI analysis happens on backend after job creation
+  await new Promise(resolve => setTimeout(resolve, 1000))
+
   if (formData.value.requirements.length === 0) {
+    // Provide a helpful hint based on the description
     formData.value.requirements = [
-      'Kinh nghiệm 2+ năm với framework liên quan',
-      'Kỹ năng giải quyết vấn đề tốt',
-      'Khả năng làm việc nhóm'
+      'Yêu cầu phân tích chi tiết từ AI server sau khi tạo job'
     ]
     if (errors.value.requirements) delete errors.value.requirements
+    localToast.value = { type: 'info', message: 'Hãy tạo job trước để AI phân tích chi tiết JD.' }
   }
-  
+
   isAnalyzing.value = false
 }
 

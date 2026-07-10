@@ -170,6 +170,34 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest, ipAdd
 	return resp, refreshToken, nil
 }
 
+// UpdateProfile updates the current user's editable profile fields.
+func (s *AuthService) UpdateProfile(ctx context.Context, userID, fullName, avatarURL string) error {
+	if fullName == "" {
+		return errors.NewValidation("full_name", []string{"full_name is required"})
+	}
+	return s.userRepo.UpdateProfile(ctx, userID, fullName, avatarURL)
+}
+
+// GetSettings returns the current user's settings JSON blob ({} if unset).
+func (s *AuthService) GetSettings(ctx context.Context, userID string) (models.JSONB, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, errors.NewNotFound("user not found")
+	}
+	if len(user.Settings) == 0 {
+		return models.JSONB([]byte("{}")), nil
+	}
+	return user.Settings, nil
+}
+
+// UpdateSettings replaces the current user's settings JSON blob.
+func (s *AuthService) UpdateSettings(ctx context.Context, userID string, settings models.JSONB) error {
+	if len(settings) == 0 {
+		settings = models.JSONB([]byte("{}"))
+	}
+	return s.userRepo.UpdateSettings(ctx, userID, settings)
+}
+
 func (s *AuthService) GetMe(ctx context.Context, userID string) (*response.UserMeResponse, error) {
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {

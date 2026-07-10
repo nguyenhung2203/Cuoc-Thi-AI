@@ -13,6 +13,15 @@ export const candidatePortalService = {
     return apiService.get('/portal/profile');
   },
 
+  /**
+   * Cập nhật thông tin profile candidate
+   * @param {Object} data { full_name, avatar_url }
+   * @returns {Promise<Object>}
+   */
+  updateProfile: (data) => {
+    return apiService.put('/portal/profile', data);
+  },
+
   uploadCv: (file) => {
     const formData = new FormData();
     formData.append('file', file);

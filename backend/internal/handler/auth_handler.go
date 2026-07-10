@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,6 +10,7 @@ import (
 	"backend/internal/dto/request"
 	"backend/internal/dto/response"
 	"backend/internal/middleware"
+	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	pkgresponse "backend/internal/pkg/response"
 	"backend/internal/service"
@@ -31,6 +33,9 @@ func (h *AuthHandler) Routes(r chi.Router) {
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout", h.Logout)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout-all", h.LogoutAll)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Get("/me", h.Me)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Put("/me", h.UpdateMe)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Get("/me/settings", h.GetSettings)
+	r.With(middleware.AuthMiddleware(h.jwtSecret)).Put("/me/settings", h.UpdateSettings)
 }
 
 func setRefreshTokenCookie(w http.ResponseWriter, token string) {
@@ -173,6 +178,87 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, me, nil, "")
+}
+
+// UpdateMe updates the current user's profile (full_name, avatar_url).
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+
+	var body struct {
+		FullName  string `json:"full_name"`
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewValidation("payload", []string{"invalid json payload"}), "")
+		return
+	}
+
+	if err := h.authService.UpdateProfile(r.Context(), userID, body.FullName, body.AvatarURL); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to update profile"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "updated"}, nil, "")
+}
+
+// GetSettings returns the current user's settings JSON.
+func (h *AuthHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+	settings, err := h.authService.GetSettings(r.Context(), userID)
+	if err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to fetch settings"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"settings": settings}, nil, "")
+}
+
+// UpdateSettings replaces the current user's settings JSON.
+func (h *AuthHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		pkgresponse.Error(w, errors.NewUnauthorized("unauthorized"), "")
+		return
+	}
+
+	// Accept either {"settings": {...}} or a raw object body.
+	var wrapper struct {
+		Settings json.RawMessage `json:"settings"`
+	}
+	raw, _ := io.ReadAll(r.Body)
+	var payload json.RawMessage
+	if err := json.Unmarshal(raw, &wrapper); err == nil && len(wrapper.Settings) > 0 {
+		payload = wrapper.Settings
+	} else {
+		payload = raw
+	}
+	if len(payload) == 0 {
+		payload = json.RawMessage([]byte("{}"))
+	}
+
+	if err := h.authService.UpdateSettings(r.Context(), userID, models.JSONB(payload)); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to save settings"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "saved"}, nil, "")
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
