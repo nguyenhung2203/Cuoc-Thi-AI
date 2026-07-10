@@ -40,7 +40,9 @@ const handleLogin = async (e) => {
     const redirectPath = route.query.redirect
     if (redirectPath) {
       router.push(redirectPath)
-    } else if (user.role === 'recruiter' || user.role === 'admin' || user.role === 'owner') {
+    } else if (user.role === 'admin') {
+      router.push({ path: '/admin/dashboard', state: { message: `Chào mừng Quản trị viên ${user.full_name}!` } })
+    } else if (user.role === 'recruiter' || user.role === 'owner') {
       router.push({ path: '/dashboard', state: { message: `Chào mừng ${user.full_name} quay trở lại màn hình quản lý!` } })
     } else {
       router.push({ path: '/home', state: { message: `Đăng nhập thành công! Chào mừng ${user.full_name}.` } })

@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
@@ -9,6 +9,7 @@ import { useLiveKit } from '../../composables/useLiveKit'
 import { useWebSocket } from '../../composables/useWebSocket'
 import { useRoom } from '../../composables/useRoom'
 import { useChat } from '../../composables/useChat'
+import { interviewService } from '../../services/interview.service'
 
 const router = useRouter()
 const route = useRoute()
@@ -27,53 +28,62 @@ const isLeaving = ref(false)
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 const interviewInfo = ref(history.state?.interviewInfo || null)
 
-// Parse JWT to extract room_id and interview_id
-const parseJwt = (token) => {
-  try {
-    return JSON.parse(atob(token.split('.')[1]));
-  } catch (e) {
-    return {};
-  }
-}
+const inviteToken = route.query.token || ''
+const roomIdRef = ref('')
+const interviewIdRef = ref('')
 
-const token = route.query.token || ''
-const tokenClaims = parseJwt(token)
-const roomId = tokenClaims.room_id || (tokenClaims.video && tokenClaims.video.room) || ''
-const interviewId = tokenClaims.interview_id || ''
-
+// Sẽ được set sau khi gọi api join
 const { connect, disconnect: wsDisconnect } = useWebSocket()
-const { joinRoom, participants, isJoined } = useRoom(roomId, interviewId)
-const { messages, sendChatMessage } = useChat(roomId, interviewId)
-
 const chatInput = ref('')
 
-const handleSendMessage = () => {
-  if (!chatInput.value.trim()) return
-  sendChatMessage(chatInput.value.trim(), 'room')
-  chatInput.value = ''
-}
+// Khởi tạo Composables ở root level với refs
+const { joinRoom, participants, isJoined } = useRoom(roomIdRef, interviewIdRef)
+const { messages, sendChatMessage } = useChat(roomIdRef, interviewIdRef)
 
 onMounted(async () => {
+  // Bind to window for template access (or refactor composable usage)
+  window.__sendChatMessage = sendChatMessage
+
   if (history.state?.message) {
     window.history.replaceState({ interviewInfo: history.state.interviewInfo }, document.title)
   }
-  
-  // Logic kết nối LiveKit & WebSocket
-  if (token) {
+
+  if (inviteToken) {
     try {
-      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
-      await connectToRoom(livekitUrl, token)
-      
-      // Connect WebSocket Realtime
-      connect(token)
-      setTimeout(() => {
-        joinRoom()
-      }, 500) // Delay slight to ensure connection opens
+      const res = await interviewService.joinByToken(inviteToken)
+      interviewInfo.value = {
+        ...(history.state?.interviewInfo || {}),
+        id: res.interview_id,
+        job_title: res.job_title || history.state?.interviewInfo?.job_title,
+        company_name: history.state?.interviewInfo?.company_name || '',
+        room_id: res.room_id,
+        room_code: res.room_code,
+        status: res.status
+      }
+      roomIdRef.value = res.room_id
+      interviewIdRef.value = res.interview_id
+
+      const livekitToken = res.room_access_token || res.roomAccessToken || res.access_token
+      if (livekitToken) {
+        const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+        await connectToRoom(livekitUrl, livekitToken)
+        connect(livekitToken)
+        setTimeout(() => {
+          joinRoom()
+        }, 500)
+      }
     } catch (err) {
-      console.error('Không thể vào phòng', err)
+      console.error('Lỗi khi vào phòng', err)
+      error.value = 'Không thể tham gia phòng phỏng vấn: ' + (err.message || 'Lỗi không xác định')
     }
   }
 })
+
+const handleSendMessage = () => {
+  if (!chatInput.value.trim()) return
+  if (window.__sendChatMessage) window.__sendChatMessage(chatInput.value.trim(), 'room')
+  chatInput.value = ''
+}
 
 onUnmounted(() => {
   disconnect()

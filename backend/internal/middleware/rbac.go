@@ -89,3 +89,19 @@ func RequirePermission(action string) func(http.Handler) http.Handler {
 
 	return RequireCompanyRole(allowedRoles...)
 }
+
+// RequireCandidate returns a middleware that blocks non-candidate roles.
+// Candidate users can ONLY access mock-interview endpoints (scoped to their user_id).
+func RequireCandidate() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID := getRequestIDFromCtx(r)
+			userRole, _ := r.Context().Value(CtxUserRole).(string)
+			if userRole != "candidate" {
+				response.Error(w, apierrors.NewForbidden("only candidates can access this endpoint"), requestID)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

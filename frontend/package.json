@@ -12,7 +12,8 @@
     "livekit-client": "^2.20.0",
     "lucide-vue-next": "^1.0.0",
     "vue": "^3.5.38",
-    "vue-router": "^5.1.0"
+    "vue-router": "^5.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",

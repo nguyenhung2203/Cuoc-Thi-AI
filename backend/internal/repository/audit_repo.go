@@ -1,22 +1,81 @@
 package repository
 
 import (
-	"log"
+	"context"
+
+	"github.com/jmoiron/sqlx"
 
 	"backend/internal/models"
 )
 
 type AuditRepository struct {
-	// Data access fields
+	db *sqlx.DB
 }
 
-func NewAuditRepository() *AuditRepository {
-	return &AuditRepository{}
+func NewAuditRepository(db *sqlx.DB) *AuditRepository {
+	return &AuditRepository{db: db}
 }
 
-// Insert simulates inserting an audit log into the database
-func (r *AuditRepository) Insert(al *models.AuditLog) error {
-	log.Printf("[db] INSERT INTO audit_logs (action, actor_id, resource_id, metadata, ip_address) VALUES ('%s', '%s', '%s', '%v', '%s')",
-		al.Action, al.ActorID, al.ResourceID, al.Metadata, al.IPAddress)
-	return nil
+func (r *AuditRepository) Insert(ctx context.Context, al *models.AuditLog) error {
+	q := `
+		INSERT INTO audit_logs (
+			id, company_id, actor_user_id, actor_role,
+			action, resource_type, resource_id,
+			before_json, after_json, ip_address, user_agent,
+			created_at
+		) VALUES (
+			:id, :company_id, :actor_user_id, :actor_role,
+			:action, :resource_type, :resource_id,
+			:before_json, :after_json, :ip_address, :user_agent,
+			NOW()
+		) RETURNING id, created_at
+	`
+	stmt, err := r.db.PrepareNamedContext(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	return stmt.QueryRowContext(ctx, al).Scan(&al.ID, &al.CreatedAt)
+}
+
+func (r *AuditRepository) ListByCompany(ctx context.Context, companyID string, resourceType, actorUserID string, limit, offset int) ([]models.AuditLog, error) {
+	args := []interface{}{companyID}
+	query := `SELECT * FROM audit_logs WHERE company_id = $1`
+	paramIdx := 2
+
+	if resourceType != "" {
+		query += ` AND resource_type = $` + string(rune('0'+paramIdx))
+		args = append(args, resourceType)
+		paramIdx++
+	}
+	if actorUserID != "" {
+		query += ` AND actor_user_id = $` + string(rune('0'+paramIdx))
+		args = append(args, actorUserID)
+		paramIdx++
+	}
+
+	query += ` ORDER BY created_at DESC LIMIT $` + string(rune('0'+paramIdx)) + ` OFFSET $` + string(rune('0'+paramIdx+1))
+	args = append(args, limit, offset)
+
+	var items []models.AuditLog
+	err := r.db.SelectContext(ctx, &items, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *AuditRepository) ListSystem(ctx context.Context, limit, offset int) ([]models.AuditLog, int, error) {
+	var total int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_logs WHERE action NOT IN ('login', 'logout')`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT * FROM audit_logs WHERE action NOT IN ('login', 'logout') ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	var items []models.AuditLog
+	if err := r.db.SelectContext(ctx, &items, query, limit, offset); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }

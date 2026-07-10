@@ -26,6 +26,25 @@ func (h *CandidatePortalHandler) Routes(r chi.Router) {
 	r.Get("/profile", h.GetProfile)
 	r.Post("/cv", h.UploadCV)
 	r.Post("/jobs/{jobID}/apply", h.ApplyJob)
+	r.Get("/jobs/{jobID}/check-applied", h.CheckApplied)
+	r.Get("/applications", h.GetApplications)
+}
+
+func (h *CandidatePortalHandler) GetApplications(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+
+	applications, err := h.svc.GetApplications(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, applications, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request) {
@@ -43,10 +62,15 @@ func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request
 	var cvFileID, cvOriginalName string
 	if err == nil && file != nil {
 		defer file.Close()
-		// Here you would normally upload the file to S3 or save it locally and get the file ID
-		// For now we simulate saving it and just use the filename
-		cvFileID = "local-" + header.Filename
-		cvOriginalName = header.Filename
+		fileRecord, uploadErr := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, "", "cv")
+		if uploadErr == nil {
+			cvFileID = fileRecord.ID
+			cvOriginalName = fileRecord.OriginalName
+		} else {
+			// fallback if upload fails but we still want to apply
+			cvFileID = "local-" + header.Filename
+			cvOriginalName = header.Filename
+		}
 	}
 
 	err = h.svc.ApplyForJob(r.Context(), userID, jobID, cvFileID, cvOriginalName)
@@ -60,6 +84,24 @@ func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "applied successfully"}, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) CheckApplied(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+	jobID := chi.URLParam(r, "jobID")
+
+	applied, err := h.svc.CheckApplied(r.Context(), userID, jobID)
+	if err != nil {
+		response.Error(w, errors.NewInternal("failed to check application status"), requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]bool{"has_applied": applied}, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {

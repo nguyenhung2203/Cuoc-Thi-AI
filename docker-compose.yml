@@ -90,7 +90,7 @@ services:
       dockerfile: ../deploy/docker/ai-service.Dockerfile
     container_name: ai-interview-ai
     ports:
-      - "18000:8000"
+      - "18000:5000"
     env_file:
       - .env
     depends_on:

@@ -40,7 +40,7 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
 		transcriptSaver:  NewTranscriptBatchSaver(100, 5*time.Second),
 		aiRateLimiter:    NewAIRateLimiter(10, 10*time.Minute),
 		scoreRateLimiter: NewAIRateLimiter(10, 10*time.Minute),
-		auditLogger:      NewAuditLogger(repository.NewAuditRepository()),
+		auditLogger:      NewAuditLogger(repository.NewAuditRepository(nil)), // stub, will wire real db later
 		aiRetries:        make(map[string]int),
 	}
 	r.registerHandlers()

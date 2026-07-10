@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, unref } from 'vue'
 import { useWebSocket } from './useWebSocket'
 
 export function useChat(roomId, interviewId) {
@@ -32,7 +32,7 @@ export function useChat(roomId, interviewId) {
     return sendMessage('chat:send', {
       content,
       visibility
-    }, roomId, interviewId)
+    }, unref(roomId), unref(interviewId))
   }
 
   onMounted(() => {

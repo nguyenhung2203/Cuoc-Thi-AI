@@ -300,6 +300,26 @@ func (r *CandidateRepository) UpdateJobCandidateStatus(ctx context.Context, comp
 	return nil
 }
 
+// DeleteJobCandidate removes a candidate from a job (unassign).
+// Hard-deletes the job_candidates row scoped to company.
+func (r *CandidateRepository) DeleteJobCandidate(ctx context.Context, companyID, jobID, candidateID string) error {
+	const q = `
+		DELETE FROM job_candidates
+		WHERE job_id = $1::uuid
+		  AND candidate_id = $2::uuid
+		  AND company_id = $3::uuid`
+
+	res, err := r.db.ExecContext(ctx, q, jobID, candidateID, companyID)
+	if err != nil {
+		return fmt.Errorf("delete job candidate: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("delete job candidate: row not found or access denied")
+	}
+	return nil
+}
+
 // ListByJobID returns job_candidates rows (with pipeline info) for a given job scoped to companyID.
 func (r *CandidateRepository) ListByJobID(ctx context.Context, companyID, jobID string, p pagination.Params) ([]models.JobCandidate, int, error) {
 	const countQ = `
@@ -322,9 +342,11 @@ func (r *CandidateRepository) ListByJobID(ctx context.Context, companyID, jobID 
 	}
 
 	listQ := fmt.Sprintf(`
-		SELECT * FROM job_candidates
-		WHERE job_id = $1::uuid AND company_id = $2::uuid
-		ORDER BY %s %s
+		SELECT jc.*, c.full_name AS candidate_name, c.email AS candidate_email 
+		FROM job_candidates jc
+		LEFT JOIN candidates c ON jc.candidate_id = c.id
+		WHERE jc.job_id = $1::uuid AND jc.company_id = $2::uuid
+		ORDER BY jc.%s %s
 		LIMIT $3 OFFSET $4`,
 		sortBy, sortDir,
 	)

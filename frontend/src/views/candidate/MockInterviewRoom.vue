@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Card from '../../components/common/AppCard.vue'
@@ -20,8 +20,10 @@ const feedback = ref(null)
 const textAnswer = ref('')
 const showEndModal = ref(false)
 const messages = ref([])
+const chatContainer = ref(null)
 
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
+const toast = ref(null)
 
 // Lấy câu hỏi hiện tại (message AI cuối chưa có câu trả lời)
 const currentQuestion = computed(() => {
@@ -29,11 +31,18 @@ const currentQuestion = computed(() => {
   return aiMsgs.length > 0 ? aiMsgs[aiMsgs.length - 1] : null
 })
 
-const loadMessages = async () => {
+const loadMessages = async (retryCount = 0) => {
   if (!mockId) return
   try {
     const msgs = await mockService.getMessages(mockId)
     messages.value = Array.isArray(msgs) ? msgs : []
+    
+    // Nếu messages trống (có thể do backend đang gen câu hỏi đầu tiên), thử lại sau 1s (tối đa 3 lần)
+    if (messages.value.length === 0 && retryCount < 3) {
+      setTimeout(() => loadMessages(retryCount + 1), 1000)
+      return
+    }
+
     // Parse feedback từ message AI có score_json
     const feedbackMsg = [...messages.value].reverse().find(m => m.sender_type === 'ai' && m.score_json)
     if (feedbackMsg) {
@@ -50,6 +59,7 @@ const loadMessages = async () => {
     } else {
       feedback.value = null
     }
+    scrollToBottom()
   } catch (err) {
     console.error('Lỗi tải tin nhắn', err)
   }
@@ -61,6 +71,14 @@ onMounted(() => {
   }
   loadMessages()
 })
+
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
+  })
+}
 
 const handleRecord = () => {
   // Mock recording logic for now since voice parsing is not requested yet
@@ -75,27 +93,39 @@ const handleRecord = () => {
 
 const handleSendText = async () => {
   if (!textAnswer.value && !recording.value) return
+  
+  const answerText = textAnswer.value || 'Câu trả lời ghi âm (chức năng voice chưa tích hợp)'
+  
+  // Immediately add user's message to UI and clear input
+  messages.value.push({
+    sender_type: 'user',
+    content: answerText
+  })
+  textAnswer.value = ''
+  scrollToBottom()
+  
   analyzing.value = true
   feedback.value = null
-  const answerText = textAnswer.value || 'Câu trả lời ghi âm (chức năng voice chưa tích hợp)'
+  
   // Lấy question_id từ câu hỏi hiện tại
   const questionId = currentQuestion.value?.id || currentQuestion.value?.question_id || null
 
   try {
-    // API_SPEC §11.3 — POST /mock-interviews/:id/answer
     const result = await mockService.submitAnswer(mockId, {
       question_id: questionId,
       answer_text: answerText
     })
-    textAnswer.value = ''
+    
     questionIndex.value++
 
     // Reload messages để có câu hỏi tiếp theo + feedback
     await loadMessages()
 
-    // Parse feedback từ response trực tiếp
-    if (result?.feedback) {
-      const fb = result.feedback
+    // Parse feedback từ result.ai_message (nếu backend parse scoreJSON ra)
+    if (result?.ai_message?.score_json) {
+      const fb = typeof result.ai_message.score_json === 'string' 
+        ? JSON.parse(result.ai_message.score_json) 
+        : result.ai_message.score_json
       feedback.value = {
         score: `${fb.score ?? '?'}/10`,
         message: Array.isArray(fb.strengths) ? fb.strengths.join('. ') : 'AI đã đánh giá.',
@@ -110,10 +140,75 @@ const handleSendText = async () => {
 }
 
 const handleNext = async () => {
-  // API_SPEC §11.4 — POST /mock-interviews/:id/end
-  await mockService.endMockInterview(mockId)
-  router.push({ path: '/mock-results', query: { mock_id: mockId } })
+  if (!mockId) {
+    router.push({ path: '/mock-results' })
+    return
+  }
+
+  try {
+    await mockService.endMockInterview(mockId)
+  } catch (error) {
+    console.error('Lỗi kết thúc mock interview:', error)
+  } finally {
+    router.push({ path: `/mock-results/${mockId}` })
+  }
 }
+
+// STT: Speech Recognition
+let recognition = null
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  recognition = new SpeechRecognition()
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.lang = 'vi-VN'
+
+  recognition.onresult = (event) => {
+    let interimTranscript = ''
+    let finalTranscript = ''
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) {
+        finalTranscript += event.results[i][0].transcript
+      } else {
+        interimTranscript += event.results[i][0].transcript
+      }
+    }
+    // Update the input field with ongoing transcription
+    textAnswer.value = finalTranscript || interimTranscript
+  }
+  
+  recognition.onerror = (event) => {
+    console.error('Speech recognition error', event.error)
+    recording.value = false
+    toast.value = { type: 'error', message: 'Lỗi ghi âm: ' + event.error }
+  }
+  
+  recognition.onend = () => {
+    if (recording.value) {
+      // Auto restart if it stopped but we are still in "recording" state
+      recognition.start()
+    }
+  }
+}
+
+const toggleRecord = () => {
+  if (!recognition) {
+    toast.value = { type: 'error', message: 'Trình duyệt không hỗ trợ Web Speech API' }
+    return
+  }
+  if (!recording.value) {
+    recording.value = true
+    feedback.value = null
+    textAnswer.value = ''
+    recognition.start()
+  } else {
+    recording.value = false
+    recognition.stop()
+    // Sau khi tắt thì tự động send luôn hoặc bắt user bấm Gửi?
+    // Sẽ không tự động send, để user review text
+  }
+}
+
 </script>
 
 <template>
@@ -135,7 +230,7 @@ const handleNext = async () => {
       <p class="text-gray-600 mb-6">Bạn có chắc chắn muốn kết thúc bài thi sớm? Kết quả sẽ được tính trên những câu bạn đã trả lời.</p>
       <div class="flex justify-end gap-3">
         <button class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors" @click="showEndModal = false">Huỷ</button>
-        <button class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-lg shadow-sm transition-colors" @click="router.push({ path: '/home', state: { message: 'Đã hủy bài thi thử' } })">Xác nhận</button>
+        <button class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-lg shadow-sm transition-colors" @click="handleNext">Xác nhận</button>
       </div>
     </Modal>
 
@@ -175,38 +270,44 @@ const handleNext = async () => {
             </template>
           </div>
         </div>
-
-        <!-- Chat History -->
-        <div class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth bg-slate-50/50">
-          <div v-if="messages.length === 0" class="text-center text-gray-400 text-sm mt-10">
-            Cuộc trò chuyện sẽ hiển thị tại đây...
-          </div>
-          <div v-for="(msg, idx) in messages" :key="idx" class="animate-fade-in-up">
-            <div v-if="msg.sender_type === 'ai'" class="flex gap-3">
-              <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200 mt-1">
-                <span class="text-xs font-bold text-indigo-700">AI</span>
-              </div>
-              <div class="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm p-4 text-gray-800 text-[15px] leading-relaxed">
-                {{ msg.content }}
-              </div>
-            </div>
-            <div v-else class="flex gap-3 justify-end">
-              <div class="bg-blue-600 text-white shadow-sm rounded-2xl rounded-tr-sm p-4 text-[15px] leading-relaxed max-w-[85%]">
-                {{ msg.content }}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Right: Candidate Answer & Interaction -->
       <div class="flex-1 flex flex-col relative bg-slate-50/30">
         
-        <div class="flex-1 overflow-y-auto p-8 pb-32">
+        <div ref="chatContainer" class="flex-1 overflow-y-auto p-8 pb-32 scroll-smooth">
           <div class="max-w-3xl mx-auto space-y-8">
             
+            <!-- Chat History -->
+            <div class="space-y-6 mb-8">
+              <div v-if="messages.length === 0" class="flex flex-col items-center justify-center text-center opacity-50 mt-20 animate-pulse">
+                <Mic class="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p class="text-gray-500 font-medium">Hệ thống đang chuẩn bị câu hỏi đầu tiên...</p>
+              </div>
+              <div v-for="(msg, idx) in messages" :key="idx" class="animate-fade-in-up">
+                <div v-if="msg.sender_type === 'ai'" class="flex gap-3">
+                  <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 border border-indigo-200 mt-1 shadow-sm">
+                    <span class="text-xs font-bold text-indigo-700">AI</span>
+                  </div>
+                  <div class="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-sm p-4 text-gray-800 text-[15px] leading-relaxed relative">
+                    {{ msg.content }}
+                    <!-- Indicate if this is the latest AI question without feedback -->
+                    <span v-if="idx === messages.length - 1 && !analyzing && !msg.is_feedback" class="absolute -right-2 -bottom-2 flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                  </div>
+                </div>
+                <div v-else class="flex gap-3 justify-end">
+                  <div class="bg-blue-600 text-white shadow-sm rounded-2xl rounded-tr-sm p-4 text-[15px] leading-relaxed max-w-[85%]">
+                    {{ msg.content }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Feedback Area -->
-            <div v-if="feedback" class="bg-white rounded-2xl shadow-xl border-t-4 border-t-emerald-500 overflow-hidden animate-fade-in-down">
+            <div v-if="feedback" class="bg-white rounded-2xl shadow-xl border-t-4 border-t-emerald-500 overflow-hidden animate-fade-in-down mt-6">
               <div class="p-6">
                 <div class="flex justify-between items-center mb-4">
                   <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -250,7 +351,7 @@ const handleNext = async () => {
             
             <!-- Voice Record Button -->
             <div class="relative shrink-0 flex flex-col items-center group">
-              <button @click="handleRecord" 
+              <button @click="toggleRecord" 
                  class="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl z-10"
                  :class="recording ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/40 animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-indigo-500/30 hover:scale-105'">
                 <Square v-if="recording" class="w-6 h-6 text-white fill-current" />

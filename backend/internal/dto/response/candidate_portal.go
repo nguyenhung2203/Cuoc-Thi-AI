@@ -10,17 +10,17 @@ type CandidatePortalDashboardStats struct {
 }
 
 type CandidatePortalInterview struct {
-	ID              string     `json:"id"`
-	Title           string     `json:"title"`
-	CompanyID       string     `json:"company_id"`
-	CompanyName     string     `json:"company_name"`
-	JobID           string     `json:"job_id"`
-	JobTitle        string     `json:"job_title"`
-	Mode            string     `json:"mode"`
-	Status          string     `json:"status"`
-	ScheduledAt     *time.Time `json:"scheduled_at"`
-	InviteTokenHash string     `json:"-"`
-	JoinLink        string     `json:"join_link,omitempty"`
+	ID              string     `json:"id" db:"id"`
+	Title           string     `json:"title" db:"title"`
+	CompanyID       string     `json:"company_id" db:"company_id"`
+	CompanyName     string     `json:"company_name" db:"company_name"`
+	JobID           string     `json:"job_id" db:"job_id"`
+	JobTitle        string     `json:"job_title" db:"job_title"`
+	Mode            string     `json:"mode" db:"mode"`
+	Status          string     `json:"status" db:"status"`
+	ScheduledAt     *time.Time `json:"scheduled_at" db:"scheduled_at"`
+	InviteTokenHash string     `json:"-" db:"invite_token_hash"`
+	JoinLink        string     `json:"join_link,omitempty" db:"-"`
 }
 
 type CandidatePortalProfile struct {
@@ -32,4 +32,13 @@ type CandidatePortalProfile struct {
 	CVFileID  string `json:"cv_file_id"`
 	CVUrl     string `json:"cv_url"`
 	CVName    string `json:"cv_name"`
+}
+
+type CandidateApplication struct {
+	JobID          string    `json:"job_id" db:"job_id"`
+	JobTitle       string    `json:"job_title" db:"job_title"`
+	CompanyID      string    `json:"company_id" db:"company_id"`
+	CompanyName    string    `json:"company_name" db:"company_name"`
+	PipelineStatus string    `json:"pipeline_status" db:"pipeline_status"`
+	AppliedAt      time.Time `json:"applied_at" db:"applied_at"`
 }

@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { publicService } from '../../services/public.service'
+import { candidatePortalService } from '../../services/candidate-portal.service'
 import { authStore } from '../../stores/auth.store'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -23,6 +24,7 @@ const cvFile = ref(null)
 const cvPreviewUrl = ref(null)
 const isDragging = ref(false)
 const fileInput = ref(null)
+const hasApplied = ref(false)
 
 const isLoggedIn = computed(() => authStore.isAuthenticated)
 const user = computed(() => authStore.user)
@@ -40,6 +42,15 @@ onMounted(async () => {
     // If auth store exists but not initialized, let's init it
     if (authStore.isAuthenticated && !authStore.user) {
       await authStore.init()
+    }
+
+    if (authStore.isAuthenticated) {
+      try {
+        const checkRes = await candidatePortalService.checkApplied(jobId)
+        hasApplied.value = checkRes.data?.has_applied || checkRes.has_applied || false
+      } catch (err) {
+        console.error('Failed to check if applied', err)
+      }
     }
 
     const res = await publicService.getJobDetails(companyId, jobId)
@@ -172,7 +183,12 @@ const submitApplication = async () => {
         <Card style="padding: 24px; position: sticky; top: 24px;">
           <h2 style="margin: 0 0 24px 0; font-size: 20px;">Nộp đơn ứng tuyển</h2>
 
-          <div v-if="!isLoggedIn" style="text-align: center; padding: 24px 0;">
+          <div v-if="hasApplied" style="text-align: center; padding: 24px 0;">
+            <div style="margin-bottom: 16px; color: var(--success); font-weight: 500;">Bạn đã ứng tuyển vị trí này rồi.</div>
+            <Button variant="outline" style="width: 100%" @click="router.push('/home')">Về trang quản lý ứng viên</Button>
+          </div>
+
+          <div v-else-if="!isLoggedIn" style="text-align: center; padding: 24px 0;">
             <div style="margin-bottom: 16px; color: var(--text-secondary);">Bạn cần đăng nhập bằng tài khoản Ứng viên để nộp đơn.</div>
             <Button variant="primary" style="width: 100%" @click="requireLogin">Đăng nhập / Đăng ký</Button>
           </div>

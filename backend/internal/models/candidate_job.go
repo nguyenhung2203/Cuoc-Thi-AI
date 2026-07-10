@@ -11,6 +11,8 @@ type JobCandidate struct {
 	CompanyID      string          `db:"company_id"      json:"company_id"`
 	JobID          string          `db:"job_id"          json:"job_id"`
 	CandidateID    string          `db:"candidate_id"    json:"candidate_id"`
+	CandidateName  sql.NullString  `db:"candidate_name"  json:"-"`
+	CandidateEmail sql.NullString  `db:"candidate_email" json:"-"`
 	PipelineStatus string          `db:"pipeline_status" json:"pipeline_status"`
 	FitScore       sql.NullFloat64 `db:"fit_score"       json:"fit_score,omitempty"`
 	AIMatchJSON    JSONB           `db:"ai_match_json"   json:"ai_match_json,omitempty"`

@@ -11,6 +11,8 @@ const routes = [
   { path: '/login', component: () => import('../views/auth/LoginPage.vue') },
   { path: '/register', component: () => import('../views/auth/RegisterPage.vue') },
   { path: '/forgot-password', component: () => import('../views/auth/ForgotPasswordPage.vue') },
+  { path: '/reset-password', component: () => import('../views/auth/ResetPasswordPage.vue') },
+  { path: '/verify-email', component: () => import('../views/auth/VerifyEmailPage.vue') },
   { path: '/interview-consent', component: () => import('../views/candidate/InterviewWaitingRoom.vue') },
   { path: '/interview-expired', component: () => import('../views/shared/InterviewExpiredPage.vue') },
   
@@ -28,10 +30,11 @@ const routes = [
       { path: 'interviews/:id', component: () => import('../views/recruiter/InterviewDetailPage.vue') },
       { path: 'interviews/:id/report', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'recruiter-room', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
-      { path: 'reports', component: () => import('../views/recruiter/InterviewReportPage.vue') },
+      { path: 'reports/:id', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'question-bank', component: () => import('../views/recruiter/QuestionBankPage.vue') },
       { path: 'rubrics', component: () => import('../views/recruiter/RubricPage.vue') },
       { path: 'templates', component: () => import('../views/recruiter/TemplatePage.vue') },
+      { path: 'audit-logs', component: () => import('../views/recruiter/AuditLogsPage.vue') },
       { path: 'settings', component: () => import('../views/recruiter/SettingsPage.vue') }
     ]
   },
@@ -59,11 +62,24 @@ const routes = [
       { path: 'jobs/:job_id', component: () => import('../views/public/JobApplyPage.vue') }
     ]
   },
+  {
+    path: '/admin',
+    component: () => import('../components/layout/AdminLayout.vue'),
+    children: [
+      { path: 'dashboard', component: () => import('../views/admin/AdminDashboardPage.vue') },
+      { path: 'users', component: () => import('../views/admin/AdminUsersPage.vue') },
+      { path: 'companies', component: () => import('../views/admin/AdminCompaniesPage.vue') },
+      { path: 'prompts', component: () => import('../views/admin/AdminAIPromptsPage.vue') },
+      { path: 'audit-logs', component: () => import('../views/admin/AdminAuditLogsPage.vue') }
+    ]
+  },
   { path: '/:pathMatch(.*)*', redirect: () => {
     // If not logged in, redirect to login, else redirect based on role
     const token = localStorage.getItem('access_token')
     if (!token) return '/login'
-    return localStorage.getItem('user_role') === 'recruiter' ? '/dashboard' : '/home'
+    const role = localStorage.getItem('user_role')
+    if (role === 'admin') return '/admin/dashboard'
+    return role === 'recruiter' ? '/dashboard' : '/home'
   }}
 ]
 
@@ -75,7 +91,8 @@ const router = createRouter({
 // Simple auth guard
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('access_token')
-  const publicPages = ['/', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired']
+  const userRole = localStorage.getItem('user_role')
+  const publicPages = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/interview-consent', '/interview-expired']
   const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers')
   const authRequired = !isPublicPage
 
@@ -85,9 +102,18 @@ router.beforeEach((to, from, next) => {
 
   // Prevent logged in users from visiting login page
   if (!authRequired && token && (to.path === '/login' || to.path === '/register')) {
-    const userString = localStorage.getItem('user_role')
-    return next(userString === 'recruiter' ? '/dashboard' : '/home')
+    if (userRole === 'admin') return next('/admin/dashboard')
+    return next(userRole === 'recruiter' ? '/dashboard' : '/home')
   }
+
+  // Admin route protection
+  if (to.path.startsWith('/admin') && userRole !== 'admin') {
+    return next(userRole === 'recruiter' ? '/dashboard' : '/home')
+  }
+
+  // Recruiter route protection (prevent admin from accessing recruiter routes directly without a company)
+  // Actually, if admin wants to see recruiter view, they can, but typically we protect it. 
+  // For simplicity, we just protect admin routes.
 
   next()
 })

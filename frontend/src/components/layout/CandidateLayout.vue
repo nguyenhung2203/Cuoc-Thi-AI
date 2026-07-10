@@ -69,7 +69,7 @@ const candidateMenu = [
   { path: '/', name: 'Giới thiệu', icon: Globe },
   { path: '/home', name: 'Tổng quan', icon: Home },
   { path: '/job-board', name: 'Tìm việc', icon: Briefcase },
-  { path: '/my-interviews', name: 'Phỏng vấn', icon: Calendar },
+  { path: '/my-interviews', name: 'Công việc & Phỏng vấn', icon: Calendar },
   { path: '/mock-setup', name: 'Luyện tập AI', icon: Bot },
   { path: '/mock-results', name: 'Kết quả', icon: Award }
 ]

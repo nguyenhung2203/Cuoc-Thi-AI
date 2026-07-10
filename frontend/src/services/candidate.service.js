@@ -75,5 +75,25 @@ export const candidateService = {
    */
   getCVUrl: (fileId, companyId) => {
     return apiService.get(`/files/${fileId}/signed-url?company_id=${companyId}`);
+  },
+
+  /**
+   * Gán ứng viên vào một công việc
+   * @param {String} companyId
+   * @param {String} jobId
+   * @param {String} candidateId
+   */
+  assignToJob: (companyId, jobId, candidateId) => {
+    return apiService.post(`/companies/${companyId}/jobs/${jobId}/candidates/${candidateId}/assign`);
+  },
+
+  /**
+   * Gỡ ứng viên khỏi một công việc
+   * @param {String} companyId
+   * @param {String} jobId
+   * @param {String} candidateId
+   */
+  unassignFromJob: (companyId, jobId, candidateId) => {
+    return apiService.delete(`/companies/${companyId}/jobs/${jobId}/candidates/${candidateId}/unassign`);
   }
 };

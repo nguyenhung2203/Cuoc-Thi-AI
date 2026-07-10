@@ -29,7 +29,7 @@ func (r *CandidatePortalRepository) GetInterviewsByUserID(ctx context.Context, u
 		JOIN candidates c ON i.candidate_id = c.id
 		LEFT JOIN companies comp ON i.company_id = comp.id
 		LEFT JOIN jobs j ON i.job_id = j.id
-		WHERE c.user_id = $1
+		WHERE c.user_id = $1 OR c.email = (SELECT email FROM users WHERE id = $1)
 		ORDER BY i.scheduled_at ASC NULLS LAST
 	`
 	var items []response.CandidatePortalInterview
@@ -41,14 +41,14 @@ func (r *CandidatePortalRepository) GetInterviewsByUserID(ctx context.Context, u
 }
 
 func (r *CandidatePortalRepository) GetCompletedMockCount(ctx context.Context, userID string) (int, error) {
-	q := `SELECT count(*) FROM mock_results WHERE user_id = $1`
+	q := `SELECT count(*) FROM mock_interviews WHERE user_id = $1 AND status = 'completed'`
 	var count int
 	err := r.db.GetContext(ctx, &count, q, userID)
 	return count, err
 }
 
 func (r *CandidatePortalRepository) GetAverageMockScore(ctx context.Context, userID string) (float64, error) {
-	q := `SELECT coalesce(avg(score), 0) FROM mock_results WHERE user_id = $1`
+	q := `SELECT coalesce(avg(final_score), 0) FROM mock_interviews WHERE user_id = $1 AND status = 'completed'`
 	var avg float64
 	err := r.db.GetContext(ctx, &avg, q, userID)
 	return avg, err
@@ -123,4 +123,41 @@ func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, compan
 	`
 	_, err = r.db.ExecContext(ctx, qJc, companyID, candidateID, jobID)
 	return err
+}
+
+func (r *CandidatePortalRepository) CheckApplied(ctx context.Context, userID, jobID string) (bool, error) {
+	q := `
+		SELECT EXISTS(
+			SELECT 1 FROM job_candidates jc
+			JOIN candidates c ON jc.candidate_id = c.id
+			WHERE (c.user_id = $1 OR c.email = (SELECT email FROM users WHERE id = $1)) AND jc.job_id = $2
+		)
+	`
+	var exists bool
+	err := r.db.GetContext(ctx, &exists, q, userID, jobID)
+	return exists, err
+}
+
+func (r *CandidatePortalRepository) GetApplicationsByUserID(ctx context.Context, userID string) ([]response.CandidateApplication, error) {
+	q := `
+		SELECT 
+			jc.job_id,
+			coalesce(j.title, '') as job_title,
+			jc.company_id,
+			coalesce(comp.name, '') as company_name,
+			jc.pipeline_status,
+			jc.created_at as applied_at
+		FROM job_candidates jc
+		JOIN candidates c ON jc.candidate_id = c.id
+		LEFT JOIN jobs j ON jc.job_id = j.id
+		LEFT JOIN companies comp ON jc.company_id = comp.id
+		WHERE c.user_id = $1 OR c.email = (SELECT email FROM users WHERE id = $1)
+		ORDER BY jc.created_at DESC
+	`
+	var items []response.CandidateApplication
+	err := r.db.SelectContext(ctx, &items, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
 }

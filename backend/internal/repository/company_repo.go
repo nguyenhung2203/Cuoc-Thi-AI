@@ -69,3 +69,34 @@ func (r *CompanyRepository) Update(ctx context.Context, company *models.Company)
 	_, err := r.db.NamedExecContext(ctx, query, company)
 	return err
 }
+
+func (r *CompanyRepository) List(ctx context.Context, limit, offset int) ([]models.Company, int, error) {
+	var total int
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM companies`).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT * FROM companies ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	rows, err := r.db.QueryxContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var comps []models.Company
+	for rows.Next() {
+		var c models.Company
+		if err := rows.StructScan(&c); err != nil {
+			return nil, 0, err
+		}
+		comps = append(comps, c)
+	}
+	return comps, total, nil
+}
+
+func (r *CompanyRepository) UpdateStatus(ctx context.Context, companyID, status string) error {
+	query := `UPDATE companies SET status = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, query, status, companyID)
+	return err
+}

@@ -32,7 +32,7 @@ const handleRegister = async (e) => {
 
   try {
     await authStore.register(email.value, password.value, name.value, role.value)
-    router.push({ path: '/login', state: { message: 'Đăng ký thành công! Vui lòng đăng nhập.' } })
+    router.push({ path: '/verify-email', query: { email: email.value } })
   } catch (err) {
     if (err.message === 'email already exists') {
       error.value = 'Email này đã được đăng ký, vui lòng dùng email khác.'

@@ -33,6 +33,7 @@ export const authStore = reactive({
         }
         
         this.user = userData;
+        localStorage.setItem('user_role', userData.role);
       } catch (err) {
         console.error('Failed to init auth store:', err);
         // api.service.js đã tự động đá về /login nếu 401

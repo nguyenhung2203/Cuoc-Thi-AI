@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
@@ -7,13 +7,11 @@ import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import { Plus, Search, Filter, Bot, Copy, Edit, Trash2, Tag, Clock, MoreHorizontal } from 'lucide-vue-next'
+import { templateService } from '../../services/template.service'
+import { authStore } from '../../stores/auth.store'
 
-const templates = ref([
-  { id: 1, title: 'Frontend ReactJS Fresher', type: 'Technical', desc: 'Bộ câu hỏi tập trung vào nền tảng ReactJS, Javascript và DOM.', tags: ['React', 'Fresher', 'Frontend'], created: '2026-06-25' },
-  { id: 2, title: 'Backend Node.js Middle', type: 'Technical', desc: 'Kiểm tra kiến thức System Design cơ bản và API Design.', tags: ['Nodejs', 'Middle', 'Backend'], created: '2026-06-20' },
-  { id: 3, title: 'Project Manager (Agile)', type: 'Management', desc: 'Đánh giá khả năng quản lý rủi ro và giải quyết xung đột.', tags: ['Agile', 'Manager', 'Behavioral'], created: '2026-06-15' },
-  { id: 4, title: 'Văn hóa Doanh nghiệp', type: 'Behavioral', desc: 'Bộ câu hỏi tiêu chuẩn để đánh giá mức độ phù hợp văn hóa.', tags: ['Culture', 'Soft Skills'], created: '2026-06-10' }
-])
+const templates = ref([])
+const loading = ref(false)
 
 const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
@@ -25,25 +23,55 @@ const newTemplate = ref({
   desc: ''
 })
 
-const confirmDelete = () => {
-  templates.value = templates.value.filter(t => t.id !== deletingId.value)
-  showDeleteModal.value = false
-  toast.value = { type: 'success', message: 'Đã xóa mẫu AI thành công!' }
+const loadTemplates = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  loading.value = true
+  try {
+    const res = await templateService.getTemplates(companyId)
+    templates.value = Array.isArray(res) ? res : []
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Không thể tải danh sách mẫu AI' }
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleCreate = () => {
+onMounted(() => {
+  loadTemplates()
+})
+
+const confirmDelete = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  try {
+    await templateService.deleteTemplate(companyId, deletingId.value)
+    templates.value = templates.value.filter(t => t.id !== deletingId.value)
+    showDeleteModal.value = false
+    toast.value = { type: 'success', message: 'Đã xóa mẫu AI thành công!' }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Xóa thất bại' }
+  }
+}
+
+const handleCreate = async () => {
   if (!newTemplate.value.title) return
-  templates.value.unshift({
-    id: Date.now(),
-    title: newTemplate.value.title,
-    type: newTemplate.value.type,
-    desc: newTemplate.value.desc,
-    tags: ['New'],
-    created: new Date().toISOString().split('T')[0]
-  })
-  newTemplate.value = { title: '', type: 'Technical', desc: '' }
-  showCreateModal.value = false
-  toast.value = { type: 'success', message: 'Đã tạo mẫu AI mới!' }
+  const companyId = authStore.user?.companies?.[0]?.id
+  try {
+    const res = await templateService.createTemplate(companyId, {
+      title: newTemplate.value.title,
+      type: newTemplate.value.type,
+      description: newTemplate.value.desc,
+      tags: ['New']
+    })
+    
+    templates.value.unshift(res)
+    
+    newTemplate.value = { title: '', type: 'Technical', desc: '' }
+    showCreateModal.value = false
+    toast.value = { type: 'success', message: 'Đã tạo mẫu AI mới!' }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Tạo thất bại' }
+  }
 }
 </script>
 
@@ -100,7 +128,7 @@ const handleCreate = () => {
         </div>
 
         <p class="text-helper" style="color: var(--text-secondary); margin-bottom: 24px; flex-grow: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;">
-          {{ template.desc }}
+          {{ template.description }}
         </p>
 
         <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: auto">
@@ -108,7 +136,7 @@ const handleCreate = () => {
             <Badge v-for="tag in template.tags" :key="tag" type="neutral" style="font-size: 11px; padding: 2px 6px"><Tag size="10" style="margin-right: 4px"/>{{ tag }}</Badge>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center">
-            <span class="text-helper" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted)"><Clock size="12" /> Đã tạo: {{ template.created }}</span>
+            <span class="text-helper" style="display: flex; align-items: center; gap: 4px; color: var(--text-muted)"><Clock size="12" /> Đã tạo: {{ new Date(template.created_at).toLocaleDateString('vi-VN') }}</span>
             <Button variant="ghost" style="font-size: 13px; color: var(--primary); padding: 0">Cấu hình &rarr;</Button>
           </div>
         </div>

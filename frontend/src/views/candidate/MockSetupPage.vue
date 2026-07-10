@@ -19,16 +19,46 @@ const setup = ref({
   useCurrentCv: false
 })
 
+const currentCvId = ref(null)
+const currentCvName = ref('')
+
+import { onMounted } from 'vue'
+import { candidatePortalService } from '../../services/candidate-portal.service'
+
+onMounted(async () => {
+  try {
+    const profile = await candidatePortalService.getProfile()
+    if (profile && profile.cv_file_id) {
+      if (typeof profile.cv_file_id === 'object' && profile.cv_file_id.Valid) {
+        currentCvId.value = profile.cv_file_id.String
+      } else if (typeof profile.cv_file_id === 'string') {
+        currentCvId.value = profile.cv_file_id
+      }
+      currentCvName.value = profile.cv_name || ''
+    }
+  } catch (error) {
+    console.error('Không thể lấy thông tin CV:', error)
+  }
+})
+
 const handleStart = async (e) => {
   e.preventDefault()
   loading.value = true
   try {
-    // Bước 1: Tạo session mới (status=draft) — API_SPEC §11.1
-    const session = await mockService.createMockInterview({
+    const payload = {
       target_role: setup.value.jobRole,
-      target_level: setup.value.level,
-      cv_file_id: setup.value.useCurrentCv ? 'my_cv_id_here' : undefined
-    })
+      target_level: setup.value.level
+    }
+    
+    if (setup.value.useCurrentCv && currentCvId.value) {
+      payload.cv_file_id = currentCvId.value
+    } else if (setup.value.useCurrentCv && !currentCvId.value) {
+      toast.value = { type: 'error', message: 'Bạn chưa có CV nào trong hồ sơ!' }
+      loading.value = false
+      return
+    }
+    
+    const session = await mockService.createMockInterview(payload)
     // Bước 2: Bắt đầu session → nhận câu hỏi đầu tiên — API_SPEC §11.2
     await mockService.startMockInterview(session.id)
     // Chuyển vào phòng phỏng vấn mock
@@ -44,6 +74,12 @@ const handleStart = async (e) => {
 
 <template>
   <div class="space-y-8 animate-fade-in pb-12 max-w-5xl mx-auto">
+    <Toast 
+      v-if="toast" 
+      :type="toast.type" 
+      :message="toast.message" 
+      @close="toast = null" 
+    />
     <div class="mb-8">
       <h1 class="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">Luyện phỏng vấn cùng AI</h1>
       <p class="text-gray-500 mt-2 text-lg">AI sẽ đóng vai người phỏng vấn thật, đặt câu hỏi theo vị trí ứng tuyển và đưa feedback chi tiết.</p>
@@ -102,12 +138,17 @@ const handleStart = async (e) => {
             </div>
 
             <div class="mt-8 pt-8 border-t border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
-              <label class="flex items-center gap-3 cursor-pointer group bg-blue-50 hover:bg-blue-100 px-4 py-3 rounded-xl transition-colors border border-blue-100 w-full md:w-auto">
-                <input type="checkbox" v-model="setup.useCurrentCv" class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
-                <div class="flex items-center gap-2 text-blue-800 font-medium">
-                  <FileText class="w-5 h-5 text-blue-500" /> Sử dụng CV hiện tại trong Hồ sơ
-                </div>
-              </label>
+              <div class="flex flex-col gap-1 w-full md:w-auto">
+                <label class="flex items-center gap-3 cursor-pointer group bg-blue-50 hover:bg-blue-100 px-4 py-3 rounded-xl transition-colors border border-blue-100">
+                  <input type="checkbox" v-model="setup.useCurrentCv" class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                  <div class="flex items-center gap-2 text-blue-800 font-medium">
+                    <FileText class="w-5 h-5 text-blue-500" /> Sử dụng CV hiện tại trong Hồ sơ
+                  </div>
+                </label>
+                <p v-if="setup.useCurrentCv && currentCvName" class="text-sm text-gray-500 italic pl-4 border-l-2 border-blue-300 ml-2 mt-1">
+                  Đang dùng: <span class="font-medium text-gray-700">{{ currentCvName }}</span>
+                </p>
+              </div>
               
               <button type="submit" :disabled="loading" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 px-8 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:transform-none">
                 <Play class="w-5 h-5 fill-current" /> 

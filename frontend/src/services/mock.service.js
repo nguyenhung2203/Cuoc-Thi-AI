@@ -94,6 +94,6 @@ export const mockService = {
    * @param {String} mockId
    */
   finishMockInterview: (mockId) => {
-    return apiService.post(`/mock-interviews/${mockId}/finish`);
+    return apiService.post(`/mock-interviews/${mockId}/end`);
   }
 };

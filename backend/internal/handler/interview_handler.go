@@ -69,7 +69,7 @@ func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 		requestID = ""
 	}
 
-	room, err := h.svc.JoinByToken(r.Context(), inviteToken)
+	info, err := h.svc.JoinByToken(r.Context(), inviteToken)
 	if err != nil {
 		if appErr, ok := apierrors.IsAppError(err); ok {
 			response.Error(w, appErr, requestID.(string))
@@ -79,7 +79,7 @@ func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, room, nil, requestID.(string))
+	response.JSON(w, http.StatusOK, info, nil, requestID.(string))
 }
 
 func (h *InterviewHandler) CreateInterview(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +100,14 @@ func (h *InterviewHandler) CreateInterview(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Audit log interview creation
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("interview:create", "interview", res.InterviewID, companyID, nil, map[string]interface{}{
+			"job_id":       req.JobID,
+			"candidate_id": req.CandidateID,
+		})
+	}
+
 	response.JSON(w, http.StatusCreated, res, nil, requestID)
 }
 
@@ -114,6 +122,11 @@ func (h *InterviewHandler) StartInterview(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Audit log start
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("interview:start", "interview", interviewID, companyID, map[string]string{"status": "scheduled"}, map[string]string{"status": "active"})
+	}
+
 	response.JSON(w, http.StatusOK, map[string]string{"message": "interview started"}, nil, requestID)
 }
 
@@ -126,6 +139,11 @@ func (h *InterviewHandler) EndInterview(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
+	}
+
+	// Audit log end
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("interview:end", "interview", interviewID, companyID, map[string]string{"status": "active"}, map[string]string{"status": "completed"})
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "interview ended"}, nil, requestID)
@@ -145,5 +163,3 @@ func (h *InterviewHandler) GetRoomAccessToken(w http.ResponseWriter, r *http.Req
 
 	response.JSON(w, http.StatusOK, map[string]string{"access_token": token}, nil, requestID)
 }
-
-

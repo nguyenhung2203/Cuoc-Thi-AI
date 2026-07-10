@@ -6,7 +6,7 @@ import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users } from 'lucide-vue-next'
+import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users, Trash2 } from 'lucide-vue-next'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
 
@@ -27,6 +27,29 @@ const saving = ref(false)
 const aiAnalyzing = ref(false)
 const rubric = ref(null)
 const localToast = ref(null)
+const candidates = ref([])
+
+const handlePipelineChange = async (candidateId, newStatus) => {
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await jobService.updateCandidatePipeline(companyId, id, candidateId, newStatus)
+    localToast.value = { type: 'success', message: 'Đã cập nhật trạng thái ứng viên!' }
+  } catch (err) {
+    localToast.value = { type: 'error', message: 'Lỗi cập nhật trạng thái' }
+  }
+}
+
+const handleUnassign = async (candidateId) => {
+  if (!confirm('Bạn có chắc chắn muốn gỡ ứng viên này khỏi công việc?')) return
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await jobService.unassignCandidate(companyId, id, candidateId)
+    candidates.value = candidates.value.filter(c => c.candidate_id !== candidateId)
+    localToast.value = { type: 'success', message: 'Đã gỡ ứng viên thành công' }
+  } catch (err) {
+    localToast.value = { type: 'error', message: 'Lỗi gỡ ứng viên' }
+  }
+}
 
 const unwrap = (val) => {
   if (!val) return ''
@@ -37,6 +60,11 @@ const unwrap = (val) => {
 }
 
 onMounted(async () => {
+  if (authStore.user?.role === 'candidate') {
+    router.replace('/home')
+    return
+  }
+
   if (!isNew.value) {
     try {
       const companyId = authStore.user?.companies?.[0]?.id
@@ -58,9 +86,20 @@ onMounted(async () => {
             weight: `${r.weight}%`
           }))
         }
+        
+        // Fetch candidates for this job
+        try {
+          const candidatesData = await jobService.getJobCandidates(companyId, id)
+          candidates.value = candidatesData.data || candidatesData || []
+        } catch(e) {
+          console.error("Error loading candidates", e)
+        }
+      } else {
+        localToast.value = { type: 'error', message: 'Tài khoản chưa được gán vào công ty nào' }
       }
     } catch (error) {
-      localToast.value = { type: 'error', message: 'Không thể tải chi tiết công việc' }
+      console.error(error)
+      localToast.value = { type: 'error', message: error?.message || 'Không thể tải chi tiết công việc' }
     } finally {
       loading.value = false
     }
@@ -239,10 +278,46 @@ const handleAiAnalyze = async () => {
         </div>
         
         <div v-if="!isNew" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên</h2>
-          <div class="text-center text-slate-500 dark:text-slate-400 py-12">
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên ({{ candidates.length }})</h2>
+          
+          <div v-if="candidates.length === 0" class="text-center text-slate-500 dark:text-slate-400 py-12">
             <Users size="48" class="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
             <p class="font-medium text-sm">Chưa có ứng viên nào nộp đơn.</p>
+          </div>
+          
+          <div v-else class="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+            <div v-for="c in candidates" :key="c.candidate_id" class="p-4 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center">
+                  {{ c.full_name ? c.full_name.charAt(0) : '?' }}
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100 cursor-pointer hover:text-indigo-600" @click="router.push(`/candidates/${c.candidate_id}`)">
+                    {{ c.full_name || 'Unknown' }}
+                  </h4>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ c.email || 'N/A' }}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <!-- Dropdown for Pipeline status -->
+                <select 
+                  :value="c.pipeline_status" 
+                  @change="handlePipelineChange(c.candidate_id, $event.target.value)"
+                  class="text-xs px-2 py-1.5 border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="Applied">Nộp đơn (Applied)</option>
+                  <option value="Screening">Vòng hồ sơ (Screening)</option>
+                  <option value="Interviewing">Phỏng vấn (Interviewing)</option>
+                  <option value="Offered">Đề nghị (Offered)</option>
+                  <option value="Hired">Nhận việc (Hired)</option>
+                  <option value="Rejected">Loại (Rejected)</option>
+                </select>
+                
+                <button @click="handleUnassign(c.candidate_id)" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Gỡ ứng viên khỏi công việc này">
+                  <Trash2 size="16" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

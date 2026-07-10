@@ -27,7 +27,7 @@ defineProps({
   font-family: var(--sans);
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius-full);
+  border-radius: 10px !important;
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
