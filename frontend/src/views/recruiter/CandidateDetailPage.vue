@@ -231,7 +231,7 @@ const handleParseCV = async () => {
   </div>
   <div v-else class="animate-fade-in space-y-6">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center gap-4 p-6 rounded-2xl shadow-sm">
       <button @click="router.push('/candidates')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
         <ArrowLeft size="20" />
       </button>
@@ -253,7 +253,7 @@ const handleParseCV = async () => {
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Candidates > {{ isNew ? 'New' : candidate.name }}</p>
       </div>
-    </div>
+    </Card>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
       <!-- Loading Overlay -->
@@ -276,7 +276,7 @@ const handleParseCV = async () => {
       </div>
 
       <!-- Form Section -->
-      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 self-start">
+      <Card class="rounded-2xl shadow-sm p-6 self-start">
         <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin cá nhân</h2>
         <form @submit="handleSave" class="space-y-5">
           <div class="space-y-2">
@@ -285,7 +285,7 @@ const handleParseCV = async () => {
               v-model="candidate.name" 
               required 
               minlength="2"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             />
           </div>
           
@@ -295,7 +295,7 @@ const handleParseCV = async () => {
               type="email"
               v-model="candidate.email" 
               required 
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             />
           </div>
           
@@ -305,7 +305,7 @@ const handleParseCV = async () => {
               v-model="candidate.job_id" 
               required 
               :disabled="!isNew"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="" disabled>-- Chọn vị trí ứng tuyển --</option>
               <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
@@ -317,7 +317,7 @@ const handleParseCV = async () => {
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
             <select 
               v-model="candidate.status"
-              class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
+              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             >
               <option value="new">Mới (New)</option>
               <option value="interviewing">Đang phỏng vấn (Interviewing)</option>
@@ -335,11 +335,11 @@ const handleParseCV = async () => {
             </Button>
           </div>
         </form>
-      </div>
+      </Card>
 
       <div class="space-y-6">
         <!-- CV Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card class="rounded-2xl shadow-sm p-6">
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Hồ sơ (CV & Resume)</h2>
           <div v-if="candidate.cv || selectedFile" class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900">
             <div class="flex items-center gap-4 mb-3">
@@ -351,7 +351,7 @@ const handleParseCV = async () => {
                   <CheckCircle size="14" /> {{ selectedFile ? 'Sẵn sàng tải lên' : 'Đã lưu trên hệ thống' }}
                 </p>
               </div>
-              <Button type="button" variant="secondary" @click="fileInputRef?.click()" :disabled="uploading || isAiParsing" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+              <Button type="button" variant="secondary" @click="fileInputRef?.click()" :disabled="uploading || isAiParsing" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
                 Thay đổi
               </Button>
             </div>
@@ -363,7 +363,7 @@ const handleParseCV = async () => {
             </div>
 
             <div v-if="candidate.cv_file_id && !selectedFile" class="flex gap-2 mt-4">
-              <Button type="button" variant="secondary" @click="handleViewCV" class="flex-1 bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">
+              <Button type="button" variant="secondary" @click="handleViewCV" class="flex-1 bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
                 Xem CV
               </Button>
               <Button type="button" :disabled="uploading || isAiParsing" @click="handleParseCV" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none">
@@ -388,10 +388,10 @@ const handleParseCV = async () => {
             accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" 
             @change="handleFileUpload"
           />
-        </div>
+        </Card>
 
         <!-- AI Parsing Card -->
-        <div v-if="parsedData" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+        <Card v-if="parsedData" class="rounded-2xl shadow-sm p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
           <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
@@ -420,7 +420,7 @@ const handleParseCV = async () => {
               <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ parsedData.education }}</p>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   </div>

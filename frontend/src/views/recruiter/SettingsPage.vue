@@ -170,98 +170,143 @@ const confirmDeleteAccount = async () => {
           </Card>
         </div>
 
-        <div v-if="activeTab === 'notifications'">
+        <div v-if="activeTab === 'notifications'" class="space-y-6">
           <Card title="Thông báo & Cảnh báo">
-            <div style="display: flex; flex-direction: column; gap: 20px">
+            <div class="space-y-6">
               <div>
-                <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Qua Email</h3>
-                <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" v-model="settings.notify_email_interview" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email thông báo khi có lịch phỏng vấn mới</span>
-                  </label>
-                  <label v-if="role === 'recruiter'" style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" v-model="settings.notify_email_report" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Nhận email khi AI Report đã xử lý xong</span>
-                  </label>
+                <h3 class="text-base font-bold text-[var(--text-main)] uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-[var(--primary)]"></span> Thông báo qua Email
+                </h3>
+                <div class="space-y-4 bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+                  <div class="flex items-center justify-between gap-6">
+                    <div class="space-y-1 pr-4">
+                      <span class="text-base font-semibold text-[var(--text-main)] block">Nhận email thông báo khi có lịch phỏng vấn mới</span>
+                      <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Hệ thống gửi email ngay khi có ứng viên xác nhận hoặc đặt lịch phỏng vấn với doanh nghiệp.</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="settings.notify_email_interview" class="sr-only peer" />
+                      <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)] shadow-inner"></div>
+                    </label>
+                  </div>
+
+                  <div class="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-6">
+                    <div class="space-y-1 pr-4">
+                      <span class="text-base font-semibold text-[var(--text-main)] block">Nhận email khi AI Report đã xử lý xong</span>
+                      <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Gửi báo cáo phân tích và điểm số đánh giá chi tiết của ứng viên từ mô hình AI vào email HR.</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="settings.notify_email_report" class="sr-only peer" />
+                      <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)] shadow-inner"></div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div style="border-top: 1px solid var(--border); padding-top: 20px">
-                <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Thông báo đẩy (Push Notifications)</h3>
-                <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" v-model="settings.notify_push" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Hiển thị thông báo trên trình duyệt (Browser push)</span>
-                  </label>
+              <div>
+                <h3 class="text-base font-bold text-[var(--text-main)] uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-[var(--accent)]"></span> Thông báo đẩy (Push Notifications)
+                </h3>
+                <div class="bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+                  <div class="flex items-center justify-between gap-6">
+                    <div class="space-y-1 pr-4">
+                      <span class="text-base font-semibold text-[var(--text-main)] block">Hiển thị thông báo trên trình duyệt (Browser push)</span>
+                      <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Nhận thông báo realtime tức thì trên màn hình làm việc khi ứng viên tham gia phòng phỏng vấn.</span>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input type="checkbox" v-model="settings.notify_push" class="sr-only peer" />
+                      <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)] shadow-inner"></div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+              <div class="flex justify-end pt-2">
                 <Button @click="handleSave" :disabled="saving"><Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu tùy chọn' }}</Button>
               </div>
             </div>
           </Card>
         </div>
 
-        <div v-if="activeTab === 'privacy'">
+        <div v-if="activeTab === 'privacy'" class="space-y-6">
           <Card title="Quyền riêng tư & Bảo mật">
-            <div style="display: flex; flex-direction: column; gap: 20px">
-
-              <div v-if="role === 'recruiter'">
-                <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px">Bảo mật dữ liệu công ty</h3>
-                <div style="display: flex; flex-direction: column; gap: 12px">
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" v-model="settings.encrypt_recordings" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Mã hóa ghi âm/video các cuộc phỏng vấn (E2E Encryption)</span>
+            <div class="space-y-6">
+              <div class="space-y-4 bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+                <div class="flex items-center justify-between gap-6">
+                  <div class="space-y-1 pr-4">
+                    <span class="text-base font-semibold text-[var(--text-main)] block">Mã hóa ghi âm/video các cuộc phỏng vấn (E2E Encryption)</span>
+                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Bảo vệ toàn vẹn dữ liệu cuộc họp bằng cơ chế mã hóa đầu cuối tiêu chuẩn Enterprise.</span>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" v-model="settings.encrypt_recordings" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)] shadow-inner"></div>
                   </label>
-                  <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                    <input type="checkbox" v-model="settings.require_2fa" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                    <span class="text-body">Yêu cầu xác thực 2 bước (2FA) khi đăng nhập nội bộ</span>
+                </div>
+
+                <div class="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-6">
+                  <div class="space-y-1 pr-4">
+                    <span class="text-base font-semibold text-[var(--text-main)] block">Yêu cầu xác thực 2 bước (2FA) khi đăng nhập nội bộ</span>
+                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Đảm bảo an toàn tài khoản tuyển dụng bằng mã xác thực qua ứng dụng authenticator.</span>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" v-model="settings.require_2fa" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--primary)] shadow-inner"></div>
                   </label>
                 </div>
               </div>
 
-              <div style="border-top: 1px solid var(--border); padding-top: 20px">
-                <h3 class="text-body" style="font-weight: 600; margin-bottom: 12px; color: var(--danger)">Quản lý dữ liệu</h3>
-                <div style="display: flex; gap: 12px">
+              <div class="border-t border-[var(--border)] pt-5">
+                <h3 class="text-base font-semibold text-[var(--danger)] mb-3">Quản lý dữ liệu</h3>
+                <div class="flex gap-3">
                   <Button variant="ghost" style="color: var(--danger); border-color: var(--danger)" @click="handleDeleteAccount">Xóa tài khoản</Button>
                 </div>
               </div>
 
-              <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+              <div class="flex justify-end pt-2">
                 <Button @click="handleSave" :disabled="saving"><Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu tùy chọn' }}</Button>
               </div>
             </div>
           </Card>
         </div>
 
-        <div v-if="activeTab === 'workspace' && role === 'recruiter'">
+        <div v-if="activeTab === 'workspace' && role === 'recruiter'" class="space-y-6">
           <Card title="Cấu hình AI Workspace">
-            <div style="display: flex; flex-direction: column; gap: 16px">
-              <p class="text-body" style="color: var(--text-secondary); margin-bottom: 8px">Tuỳ chỉnh cách AI Assistant hoạt động trong không gian làm việc của công ty bạn.</p>
+            <div class="space-y-6">
+              <p class="text-sm text-[var(--text-secondary)]">Tuỳ chỉnh cách AI Assistant hoạt động trong không gian làm việc của công ty bạn.</p>
 
-              <div class="input-group">
-                <label class="input-label">Mô hình AI mặc định</label>
-                <select class="input-field" v-model="settings.ai_model">
+              <div class="space-y-2">
+                <label class="text-base font-semibold text-[var(--text-main)] block">Mô hình AI mặc định</label>
+                <select class="input-field w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm font-semibold text-[var(--text-main)]" v-model="settings.ai_model">
                   <option value="gpt-4">GPT-4 (Độ chính xác cao nhất)</option>
                   <option value="gpt-35">GPT-3.5 Turbo (Nhanh nhất)</option>
                   <option value="claude">Claude 3 Haiku (Tối ưu hội thoại)</option>
                 </select>
               </div>
 
-              <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px">
-                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                  <input type="checkbox" v-model="settings.auto_rubric" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                  <span class="text-body">Tự động bóc tách JD thành Rubric</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 12px; cursor: pointer">
-                  <input type="checkbox" v-model="settings.auto_suggest_followup" style="width: 16px; height: 16px; accent-color: var(--primary)" />
-                  <span class="text-body">Tự động Suggest câu hỏi follow-up trong lúc phỏng vấn</span>
-                </label>
+              <div class="space-y-4 bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
+                <div class="flex items-center justify-between gap-6">
+                  <div class="space-y-1 pr-4">
+                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động bóc tách JD thành Rubric</span>
+                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Phân tích yêu cầu tuyển dụng để tạo ra bộ tiêu chí đánh giá chuẩn xác cho từng vị trí.</span>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" v-model="settings.auto_rubric" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
+                  </label>
+                </div>
+
+                <div class="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-6">
+                  <div class="space-y-1 pr-4">
+                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động Suggest câu hỏi follow-up trong lúc phỏng vấn</span>
+                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Đưa ra gợi ý câu hỏi tiếp theo ngay khi ứng viên vừa trả lời xong để đào sâu kỹ năng.</span>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input type="checkbox" v-model="settings.auto_suggest_followup" class="sr-only peer" />
+                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
+                  </label>
+                </div>
               </div>
 
-              <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+              <div class="flex justify-end pt-2">
                 <Button @click="handleSave" :disabled="saving"><Save size="16" /> {{ saving ? 'Đang lưu...' : 'Lưu cấu hình' }}</Button>
               </div>
             </div>

@@ -5,17 +5,48 @@ import { authStore } from '../../stores/auth.store'
 import { useNotificationStore } from '../../stores/notification.store'
 import { fileService } from '../../services/file.service'
 import { authService } from '../../services/auth.service'
-import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight, Sun, Moon, Globe, ChevronDown, Check } from 'lucide-vue-next'
+import { langStore } from '../../stores/lang.store'
+import AppLogo from '../common/AppLogo.vue'
 
 const router = useRouter()
 const route = useRoute()
 const notificationStore = useNotificationStore()
 const showNotifications = ref(false)
+const showLangMenu = ref(false)
 const isCollapsed = ref(false)
 const uploading = ref(false)
+const currentTheme = ref(localStorage.getItem('app_theme') || 'light')
+const currentLang = computed(() => langStore.lang)
 
 const notifications = computed(() => notificationStore.notifications)
 const unreadCount = computed(() => notificationStore.unreadCount)
+
+const applyTheme = () => {
+  if (currentTheme.value === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+const toggleTheme = () => {
+  currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light'
+  localStorage.setItem('app_theme', currentTheme.value)
+  applyTheme()
+}
+
+const setLanguage = (code) => {
+  langStore.setLang(code)
+  showLangMenu.value = false
+}
+
+const closeAllMenus = () => {
+  showNotifications.value = false
+  showLangMenu.value = false
+}
 
 const handleUploadDocument = async (event) => {
   const file = event.target.files[0];
@@ -51,9 +82,8 @@ watch(() => route.path, (newPath) => {
 }, { immediate: true })
 
 onMounted(async () => {
-  // Ensure light mode is default
-  document.documentElement.classList.remove('dark')
-  localStorage.setItem('theme', 'light')
+  applyTheme()
+  window.addEventListener('click', closeAllMenus)
 
   if (authStore.user) {
     notificationStore.startPolling()
@@ -61,6 +91,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('click', closeAllMenus)
   notificationStore.stopPolling()
 })
 
@@ -140,7 +171,7 @@ const currentMenu = computed(() => recruiterMenu)
     <aside class="rc-sidebar" :class="{ 'is-collapsed': isCollapsed }">
       <div class="rc-brand">
         <div v-if="!isCollapsed" class="cursor-pointer flex items-center overflow-hidden" @click="router.push('/dashboard')">
-          <img src="/images/logo.png" alt="Logo" class="h-10 object-contain" />
+          <AppLogo size="sm" />
         </div>
         <button @click="isCollapsed = !isCollapsed" class="collapse-btn" :class="{ 'ml-auto': !isCollapsed, 'mx-auto': isCollapsed }" :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'">
           <ChevronLeft v-if="!isCollapsed" :size="18" />
@@ -183,8 +214,49 @@ const currentMenu = computed(() => recruiterMenu)
     <!-- Main Content -->
     <main class="rc-main custom-scrollbar">
       <header v-if="!route.path.includes('/recruiter-room')" class="rc-header">
+        <!-- Language Selector Dropdown -->
+        <div style="position: relative; cursor: pointer;" @click.stop="showLangMenu = !showLangMenu; showNotifications = false">
+          <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background-color: var(--surface-soft); border: 1px solid var(--border); transition: all 0.2s; font-size: 13px; font-weight: 600; color: var(--text-main)" class="hover-border">
+            <Globe :size="15" color="var(--primary)" />
+            <span>{{ currentLang === 'en' ? 'EN' : 'VN' }}</span>
+            <ChevronDown :size="14" color="var(--text-muted)" />
+          </div>
+
+          <div v-if="showLangMenu" class="dropdown-menu" style="position: absolute; top: 100%; right: 0; margin-top: 8px; width: 210px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); z-index: 60; overflow: hidden;">
+            <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+              Ngôn ngữ Giao diện
+            </div>
+            <div 
+              @click.stop="setLanguage('vi')"
+              style="padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; color: var(--text-main); cursor: pointer; transition: background 0.15s;"
+              class="hover-bg"
+              :style="{ background: currentLang === 'vi' ? 'var(--primary-light)' : 'transparent', color: currentLang === 'vi' ? 'var(--primary)' : 'var(--text-main)' }"
+            >
+              <span>🇻🇳 Tiếng Việt (Mặc định)</span>
+              <Check v-if="currentLang === 'vi'" :size="16" color="var(--primary)" />
+            </div>
+            <div 
+              @click.stop="setLanguage('en')"
+              style="padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; color: var(--text-main); cursor: pointer; transition: background 0.15s;"
+              class="hover-bg"
+              :style="{ background: currentLang === 'en' ? 'var(--primary-light)' : 'transparent', color: currentLang === 'en' ? 'var(--primary)' : 'var(--text-main)' }"
+            >
+              <span>🇺🇸 English (Global)</span>
+              <Check v-if="currentLang === 'en'" :size="16" color="var(--primary)" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Dark / Light Mode Toggle Button -->
+        <div style="cursor: pointer;" @click.stop="toggleTheme" :title="currentTheme === 'dark' ? 'Chuyển sang chế độ Sáng (Light Mode)' : 'Chuyển sang chế độ Tối (Dark Mode)'">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background-color: var(--surface-soft); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; transition: all 0.2s" class="hover-circle">
+            <Sun v-if="currentTheme === 'dark'" :size="18" style="color: #FACC15" />
+            <Moon v-else :size="18" style="color: var(--text-secondary)" />
+          </div>
+        </div>
+
         <!-- Notifications -->
-        <div class="relative cursor-pointer" @click="showNotifications = !showNotifications">
+        <div class="relative cursor-pointer" @click="showNotifications = !showNotifications; showLangMenu = false">
           <div class="icon-btn"><Bell :size="20" /></div>
           <div v-if="unreadCount > 0" class="notif-badge">{{ unreadCount }}</div>
 
@@ -255,7 +327,7 @@ const currentMenu = computed(() => recruiterMenu)
 
 /* Main + header */
 .rc-main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: var(--background); }
-.rc-header { position: sticky; top: 0; height: 68px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 32px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); z-index: 40; flex-shrink: 0; }
+.rc-header { position: sticky; top: 0; height: 68px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--surface); backdrop-filter: blur(8px); z-index: 40; flex-shrink: 0; transition: background 0.3s ease, border-color 0.3s ease; }
 .icon-btn { display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 50%; color: var(--text-secondary); cursor: pointer; transition: background 0.2s ease; }
 .icon-btn:hover { background: var(--surface-soft); color: var(--text-main); }
 .notif-badge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; background: var(--danger); color: #fff; border: 2px solid var(--surface); border-radius: var(--radius-full); font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
@@ -266,6 +338,10 @@ const currentMenu = computed(() => recruiterMenu)
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.hover-circle:hover { background-color: var(--border) !important; }
+.hover-border:hover { border-color: var(--primary) !important; }
+.hover-bg:hover { background-color: var(--surface-soft) !important; }
 </style>
 
 <style scoped>

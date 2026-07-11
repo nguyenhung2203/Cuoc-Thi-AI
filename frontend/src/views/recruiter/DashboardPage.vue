@@ -118,10 +118,10 @@ const copyCareerLink = async () => {
     />
     
     <!-- Header section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Tổng quan</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+        <h1 class="text-2xl font-bold" style="color: var(--text-main)">Tổng quan</h1>
+        <p class="mt-1 text-sm" style="color: var(--text-secondary)">
           Theo dõi lịch phỏng vấn, ứng viên và báo cáo AI hôm nay.
         </p>
       </div>
@@ -130,168 +130,168 @@ const copyCareerLink = async () => {
           <Plus size="16" /> Tạo lịch phỏng vấn
         </Button>
       </div>
-    </div>
+    </Card>
     
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" v-if="!loading">
-      <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md transition-shadow">
+      <Card class="p-6 relative group">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <Briefcase size="64" class="text-blue-500" />
         </div>
-        <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">
-          <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400">
+        <div class="flex items-center gap-3 font-medium text-sm mb-3" style="color: var(--text-secondary)">
+          <div class="p-2 rounded-lg" style="background-color: var(--primary-light); color: var(--primary)">
             <Briefcase size="18" />
           </div>
           Jobs đang mở
         </div>
-        <div class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ stats.jobs }}</div>
-      </div>
+        <div class="text-[28px] font-bold" style="color: var(--text-main)">{{ stats.jobs }}</div>
+      </Card>
 
-      <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md transition-shadow">
+      <Card class="p-6 relative group">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <Users size="64" class="text-blue-500" />
         </div>
-        <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">
-          <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400">
+        <div class="flex items-center gap-3 font-medium text-sm mb-3" style="color: var(--text-secondary)">
+          <div class="p-2 rounded-lg" style="background-color: var(--primary-light); color: var(--primary)">
             <Users size="18" />
           </div>
           Ứng viên mới
         </div>
-        <div class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ stats.candidates }}</div>
-      </div>
+        <div class="text-[28px] font-bold" style="color: var(--text-main)">{{ stats.candidates }}</div>
+      </Card>
 
-      <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md transition-shadow">
+      <Card class="p-6 relative group">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <Calendar size="64" class="text-amber-500" />
         </div>
-        <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">
-          <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg text-amber-600 dark:text-amber-400">
+        <div class="flex items-center gap-3 font-medium text-sm mb-3" style="color: var(--text-secondary)">
+          <div class="p-2 rounded-lg" style="background-color: rgba(217, 119, 6, 0.12); color: var(--warning)">
             <Calendar size="18" />
           </div>
           Phỏng vấn hôm nay
         </div>
-        <div class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ stats.interviewsToday }}</div>
-      </div>
+        <div class="text-[28px] font-bold" style="color: var(--text-main)">{{ stats.interviewsToday }}</div>
+      </Card>
 
-      <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md transition-shadow">
+      <Card class="p-6 relative group">
         <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
           <FileText size="64" class="text-emerald-500" />
         </div>
-        <div class="flex items-center gap-3 text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">
-          <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400">
+        <div class="flex items-center gap-3 font-medium text-sm mb-3" style="color: var(--text-secondary)">
+          <div class="p-2 rounded-lg" style="background-color: rgba(16, 185, 129, 0.12); color: var(--success)">
             <FileText size="18" />
           </div>
           Báo cáo chờ xem
         </div>
-        <div class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ stats.pendingReports }}</div>
-      </div>
+        <div class="text-[28px] font-bold" style="color: var(--text-main)">{{ stats.pendingReports }}</div>
+      </Card>
     </div>
 
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
         <!-- Upcoming Interviews -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Lịch phỏng vấn sắp tới</h2>
+        <Card class="p-6">
+          <h2 class="text-lg font-bold mb-4" style="color: var(--text-main)">Lịch phỏng vấn sắp tới</h2>
           <div v-if="upcomingInterviews.length === 0" class="py-12 text-center">
-            <Calendar size="48" class="text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Chưa có lịch phỏng vấn nào sắp tới.</p>
+            <Calendar size="48" style="color: var(--border); margin: 0 auto 16px auto;" />
+            <p class="text-sm font-medium" style="color: var(--text-muted)">Chưa có lịch phỏng vấn nào sắp tới.</p>
           </div>
           <div v-else class="space-y-3">
-            <div v-for="i in upcomingInterviews" :key="i.id" class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors">
+            <div v-for="i in upcomingInterviews" :key="i.id" class="flex justify-between items-center p-4 rounded-xl transition-colors" style="background-color: var(--surface-soft); border: 1px solid transparent;" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'">
               <div>
-                <div class="font-semibold text-slate-800 dark:text-slate-200">{{ i.candidate.full_name || i.candidate.name || 'Unknown' }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ i.job.title || 'Unknown Job' }}</div>
+                <div class="font-semibold" style="color: var(--text-main)">{{ i.candidate.full_name || i.candidate.name || 'Unknown' }}</div>
+                <div class="text-sm mt-1" style="color: var(--text-secondary)">{{ i.job.title || 'Unknown Job' }}</div>
               </div>
               <div class="text-right">
-                <div class="font-bold text-blue-600 dark:text-blue-400">{{ formatTime(i.dt) }}</div>
-                <div class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 bg-white dark:bg-slate-800 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 inline-block">{{ formatDate(i.dt) }}</div>
+                <div class="font-bold" style="color: var(--primary)">{{ formatTime(i.dt) }}</div>
+                <div class="text-xs font-medium mt-1 px-2 py-1 rounded-md inline-block" style="background-color: var(--surface); color: var(--text-secondary); border: 1px solid var(--border)">{{ formatDate(i.dt) }}</div>
               </div>
             </div>
           </div>
-        </div>
+        </Card>
         
         <!-- New Candidates -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Ứng viên mới nhất</h2>
+        <Card class="p-6">
+          <h2 class="text-lg font-bold mb-4" style="color: var(--text-main)">Ứng viên mới nhất</h2>
           <div v-if="newCandidates.length === 0" class="py-12 text-center">
-            <Users size="48" class="text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-            <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Chưa có ứng viên mới ứng tuyển.</p>
+            <Users size="48" style="color: var(--border); margin: 0 auto 16px auto;" />
+            <p class="text-sm font-medium" style="color: var(--text-muted)">Chưa có ứng viên mới ứng tuyển.</p>
           </div>
           <div v-else class="space-y-3">
-            <div v-for="c in newCandidates" :key="c.id" class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors">
+            <div v-for="c in newCandidates" :key="c.id" class="flex justify-between items-center p-4 rounded-xl transition-colors" style="background-color: var(--surface-soft); border: 1px solid transparent;" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'">
               <div>
-                <div class="font-semibold text-slate-800 dark:text-slate-200">{{ c.full_name || c.name }}</div>
-                <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ c.email }}</div>
+                <div class="font-semibold" style="color: var(--text-main)">{{ c.full_name || c.name }}</div>
+                <div class="text-sm mt-1" style="color: var(--text-secondary)">{{ c.email }}</div>
               </div>
               <div class="text-right">
-                <div class="font-medium text-sm text-slate-700 dark:text-slate-300">{{ c.job?.title || 'Unknown' }}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ formatDate(c.created_at) }}</div>
+                <div class="font-medium text-sm" style="color: var(--text-main)">{{ c.job?.title || 'Unknown' }}</div>
+                <div class="text-xs mt-1" style="color: var(--text-secondary)">{{ formatDate(c.created_at) }}</div>
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       <div class="space-y-6">
         <!-- AI Insights -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
-          <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
+        <Card class="p-6 relative overflow-hidden" style="border-top: 4px solid var(--primary)">
+          <div class="absolute -right-6 -top-6 pointer-events-none" style="color: var(--primary-light); opacity: 0.5;">
             <Sparkles size="100" />
           </div>
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5 relative z-10">AI Insights</h2>
+          <h2 class="text-lg font-bold mb-5 relative z-10" style="color: var(--text-main)">AI Insights</h2>
           <div class="space-y-5 relative z-10" v-if="!loading">
             <div class="flex gap-3">
-              <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-400 shrink-0 h-min">
+              <div class="p-2 rounded-lg shrink-0 h-min" style="background-color: var(--primary-light); color: var(--primary)">
                 <Sparkles size="18" />
               </div>
               <div>
-                <p class="font-semibold text-slate-800 dark:text-slate-200 text-sm">{{ aiInsights.highMatchCandidates }} ứng viên có mức phù hợp cao</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Vừa nộp đơn vào hệ thống.</p>
+                <p class="font-semibold text-sm" style="color: var(--text-main)">{{ aiInsights.highMatchCandidates }} ứng viên có mức phù hợp cao</p>
+                <p class="text-xs mt-1" style="color: var(--text-secondary)">Vừa nộp đơn vào hệ thống.</p>
               </div>
             </div>
             <div class="flex gap-3">
-              <div class="p-2 bg-amber-50 dark:bg-amber-500/10 rounded-lg text-amber-600 dark:text-amber-400 shrink-0 h-min">
+              <div class="p-2 rounded-lg shrink-0 h-min" style="background-color: rgba(217, 119, 6, 0.12); color: var(--warning)">
                 <TrendingUp size="18" />
               </div>
               <div>
-                <p class="font-semibold text-slate-800 dark:text-slate-200 text-sm">{{ aiInsights.reviewsNeeded }} buổi phỏng vấn cần review</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Báo cáo AI đã sẵn sàng để bạn đưa ra quyết định.</p>
+                <p class="font-semibold text-sm" style="color: var(--text-main)">{{ aiInsights.reviewsNeeded }} buổi phỏng vấn cần review</p>
+                <p class="text-xs mt-1" style="color: var(--text-secondary)">Báo cáo AI đã sẵn sàng để bạn đưa ra quyết định.</p>
               </div>
             </div>
           </div>
-        </div>
+        </Card>
         
         <!-- Quick Actions -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Thao tác nhanh</h2>
+        <Card class="p-6">
+          <h2 class="text-lg font-bold mb-4" style="color: var(--text-main)">Thao tác nhanh</h2>
           <div class="flex flex-col gap-3">
-            <button @click="router.push('/jobs/new')" class="flex items-center gap-2 w-full p-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl transition-colors text-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600">
-              <div class="bg-white dark:bg-slate-800 p-1.5 rounded-md shadow-sm border border-slate-200 dark:border-slate-700"><Plus size="16" /></div>
+            <button @click="router.push('/jobs/new')" class="flex items-center gap-2 w-full p-3 font-medium rounded-xl transition-colors text-sm" style="background-color: var(--surface-soft); color: var(--text-main); border: 1px solid transparent;" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'">
+              <div class="p-1.5 rounded-md shadow-sm" style="background-color: var(--surface); border: 1px solid var(--border)"><Plus size="16" /></div>
               Tạo job mới
             </button>
-            <button @click="router.push('/candidates/new')" class="flex items-center gap-2 w-full p-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl transition-colors text-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600">
-              <div class="bg-white dark:bg-slate-800 p-1.5 rounded-md shadow-sm border border-slate-200 dark:border-slate-700"><Plus size="16" /></div>
+            <button @click="router.push('/candidates/new')" class="flex items-center gap-2 w-full p-3 font-medium rounded-xl transition-colors text-sm" style="background-color: var(--surface-soft); color: var(--text-main); border: 1px solid transparent;" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'">
+              <div class="p-1.5 rounded-md shadow-sm" style="background-color: var(--surface); border: 1px solid var(--border)"><Plus size="16" /></div>
               Thêm ứng viên
             </button>
           </div>
-        </div>
+        </Card>
 
         <!-- Career Site -->
-        <div v-if="careerLink" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-emerald-500">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3">Career Site</h2>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Chia sẻ link này để ứng viên tự nộp đơn ứng tuyển:</p>
-          <div class="flex gap-2 items-center bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-            <Link size="16" class="text-slate-400 shrink-0" />
-            <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ careerLink }}</span>
-            <button @click="copyCareerLink" class="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" :title="linkCopied ? 'Đã copy!' : 'Copy link'">
-              <Copy size="14" :class="linkCopied ? 'text-emerald-500' : 'text-slate-400'" />
+        <Card v-if="careerLink" class="p-6" style="border-top: 4px solid var(--success)">
+          <h2 class="text-lg font-bold mb-3" style="color: var(--text-main)">Career Site</h2>
+          <p class="text-xs mb-3" style="color: var(--text-secondary)">Chia sẻ link này để ứng viên tự nộp đơn ứng tuyển:</p>
+          <div class="flex gap-2 items-center p-3 rounded-xl" style="background-color: var(--surface-soft); border: 1px solid var(--border)">
+            <Link size="16" style="color: var(--text-muted)" class="shrink-0" />
+            <span class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-medium" style="color: var(--success)">{{ careerLink }}</span>
+            <button @click="copyCareerLink" class="p-1.5 rounded-md transition-colors" style="background-color: transparent;" onmouseover="this.style.backgroundColor='var(--border)'" onmouseout="this.style.backgroundColor='transparent'" :title="linkCopied ? 'Đã copy!' : 'Copy link'">
+              <Copy size="14" :style="{ color: linkCopied ? 'var(--success)' : 'var(--text-muted)' }" />
             </button>
           </div>
-          <p v-if="linkCopied" class="text-emerald-500 text-xs font-medium mt-2 flex items-center gap-1">
+          <p v-if="linkCopied" class="text-xs font-medium mt-2 flex items-center gap-1" style="color: var(--success)">
             <CheckCircle size="12" /> Đã sao chép!
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   </div>

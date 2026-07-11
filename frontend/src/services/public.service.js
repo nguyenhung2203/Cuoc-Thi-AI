@@ -12,5 +12,9 @@ export const publicService = {
   applyForJob: async (jobId, formData) => {
     // Note: This goes to the portal protected endpoint since we require login to apply
     return await apiService.post(`/portal/jobs/${jobId}/apply`, formData)
+  },
+
+  getCompanyDetails: async (companyId) => {
+    return await apiService.get(`/public/companies/${companyId}`)
   }
 }

@@ -2,8 +2,9 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Toast from '../../components/common/AppToast.vue'
+import AppLogo from '../../components/common/AppLogo.vue'
 import { authStore } from '../../stores/auth.store'
-import { Mail, Lock, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, RefreshCw, AlertCircle, Sparkles, KeyRound } from 'lucide-vue-next'
+import { Mail, Lock, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, RefreshCw, AlertCircle, Sparkles, KeyRound, FileCode, TrendingUp } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -175,10 +176,107 @@ const handleVerify2FA = () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 py-12 relative overflow-hidden">
-    <!-- Ambient Glows -->
-    <div class="absolute top-1/3 -left-32 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
-    <div class="absolute bottom-1/3 -right-32 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl pointer-events-none animate-pulse" style="animation-delay: 1.5s;"></div>
+  <div class="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-6 relative overflow-hidden" style="background-image: url('/images/auth_bg.png'); background-size: cover; background-position: center;">
+    <!-- Grid Overlay & Blur -->
+    <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-[3px] pointer-events-none"></div>
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:3.5rem_3.5rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>
+
+    <!-- Premium Animated Glows -->
+    <div class="absolute -top-40 -left-40 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[140px] pointer-events-none animate-float-1"></div>
+    <div class="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[140px] pointer-events-none animate-float-2"></div>
+    <div class="absolute top-1/4 right-1/4 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none animate-float-3"></div>
+
+    <!-- Floating Decorative AI Badges (Desktop Only) -->
+    <div class="hidden lg:block absolute top-16 left-16 p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-1 pointer-events-none">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+          <Sparkles size="18" />
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">AI Recruiter Engine</div>
+          <div class="text-[9px] text-emerald-400 font-semibold">Active & Online</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden lg:block absolute bottom-20 left-24 p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-2 pointer-events-none">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <ShieldCheck size="18" />
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">Biometric Verification</div>
+          <div class="text-[9px] text-indigo-300 font-semibold">2FA Secured</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden lg:block absolute top-1/4 right-16 p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-3 pointer-events-none">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+          <KeyRound size="18" />
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">LiveKit Audio Room</div>
+          <div class="text-[9px] text-amber-300 font-semibold">Ready to connect</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extra Floating elements for Rich Aesthetics -->
+    <div class="hidden lg:block absolute bottom-[18%] right-[10%] p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-1 pointer-events-none" style="animation-delay: 1.5s;">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-extrabold text-xs">
+          94%
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">Resume Match Score</div>
+          <div class="text-[9px] text-slate-400">Calibrated to Senior React JD</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hidden lg:block absolute top-[10%] right-[30%] p-3 bg-slate-900/60 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl animate-float-2 pointer-events-none" style="animation-delay: 3s;">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping shrink-0"></span>
+        <span class="text-[10px] text-slate-300 font-bold">AI Transcript: "I scaled DB performance by 40%..."</span>
+      </div>
+    </div>
+
+    <!-- Extra Floating Widget 6: AI Code Analysis -->
+    <div class="hidden lg:block absolute top-[45%] left-[8%] p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-3 pointer-events-none" style="animation-delay: 0.5s;">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+          <FileCode size="18" />
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">AI Code Analysis</div>
+          <div class="text-[9px] text-purple-300 font-semibold">Complexity: O(N log N)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extra Floating Widget 7: AI Speech Insights -->
+    <div class="hidden lg:block absolute bottom-[8%] right-[25%] p-4 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-2 pointer-events-none" style="animation-delay: 2.2s;">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+          <TrendingUp size="18" />
+        </div>
+        <div>
+          <div class="text-[11px] font-bold text-slate-200">Speech Insights</div>
+          <div class="text-[9px] text-cyan-300 font-semibold">Confidence Level: 92%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extra Floating Widget 8: Skills Badge -->
+    <div class="hidden lg:block absolute top-[12%] left-[32%] p-3.5 bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl animate-float-1 pointer-events-none" style="animation-delay: 1.1s;">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[9px] font-bold">React</span>
+        <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[9px] font-bold">Go</span>
+        <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold">System Design</span>
+      </div>
+    </div>
 
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
 
@@ -200,31 +298,31 @@ const handleVerify2FA = () => {
 
         <div class="space-y-3">
           <button @click="handleGoogleSelect('candidate', 'candidate@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-slate-700/60 transition-all text-left group">
+                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm shadow-sm">
+              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
                 N
               </div>
               <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Nguyễn Văn A (Ứng viên)</div>
+                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">Nguyễn Văn A (Ứng viên)</div>
                 <div class="text-xs text-slate-500 dark:text-slate-400">candidate@wemake.vn</div>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">Candidate</span>
+            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Candidate</span>
           </button>
 
           <button @click="handleGoogleSelect('recruiter', 'recruiter@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 hover:bg-purple-50/50 dark:hover:bg-slate-700/60 transition-all text-left group">
+                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-sm">
+              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
                 H
               </div>
               <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-purple-600 dark:group-hover:text-purple-400">HR Manager (Nhà tuyển dụng)</div>
+                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">HR Manager (Nhà tuyển dụng)</div>
                 <div class="text-xs text-slate-500 dark:text-slate-400">recruiter@wemake.vn</div>
               </div>
             </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full">Recruiter</span>
+            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Recruiter</span>
           </button>
         </div>
 
@@ -237,14 +335,14 @@ const handleVerify2FA = () => {
     </div>
 
     <!-- Main Login Box -->
-    <div class="w-full max-w-md bg-white/95 dark:bg-slate-800/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-700/50 p-8 sm:p-10 relative z-10 transition-all duration-500">
+    <div class="w-full max-w-md bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-800/80 p-6 sm:p-8 relative z-10 transition-all duration-500">
       
       <!-- Brand Logo Header -->
-      <div class="text-center space-y-2 mb-8">
+      <div class="text-center space-y-3 mb-6 flex flex-col items-center">
         <div @click="router.push('/')" class="inline-block cursor-pointer transform hover:scale-105 transition-transform">
-          <img src="/images/logo.png" alt="WeMake AI Logo" class="h-16 mx-auto object-contain drop-shadow-md" />
+          <AppLogo size="lg" showSubtitle subtitle="Enterprise AI Platform" />
         </div>
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight pt-1">
           {{ step === 1 ? 'Chào mừng trở lại' : 'Xác thực bảo mật 2FA' }}
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm">
@@ -259,8 +357,8 @@ const handleVerify2FA = () => {
       </div>
 
       <!-- ================= STEP 1: EMAIL & GOOGLE LOGIN ================= -->
-      <div v-if="step === 1" class="space-y-6 animate-fade-in">
-        <form @submit="handleLogin" class="space-y-4">
+      <div v-if="step === 1" class="space-y-4 animate-fade-in">
+        <form @submit="handleLogin" class="space-y-3">
           <!-- Email Input -->
           <div>
             <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Địa chỉ Email</label>
@@ -270,7 +368,7 @@ const handleVerify2FA = () => {
                      type="email"
                      required
                      placeholder="nhapemail@congty.com"
-                     class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all" />
+                     class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
           </div>
 
@@ -278,7 +376,7 @@ const handleVerify2FA = () => {
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Mật khẩu</label>
-              <span @click="router.push('/forgot-password')" class="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer">
+              <span @click="router.push('/forgot-password')" class="text-xs text-[var(--accent)] font-bold hover:underline cursor-pointer">
                 Quên mật khẩu?
               </span>
             </div>
@@ -288,14 +386,14 @@ const handleVerify2FA = () => {
                      type="password"
                      required
                      placeholder="••••••••"
-                     class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm transition-all" />
+                     class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
           </div>
 
           <!-- Submit Button -->
           <button type="submit"
                   :disabled="loading"
-                  class="w-full mt-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 transform hover:-translate-y-0.5">
+                  class="w-full mt-2 py-3.5 px-6 rounded-2xl bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 transform hover:-translate-y-0.5">
             <span v-if="loading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             <template v-else>
               <span>Đăng nhập vào hệ thống</span>
@@ -313,7 +411,7 @@ const handleVerify2FA = () => {
         <!-- Google OAuth Button (Moved Down below Form) -->
         <button @click="showGoogleModal = true"
                 type="button"
-                class="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-3 group">
+                class="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-3 group">
           <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.3 8.9 5 12 5z"/>
             <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
@@ -327,7 +425,7 @@ const handleVerify2FA = () => {
         <div class="pt-2 text-center border-t border-slate-100 dark:border-slate-700/60">
           <p class="text-sm text-slate-500 dark:text-slate-400">
             Chưa có tài khoản WeMake AI?
-            <span @click="router.push('/register')" class="text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer ml-1">
+            <span @click="router.push('/register')" class="text-[var(--primary)] font-bold hover:underline cursor-pointer ml-1">
               Đăng ký tài khoản mới
             </span>
           </p>
@@ -357,18 +455,18 @@ const handleVerify2FA = () => {
                    maxlength="1"
                    @input="handleOtpInput(index, $event)"
                    @keydown="handleOtpKeyDown(index, $event)"
-                   class="w-12 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-black bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-indigo-600 dark:text-indigo-400 focus:outline-none focus:border-indigo-600 focus:ring-4 focus:ring-indigo-500/20 transition-all shadow-inner" />
+                   class="w-12 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-black bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-[var(--primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/20 transition-all shadow-inner" />
           </div>
         </div>
 
         <div class="text-center text-xs text-slate-500 dark:text-slate-400 space-y-2">
           <div v-if="timer > 0" class="flex items-center justify-center gap-1.5 font-medium">
             <span>Mã 2FA hết hạn sau:</span>
-            <span class="font-bold text-indigo-600 dark:text-indigo-400">00:{{ timer < 10 ? '0' + timer : timer }}s</span>
+            <span class="font-bold text-[var(--primary)]">00:{{ timer < 10 ? '0' + timer : timer }}s</span>
           </div>
           <div v-else>
             <span>Chưa nhận được mã?</span>
-            <button type="button" @click="resendOtp" class="ml-1 text-indigo-600 dark:text-indigo-400 font-bold hover:underline inline-flex items-center gap-1">
+            <button type="button" @click="resendOtp" class="ml-1 text-[var(--primary)] font-bold hover:underline inline-flex items-center gap-1">
               <RefreshCw size="13" /> Gửi lại mã 2FA ngay
             </button>
           </div>
@@ -377,7 +475,7 @@ const handleVerify2FA = () => {
         <div class="space-y-3 pt-2">
           <button @click="handleVerify2FA"
                   :disabled="loading || otpDigits.some(d => d === '')"
-                  class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:from-emerald-700 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 transform hover:-translate-y-0.5">
+                  class="w-full py-3.5 px-6 rounded-2xl bg-[var(--success)] hover:opacity-90 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 transform hover:-translate-y-0.5">
             <span v-if="loading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             <template v-else>
               <CheckCircle2 size="18" />
@@ -413,5 +511,28 @@ const handleVerify2FA = () => {
 }
 .animate-shake {
   animation: shake 0.3s ease-in-out;
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  50% { transform: translateY(-15px) rotate(2deg) scale(1.03); }
+}
+@keyframes float2 {
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  50% { transform: translateY(-22px) rotate(-3deg) scale(1.05); }
+}
+@keyframes float3 {
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  50% { transform: translateY(18px) rotate(1.5deg) scale(0.97); }
+}
+
+.animate-float-1 {
+  animation: float1 8s infinite ease-in-out;
+}
+.animate-float-2 {
+  animation: float2 12s infinite ease-in-out;
+}
+.animate-float-3 {
+  animation: float3 10s infinite ease-in-out;
 }
 </style>

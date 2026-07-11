@@ -93,15 +93,15 @@ const handleEnd = async () => {
 }
 </script>
 <template>
-  <div class="h-screen flex flex-col bg-gradient-to-b from-slate-900 to-slate-950 font-sans overflow-hidden text-white">
+  <div class="h-screen flex flex-col bg-white font-sans overflow-hidden text-slate-900">
     <!-- Header -->
-    <div class="h-16 bg-slate-900/70 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 shrink-0">
+    <div class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
       <div>
         <h1 class="text-lg font-bold">Luyện tập AI · {{ role }}</h1>
-        <p class="text-xs text-slate-400 capitalize">Trình độ: {{ level }}</p>
+        <p class="text-xs text-slate-500 capitalize">Trình độ: {{ level }}</p>
       </div>
       <button @click="showEndModal = true"
-        class="text-rose-300 hover:text-white hover:bg-rose-500/80 font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+        class="text-rose-500 hover:text-white hover:bg-rose-500 font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
         <PhoneOff class="w-4 h-4" /> Kết thúc
       </button>
     </div>
@@ -114,31 +114,31 @@ const handleEnd = async () => {
       <div class="relative flex flex-col items-center mb-8">
         <div class="relative">
           <!-- Speaking ripples -->
-          <div v-if="aiSpeaking" class="absolute inset-0 rounded-full bg-indigo-500/30 animate-ping" style="animation-duration:1.2s"></div>
-          <div v-if="aiSpeaking" class="absolute -inset-4 rounded-full border-2 border-indigo-400/40 animate-pulse"></div>
+          <div v-if="aiSpeaking" class="absolute inset-0 rounded-full bg-cyan-500/30 animate-ping" style="animation-duration:1.2s"></div>
+          <div v-if="aiSpeaking" class="absolute -inset-4 rounded-full border-2 border-cyan-400/40 animate-pulse"></div>
           <!-- Talking face: eyes + mouth lip-synced to the AI voice -->
-          <div class="relative z-10 w-40 h-40 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.6)] border-4 border-slate-700 transition-transform duration-150"
+          <div class="relative z-10 w-40 h-40 rounded-full bg-cyan-600 flex items-center justify-center shadow-lg border-4 border-cyan-100 transition-transform duration-150"
                :class="aiSpeaking ? 'scale-105' : 'scale-100'">
             <svg viewBox="0 0 120 120" class="w-32 h-32">
               <!-- Eyes -->
               <ellipse cx="44" cy="50" :rx="7" :ry="aiSpeaking ? 8 : 7" fill="#fff" />
               <ellipse cx="76" cy="50" :rx="7" :ry="aiSpeaking ? 8 : 7" fill="#fff" />
-              <circle cx="44" cy="51" r="3.5" fill="#1e1b4b" />
-              <circle cx="76" cy="51" r="3.5" fill="#1e1b4b" />
+              <circle cx="44" cy="51" r="3.5" fill="#164e63" />
+              <circle cx="76" cy="51" r="3.5" fill="#164e63" />
               <!-- Mouth: height follows audioLevel -->
               <rect :x="60 - mouthWidth / 2" :y="78 - mouthOpen / 2"
                     :width="mouthWidth" :height="mouthOpen"
                     :rx="mouthRadius"
-                    fill="#1e1b4b" stroke="#fff" stroke-width="2" />
+                    fill="#164e63" stroke="#fff" stroke-width="2" />
             </svg>
           </div>
         </div>
         <h3 class="mt-6 text-xl font-bold">AI Interviewer</h3>
         <div class="mt-2 flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold"
-             :class="error ? 'bg-rose-500/20 text-rose-300'
-               : aiSpeaking ? 'bg-indigo-500/20 text-indigo-200'
-               : speaking ? 'bg-emerald-500/20 text-emerald-200'
-               : 'bg-white/10 text-slate-300'">
+             :class="error ? 'bg-rose-50 text-rose-600'
+               : aiSpeaking ? 'bg-cyan-50 text-cyan-700'
+               : speaking ? 'bg-emerald-50 text-emerald-700'
+               : 'bg-slate-100 text-slate-600'">
           <Loader2 v-if="!connected && !error" class="w-4 h-4 animate-spin" />
           {{ statusLabel }}
         </div>
@@ -151,8 +151,8 @@ const handleEnd = async () => {
         </div>
         <div v-for="(t, i) in transcript" :key="i"
              class="flex" :class="t.role === 'ai' ? 'justify-start' : 'justify-end'">
-          <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed"
-               :class="t.role === 'ai' ? 'bg-white/10 text-slate-100 rounded-tl-sm' : 'bg-blue-600 text-white rounded-tr-sm'">
+          <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed shadow-sm"
+               :class="t.role === 'ai' ? 'bg-slate-100 text-slate-800 rounded-tl-sm' : 'bg-[var(--primary)] text-white rounded-tr-sm'">
             {{ t.text }}
           </div>
         </div>
@@ -160,30 +160,30 @@ const handleEnd = async () => {
     </div>
 
     <!-- Control bar -->
-    <div class="shrink-0 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 p-6">
+    <div class="shrink-0 bg-white border-t border-slate-200 p-6">
       <div class="max-w-2xl mx-auto flex flex-col items-center gap-4">
         <!-- Push to talk -->
         <button
           @mousedown="startTalk" @mouseup="stopTalk" @mouseleave="stopTalk"
           @touchstart.prevent="startTalk" @touchend.prevent="stopTalk"
           :disabled="!connected || aiSpeaking"
-          class="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-xl disabled:opacity-40 disabled:cursor-not-allowed select-none"
-          :class="speaking ? 'bg-rose-500 scale-110 shadow-rose-500/50' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 shadow-indigo-500/40'">
+          class="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-md disabled:opacity-40 disabled:cursor-not-allowed select-none text-white"
+          :class="speaking ? 'bg-rose-500 scale-110 shadow-rose-500/30' : 'bg-[var(--primary)] hover:bg-[var(--primary-hover)] hover:scale-105 shadow-md'">
           <Square v-if="speaking" class="w-7 h-7 fill-current" />
           <Mic v-else class="w-8 h-8" />
         </button>
-        <p class="text-xs text-slate-400">Nhấn giữ để nói, thả ra để AI trả lời</p>
+        <p class="text-xs text-slate-500">Nhấn giữ để nói, thả ra để AI trả lời</p>
 
         <!-- Text fallback -->
-        <button @click="showText = !showText" class="text-xs text-slate-400 hover:text-white flex items-center gap-1">
+        <button @click="showText = !showText" class="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
           <Type class="w-3.5 h-3.5" /> Trả lời bằng văn bản
         </button>
         <div v-if="showText" class="w-full flex gap-2">
           <input v-model="textAnswer" @keyup.enter="handleSendText"
             placeholder="Nhập câu trả lời..."
-            class="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 outline-none focus:border-blue-400 text-white placeholder-slate-500" />
+            class="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 outline-none focus:border-[var(--accent)] text-slate-900 placeholder-slate-400" />
           <button @click="handleSendText" :disabled="!textAnswer.trim()"
-            class="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 px-4 rounded-xl transition-colors">
+            class="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white disabled:bg-slate-300 px-4 rounded-xl transition-colors">
             <Send class="w-5 h-5" />
           </button>
         </div>

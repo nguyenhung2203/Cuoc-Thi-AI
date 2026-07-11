@@ -136,7 +136,7 @@ const columns = [
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
     
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Ứng viên</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Theo dõi ứng viên, điểm phù hợp và lịch sử phỏng vấn.</p>
@@ -144,10 +144,10 @@ const columns = [
       <Button @click="router.push('/candidates/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Thêm ứng viên
       </Button>
-    </div>
+    </Card>
 
     <!-- Main Content Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <Card class="rounded-2xl shadow-sm overflow-hidden">
       <!-- Toolbar -->
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
@@ -155,16 +155,16 @@ const columns = [
           <input 
             type="text" 
             placeholder="Tìm tên, email..." 
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            class="w-full pl-10 pr-4 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             v-model="filters.keyword"
             @keyup.enter="fetchCandidates"
           />
         </div>
         <div class="flex gap-2">
-          <Button variant="secondary" @click="showFilterModal = true" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <Button variant="secondary" @click="showFilterModal = true" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
             Lọc theo Job
           </Button>
-          <Button variant="secondary" @click="showFilterModal = true" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <Button variant="secondary" @click="showFilterModal = true" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
             Lọc theo trạng thái
           </Button>
         </div>
@@ -232,7 +232,7 @@ const columns = [
             :disabled="currentPage <= 1"
             variant="secondary"
             @click="currentPage > 1 && (currentPage--, fetchCandidates())"
-            class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ← Trước
           </Button>
@@ -240,13 +240,13 @@ const columns = [
             :disabled="currentPage >= totalPages"
             variant="secondary"
             @click="currentPage < totalPages && (currentPage++, fetchCandidates())"
-            class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Tiếp →
           </Button>
         </div>
       </div>
-    </div>
+    </Card>
 
     <!-- Modals -->
     <Modal :isOpen="showDeleteModal" @close="showDeleteModal = false" title="Xác nhận xóa">
@@ -264,7 +264,7 @@ const columns = [
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí ứng tuyển (Job)</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.job_id"
           >
             <option value="">Tất cả vị trí</option>
@@ -274,7 +274,7 @@ const columns = [
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái hồ sơ</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.status"
           >
             <option value="">Tất cả trạng thái</option>

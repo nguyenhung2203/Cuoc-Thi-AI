@@ -8,12 +8,16 @@
 
 ## 0. TL;DR — Đọc 60 giây
 
-1. **Dùng token, không hardcode màu.** Viết `var(--primary)`, không viết `from-blue-600`, `text-indigo-600`, `bg-emerald-100`.
-2. **Xanh dương (#2563EB) là màu chủ đạo duy nhất.** Cyan (#0891B2) chỉ dùng làm điểm nhấn AI. **Cấm tím/indigo-purple làm màu chính.**
-3. **Không gradient loạn, không glassmorphism, không emoji trong app.** Nền trắng, viền mảnh, đổ bóng rất nhẹ.
-4. **Chữ tiêu đề trang 24–30px.** Không dùng `text-3xl`/`text-4xl` gradient text bên trong app.
-5. **Recruiter/Admin = dày dữ liệu, quyết đoán. Candidate = nhẹ nhàng, trấn an.** Nhưng dùng chung một hệ token.
-6. **Ưu tiên component chung** `src/components/common/App*.vue` thay vì tự chế lại card/button/badge/table.
+1. **Dùng token, không hardcode màu.** Viết `var(--primary)`, `var(--accent)`, `var(--highlight)`, không viết `from-blue-600`, `text-indigo-600`, `bg-emerald-100`.
+2. **Hệ 3 Màu Chủ Đạo Chuyên Nghiệp (Royal Navy & Tech AI):**
+   - **Primary Navy (#1E3A8A - `--primary`)**: Màu chủ đạo cho thương hiệu, header, nút chính, tạo cảm giác uy tín tuyệt đối cho HR Tech / Enterprise.
+   - **Secondary / Accent AI Cyan (#06B6D4 - `--accent`)**: Màu công nghệ & AI, dùng cho link, icon nổi bật, border focus và trạng thái active.
+   - **Accent Highlight Amber (#F59E0B - `--highlight`)**: CTA quan trọng, badge nổi bật, thành tích cao (KHÔNG dùng thay thế cho warning lỗi, tách biệt rõ ràng).
+3. **Thang màu Neutral / Gray Scale chuẩn Tailwind (`gray-50` -> `gray-900`)**: Dùng cho 70-80% giao diện (background, surface, border, text).
+4. **Không gradient loạn, không glassmorphism, không emoji trong app.** Nền trắng/gray-50, viền gray-200, đổ bóng rất nhẹ.
+5. **Chữ tiêu đề trang 24–30px.** Không dùng `text-3xl`/`text-4xl` gradient text bên trong app.
+6. **Recruiter/Admin = dày dữ liệu, quyết đoán. Candidate = nhẹ nhàng, trấn an.** Nhưng dùng chung một hệ token.
+7. **Ưu tiên component chung** `src/components/common/App*.vue` thay vì tự chế lại card/button/badge/table.
 
 ---
 
@@ -42,29 +46,37 @@ Toàn bộ token sống trong `:root` của `frontend/src/styles/global.css`. **
 
 ```css
 :root {
-  /* ---- Brand ---- */
-  --primary:        #2563EB;  /* Xanh dương — hành động chính, nav active, tab chọn */
+  /* 1. Brand Colors (Core) */
+  --primary:        #1E3A8A;  /* Navy — thương hiệu, header, nút chính */
   --primary-hover:  #1D4ED8;
-  --primary-light:  #DBEAFE;  /* nền nhạt cho state chọn/hover mềm */
-  --accent:         #0891B2;  /* Cyan — CHỈ dùng cho điểm nhấn AI */
-  --accent-bg:      #ECFEFF;  /* nền cyan rất nhạt cho khối AI */
+  --primary-light:  #DBEAFE;
+  
+  --accent:         #06B6D4;  /* Cyan — accent công nghệ/AI, link, icon nổi bật, border focus */
+  --accent-bg:      #ECFEFF;
 
-  /* ---- Surface & background ---- */
-  --background:     #F8FAFC;
-  --surface:        #FFFFFF;
-  --surface-soft:   #F1F5F9;
-  --border:         #E2E8F0;
+  --highlight:      #F59E0B;  /* Amber — CTA quan trọng, badge nổi bật */
+  --highlight-hover:#D97706;
+  --highlight-bg:   #FEF3C7;
 
-  /* ---- Text ---- */
-  --text-main:      #0F172A;
-  --text-secondary: #475569;
-  --text-muted:     #94A3B8;
+  /* 2 & 4. Background layers & Neutral / Gray scale */
+  --background:     #FFFFFF;  /* Background chính light */
+  --surface:        #F8FAFC;  /* Background phụ gray-50 */
+  --surface-soft:   #F1F5F9;  /* Background hover/active gray-100 */
 
-  /* ---- Status ---- */
-  --success:        #16A34A;
-  --warning:        #D97706;
-  --danger:         #DC2626;
-  --info:           #2563EB;
+  /* 6. Border & Focus */
+  --border:         #E2E8F0;  /* Border mặc định gray-200 */
+  --border-focus:   #06B6D4;  /* Border focus Cyan */
+
+  /* 5. Text colors */
+  --text-main:      #0F172A;  /* Text chính gray-900 (không dùng #000 thuần) */
+  --text-secondary: #64748B;  /* Text phụ/mô tả gray-500 */
+  --text-muted:     #CBD5E1;  /* Text disabled gray-300 */
+
+  /* 3. Semantic colors (Trạng thái) */
+  --success:        #10B981;  /* Match thành công, duyệt, hoàn thành */
+  --warning:        #F97316;  /* Cảnh báo nhẹ */
+  --danger:         #EF4444;  /* Lỗi validation, xóa, từ chối */
+  --info:           #3B82F6;  /* Thông báo trung tính */
 
   /* ---- Radius ---- */
   --radius:         12px;
@@ -81,15 +93,16 @@ Toàn bộ token sống trong `:root` của `frontend/src/styles/global.css`. **
 }
 ```
 
-> **Việc cần làm ngay:** `AppButton.vue` đang gọi `--text-h`, `--shadow-glow`, `--bg`. Hãy đổi thành `--text-main`, bỏ `--shadow-glow` (dùng `--shadow-md`), `--bg` → `--surface-soft`. Không thêm token glow — nó phá tông "calm".
+> **Việc cần làm ngay:** `AppButton.vue` đã được chuẩn hóa dùng solid `--primary` (`#1E3A8A`) và `--shadow-sm/md`. Toàn bộ các trang (Dashboard, Candidate, Recruiter, Admin, Auth) được ép dùng token chung này.
 
-### 2.2 Quy tắc dùng màu
+### 2.2 Quy tắc dùng bộ 3 màu chủ đạo & thang neutral
 
-- **Xanh `--primary`**: nút chính, link, tab đang chọn, nav active, số liệu KPI nổi bật.
-- **Cyan `--accent`**: **chỉ** cho phần AI (AI insight card, "AI đang phân tích", badge AI). Không dùng cyan cho nút thường.
-- **Trạng thái**: dùng đúng `--success / --warning / --danger`. Badge nền = màu @ 10% alpha, chữ = màu đặc (đã có sẵn `.badge-*`).
-- **CẤM**: tím, indigo-làm-chính, hồng, gradient nhiều màu, neon, màu gaming/crypto.
-- Gradient (nếu thật sự cần, ví dụ hero landing công khai): chỉ trong khoảng xanh→cyan `linear-gradient(135deg, var(--primary), var(--accent))`. **Không dùng trong app nội bộ (dashboard, bảng, form).**
+- **Primary Navy (`--primary: #1E3A8A`)**: Thương hiệu, header, nút chính (CTA chính), tạo cảm giác uy tín cao cấp cho HR/Enterprise.
+- **Secondary Cyan (`--accent: #06B6D4`)**: Accent công nghệ/AI, link, icon nổi bật, trạng thái active/focus, viền focus input.
+- **Accent Highlight Amber (`--highlight: #F59E0B`)**: CTA quan trọng đặc biệt, badge nổi bật, điểm số cao. **Tách biệt hoàn toàn với màu Warning (`--warning: #F97316`)**.
+- **Thang Neutral (`gray-50` -> `gray-900`)**: Chiếm 70-80% giao diện, không dùng đen `#000` thuần cho chữ, luôn dùng `--text-main` (`#0F172A`) hoặc `--text-secondary` (`#64748B`).
+- **Trạng thái nghiệp vụ**: dùng đúng `--success (#10B981) / --warning (#F97316) / --danger (#EF4444)`. Badge nền = màu @ 10% alpha, chữ = màu đặc (đã có sẵn `.badge-*`).
+- **CẤM**: tím, indigo-làm-chính, hồng, neon, màu gaming/crypto loè loẹt, gradient trong app nội bộ.
 
 ---
 

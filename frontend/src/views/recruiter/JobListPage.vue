@@ -94,45 +94,45 @@ const confirmDelete = async () => {
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
     
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Việc làm</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Quản lý các vị trí tuyển dụng và pipeline ứng viên.</p>
       </div>
-      <Button @click="router.push('/jobs/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
+      <Button @click="router.push('/jobs/new')" class="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white border-none shadow-md">
         <Plus size="16" class="mr-1" /> Tạo job mới
       </Button>
-    </div>
+    </Card>
 
     <!-- Main Content Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <Card class="rounded-2xl shadow-sm overflow-hidden">
       <!-- Toolbar -->
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
-          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[var(--primary)] transition-colors" />
           <input 
             type="text" 
             placeholder="Tìm kiếm công việc..." 
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+            class="w-full pl-10 pr-4 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/50 focus:border-[var(--primary)] transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             v-model="filters.keyword"
             @keyup.enter="fetchJobs"
           />
         </div>
-        <Button variant="secondary" @click="showFilterModal = true" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+        <Button variant="secondary" @click="showFilterModal = true" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
           Lọc theo trạng thái
         </Button>
       </div>
 
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
-        <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-[var(--primary-light)] border-t-[var(--primary)] rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải dữ liệu...</span>
       </div>
       
       <div v-else class="w-full overflow-x-auto">
         <Table :columns="columns" :data="jobs" class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
           <template #title="{ row }">
-            <div class="font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px] cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" :title="row.title" @click="router.push(`/jobs/${row.id}`)">
+            <div class="font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis max-w-[250px] cursor-pointer hover:text-[var(--primary)] dark:hover:text-[var(--primary-light)] transition-colors" :title="row.title" @click="router.push(`/jobs/${row.id}`)">
               {{ row.title }}
             </div>
           </template>
@@ -140,7 +140,7 @@ const confirmDelete = async () => {
             <span 
               class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border"
               :class="[
-                row.status.toLowerCase() === 'open' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
+                row.status.toLowerCase() === 'open' ? 'bg-[var(--success-bg)] text-[var(--success)] border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
                 row.status.toLowerCase() === 'closed' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' : 
                 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
               ]"
@@ -152,16 +152,16 @@ const confirmDelete = async () => {
             <div class="text-slate-500 dark:text-slate-400 font-medium">{{ row.created }}</div>
           </template>
           <template #applicants="{ row }">
-            <div class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 font-semibold border border-blue-100 dark:border-blue-500/20">
+            <div class="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-[var(--primary-light)] dark:bg-blue-500/10 text-[var(--primary)] dark:text-blue-400 font-semibold border border-[var(--primary-light)] dark:border-blue-500/20">
               {{ row.applicants }}
             </div>
           </template>
           <template #action="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
+              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-[var(--primary)] dark:hover:text-blue-400 hover:bg-[var(--primary-light)] dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
                 <Eye size="18" />
               </button>
-              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Chỉnh sửa">
+              <button @click="router.push(`/jobs/${row.id}`)" class="p-2 text-slate-400 hover:text-[var(--primary)] dark:hover:text-blue-400 hover:bg-[var(--primary-light)] dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Chỉnh sửa">
                 <Edit size="18" />
               </button>
               <button @click="deletingId = row.id; showDeleteModal = true" class="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors" title="Xóa">
@@ -171,7 +171,7 @@ const confirmDelete = async () => {
           </template>
         </Table>
       </div>
-    </div>
+    </Card>
 
     <!-- Modals -->
     <Modal :isOpen="showDeleteModal" @close="showDeleteModal = false" title="Xác nhận xóa">
@@ -189,7 +189,7 @@ const confirmDelete = async () => {
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái công việc</label>
           <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
+            class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.status"
           >
             <option value="">Tất cả trạng thái</option>

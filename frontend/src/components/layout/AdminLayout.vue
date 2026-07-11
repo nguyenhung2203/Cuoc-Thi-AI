@@ -3,9 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
 import { LayoutDashboard, Users, Building, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Activity, ShieldCheck, Bell, Search, Sparkles } from 'lucide-vue-next'
+import { usePlatformStore } from '../../stores/platform.store'
 
 const router = useRouter()
 const route = useRoute()
+const platformStore = usePlatformStore()
 
 const isCollapsed = ref(false)
 const showNotifications = ref(false)
@@ -43,10 +45,10 @@ onMounted(() => {
       <!-- Logo & Toggle -->
       <div class="admin-brand">
         <div v-if="!isCollapsed" class="brand-id" @click="router.push('/admin/dashboard')">
-          <div class="brand-mark">A</div>
+          <div class="brand-mark">{{ platformStore.brandName ? platformStore.brandName[0] : 'V' }}</div>
           <div class="brand-text">
-            <span class="brand-name">WeMake <span class="brand-accent">Admin</span></span>
-            <span class="brand-sub">System Portal</span>
+            <span class="brand-name">{{ platformStore.brandName }} <span class="brand-accent">Admin</span></span>
+            <span class="brand-sub">{{ platformStore.brandBadge }} System Portal</span>
           </div>
         </div>
         <button class="collapse-btn" :class="{ 'mx-auto': isCollapsed }" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'">

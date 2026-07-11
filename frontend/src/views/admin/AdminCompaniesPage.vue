@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
 import { Building, Search, Globe, Users, Briefcase, RefreshCw, ExternalLink, ShieldCheck } from 'lucide-vue-next'
 
@@ -38,7 +39,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6 animate-fade-in">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
           <Building size="26" class="text-blue-600 dark:text-blue-400" />
@@ -55,10 +56,10 @@ onMounted(() => {
       >
         <RefreshCw size="16" :class="{ 'animate-spin': loading }" /> Làm mới danh sách
       </button>
-    </div>
+    </Card>
 
     <!-- Search Bar -->
-    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-4">
+    <Card class="p-4 rounded-2xl shadow-sm flex items-center justify-between gap-4">
       <div class="relative flex-1 max-w-md">
         <Search size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
@@ -71,20 +72,20 @@ onMounted(() => {
       <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">
         Tổng số: <span class="text-blue-600 dark:text-blue-400 font-bold text-sm">{{ displayedCompanies.length }}</span> doanh nghiệp
       </div>
-    </div>
+    </Card>
 
     <!-- Loading -->
-    <div v-if="loading" class="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-sm border border-slate-200 dark:border-slate-700 space-y-4">
+    <Card v-if="loading" class="rounded-2xl p-12 text-center shadow-sm space-y-4">
       <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang tải hồ sơ các doanh nghiệp...</p>
-    </div>
+    </Card>
 
     <!-- Grid View -->
     <div v-else-if="displayedCompanies.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div 
         v-for="company in displayedCompanies" 
         :key="company.id"
-        class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md hover:border-blue-500/40 transition-all flex flex-col justify-between group"
+        class="bg-[var(--surface)] rounded-2xl p-6 shadow-sm border border-[var(--border)] hover:shadow-md hover:border-blue-500/40 transition-all flex flex-col justify-between group"
       >
         <div class="space-y-4">
           <div class="flex items-start justify-between gap-3">
@@ -144,7 +145,7 @@ onMounted(() => {
     </div>
 
     <!-- Empty State -->
-    <div v-else class="bg-white dark:bg-slate-800 rounded-2xl p-16 text-center shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card v-else class="rounded-2xl p-16 text-center shadow-sm">
       <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
         <Building size="32" />
       </div>
@@ -152,6 +153,6 @@ onMounted(() => {
       <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
         {{ searchQuery ? 'Không có công ty nào khớp với từ khóa tìm kiếm.' : 'Hệ thống hiện chưa ghi nhận công ty hoặc doanh nghiệp nào được tạo.' }}
       </p>
-    </div>
+    </Card>
   </div>
 </template>

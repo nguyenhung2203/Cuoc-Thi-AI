@@ -1,12 +1,17 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
-import { Activity, Search, RefreshCw, Clock, Shield, Globe, Terminal, User, AlertCircle } from 'lucide-vue-next'
+import { Activity, Search, RefreshCw, Clock, Shield, Globe, Terminal, User, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-vue-next'
 
 const logs = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
 const actionFilter = ref('all')
+
+// CẤU HÌNH PHÂN TRANG (PAGINATION STATE)
+const currentPage = ref(1)
+const pageSize = ref(15) // Mặc định 15 dòng mỗi trang
 
 const displayedLogs = computed(() => {
   if (!logs.value || !Array.isArray(logs.value)) return []
@@ -25,11 +30,55 @@ const displayedLogs = computed(() => {
   })
 })
 
+// Tự động quay về trang 1 khi tìm kiếm, đổi bộ lọc hoặc đổi số dòng mỗi trang
+watch([searchQuery, actionFilter, pageSize], () => {
+  currentPage.value = 1
+})
+
+// Tổng số trang
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(displayedLogs.value.length / pageSize.value))
+})
+
+// Danh sách log hiển thị ở trang hiện tại
+const paginatedLogs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return displayedLogs.value.slice(start, end)
+})
+
+// Danh sách các số trang hiển thị trên thanh phân trang (Smart page window)
+const visiblePages = computed(() => {
+  const pages = []
+  const total = totalPages.value
+  const cur = currentPage.value
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i)
+  } else {
+    if (cur <= 4) {
+      pages.push(1, 2, 3, 4, 5, '...', total)
+    } else if (cur >= total - 3) {
+      pages.push(1, '...', total - 4, total - 3, total - 2, total - 1, total)
+    } else {
+      pages.push(1, '...', cur - 1, cur, cur + 1, '...', total)
+    }
+  }
+  return pages
+})
+
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page
+  }
+}
+
 const fetchLogs = async () => {
   loading.value = true
   try {
     const res = await apiService.get('/admin/logs')
     logs.value = Array.isArray(res) ? res : (res.data || [])
+    currentPage.value = 1
   } catch (error) {
     console.error('Failed to fetch logs', error)
   } finally {
@@ -64,7 +113,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6 animate-fade-in">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
           <Activity size="26" class="text-blue-600 dark:text-blue-400" />
@@ -81,10 +130,10 @@ onMounted(() => {
       >
         <RefreshCw size="16" :class="{ 'animate-spin': loading }" /> Làm mới nhật ký
       </button>
-    </div>
+    </Card>
 
-    <!-- Filters Bar -->
-    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <!-- Filters & Pagination Toolbar -->
+    <Card class="p-4 rounded-2xl shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
       <div class="relative flex-1 max-w-md">
         <Search size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input 
@@ -95,7 +144,8 @@ onMounted(() => {
         />
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Bộ lọc hành động -->
         <select 
           v-model="actionFilter"
           class="px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
@@ -107,107 +157,215 @@ onMounted(() => {
           <option value="APPROVE">Phê duyệt</option>
           <option value="DELETE">Xóa</option>
         </select>
-        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">
-          Hiển thị: <span class="text-blue-600 dark:text-blue-400 font-bold text-sm">{{ displayedLogs.length }}</span> dòng
+
+        <!-- Chọn số dòng mỗi trang -->
+        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <span>Số dòng:</span>
+          <select 
+            v-model.number="pageSize"
+            class="bg-transparent text-blue-600 dark:text-blue-400 font-bold focus:outline-none cursor-pointer text-sm"
+          >
+            <option :value="10">10</option>
+            <option :value="15">15</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </div>
+
+        <!-- Thông tin số lượng -->
+        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 pl-2 border-l border-slate-200 dark:border-slate-700">
+          Tổng: <span class="text-blue-600 dark:text-blue-400 font-bold text-sm">{{ displayedLogs.length }}</span> nhật ký
         </div>
       </div>
-    </div>
+    </Card>
 
     <!-- Logs Table Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-      <!-- Loading Skeleton -->
-      <div v-if="loading" class="p-12 text-center space-y-4">
-        <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang truy xuất dữ liệu nhật ký hệ thống...</p>
-      </div>
-
-      <!-- Logs Table -->
-      <div v-else-if="displayedLogs.length > 0" class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-sm">
-          <thead>
-            <tr class="bg-slate-50/80 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              <th class="py-4 px-6 w-48">Thời gian</th>
-              <th class="py-4 px-6">Người thực hiện (Actor)</th>
-              <th class="py-4 px-6">Hành động</th>
-              <th class="py-4 px-6">Tài nguyên & ID</th>
-              <th class="py-4 px-6 text-right">IP / Client Device</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-            <tr 
-              v-for="log in displayedLogs" 
-              :key="log.id" 
-              class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors group"
-            >
-              <!-- Time -->
-              <td class="py-4 px-6 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                <div class="flex items-center gap-1.5 font-medium">
-                  <Clock size="13" class="text-slate-400" />
-                  {{ formatDate(log.created_at) }}
-                </div>
-              </td>
-
-              <!-- Actor -->
-              <td class="py-4 px-6">
-                <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-xs shrink-0">
-                    <User size="14" />
-                  </div>
-                  <div>
-                    <div class="font-bold text-slate-800 dark:text-white text-xs truncate max-w-[180px]" :title="log.actor_user_id">
-                      {{ log.actor_user_id || 'Hệ thống tự động' }}
-                    </div>
-                    <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                      {{ log.actor_role || 'system' }}
-                    </span>
-                  </div>
-                </div>
-              </td>
-
-              <!-- Action Badge -->
-              <td class="py-4 px-6">
-                <span :class="`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold tracking-wide uppercase ${getActionColor(log.action)}`">
-                  <Terminal size="13" />
-                  {{ log.action || 'UNKNOWN' }}
-                </span>
-              </td>
-
-              <!-- Resource -->
-              <td class="py-4 px-6">
-                <div class="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
-                  <Shield size="13" class="text-slate-400" />
-                  {{ log.resource_type || 'system' }}
-                </div>
-                <div class="font-mono text-[11px] text-slate-400 truncate max-w-[180px] mt-0.5" :title="log.resource_id">
-                  ID: {{ log.resource_id || 'N/A' }}
-                </div>
-              </td>
-
-              <!-- IP Address / Device -->
-              <td class="py-4 px-6 text-right font-mono text-xs text-slate-500 dark:text-slate-400">
-                <div class="flex items-center justify-end gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
-                  <Globe size="13" class="text-blue-500" />
-                  {{ log.ip_address || 'localhost' }}
-                </div>
-                <div class="text-[11px] text-slate-400 truncate max-w-[200px] ml-auto mt-0.5" :title="log.user_agent">
-                  {{ log.user_agent || 'WeMake Client Engine' }}
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else class="p-16 text-center">
-        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-          <Activity size="32" />
+    <Card class="rounded-2xl shadow-sm overflow-hidden flex flex-col justify-between min-h-[500px]">
+      <div>
+        <!-- Loading Skeleton -->
+        <div v-if="loading" class="p-16 text-center space-y-4">
+          <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Đang truy xuất dữ liệu nhật ký hệ thống...</p>
         </div>
-        <h3 class="font-bold text-slate-800 dark:text-white text-base">Chưa ghi nhận nhật ký nào</h3>
-        <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
-          {{ searchQuery || actionFilter !== 'all' ? 'Không có dòng log nào khớp với bộ lọc tìm kiếm.' : 'Hệ thống hiện chưa có thao tác nào cần lưu lại trong Audit Logs.' }}
-        </p>
+
+        <!-- Logs Table -->
+        <div v-else-if="paginatedLogs.length > 0" class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-50/80 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <th class="py-4 px-6 w-48">Thời gian</th>
+                <th class="py-4 px-6">Người thực hiện (Actor)</th>
+                <th class="py-4 px-6">Hành động</th>
+                <th class="py-4 px-6">Tài nguyên & ID</th>
+                <th class="py-4 px-6 text-right">IP / Client Device</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
+              <tr 
+                v-for="log in paginatedLogs" 
+                :key="log.id" 
+                class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition-colors group"
+              >
+                <!-- Time -->
+                <td class="py-4 px-6 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                  <div class="flex items-center gap-1.5 font-medium">
+                    <Clock size="13" class="text-slate-400 shrink-0" />
+                    <span>{{ formatDate(log.created_at) }}</span>
+                  </div>
+                </td>
+
+                <!-- Actor -->
+                <td class="py-4 px-6">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-xs shrink-0">
+                      <User size="14" />
+                    </div>
+                    <div>
+                      <div class="font-bold text-slate-800 dark:text-white text-xs truncate max-w-[180px]" :title="log.actor_user_id">
+                        {{ log.actor_user_id || 'Hệ thống tự động' }}
+                      </div>
+                      <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                        {{ log.actor_role || 'system' }}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Action Badge -->
+                <td class="py-4 px-6">
+                  <span :class="`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold tracking-wide uppercase ${getActionColor(log.action)}`">
+                    <Terminal size="13" class="shrink-0" />
+                    <span>{{ log.action || 'UNKNOWN' }}</span>
+                  </span>
+                </td>
+
+                <!-- Resource -->
+                <td class="py-4 px-6">
+                  <div class="font-bold text-slate-800 dark:text-slate-200 text-xs flex items-center gap-1.5">
+                    <Shield size="13" class="text-slate-400 shrink-0" />
+                    <span>{{ log.resource_type || 'system' }}</span>
+                  </div>
+                  <div class="font-mono text-[11px] text-slate-400 truncate max-w-[180px] mt-0.5" :title="log.resource_id">
+                    ID: {{ log.resource_id || 'N/A' }}
+                  </div>
+                </td>
+
+                <!-- IP Address / Device -->
+                <td class="py-4 px-6 text-right font-mono text-xs text-slate-500 dark:text-slate-400">
+                  <div class="flex items-center justify-end gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
+                    <Globe size="13" class="text-blue-500 shrink-0" />
+                    <span>{{ log.ip_address || 'localhost' }}</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 truncate max-w-[200px] ml-auto mt-0.5" :title="log.user_agent">
+                    {{ log.user_agent || 'Client Engine' }}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty State -->
+        <div v-else class="p-16 text-center">
+          <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+            <Activity size="32" />
+          </div>
+          <h3 class="font-bold text-slate-800 dark:text-white text-base">Chưa ghi nhận nhật ký nào</h3>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">
+            {{ searchQuery || actionFilter !== 'all' ? 'Không có dòng log nào khớp với bộ lọc tìm kiếm.' : 'Hệ thống hiện chưa có thao tác nào cần lưu lại trong Audit Logs.' }}
+          </p>
+        </div>
       </div>
-    </div>
+
+      <!-- THANH PHÂN TRANG (PAGINATION CONTROLS BAR) -->
+      <div v-if="displayedLogs.length > 0" class="border-t border-slate-200 dark:border-slate-700 px-6 py-4 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <!-- Thông tin trang & Phạm vi hiển thị có thể chọn trực tiếp (Interactive Inline Selector) -->
+        <div class="flex flex-wrap items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <span>Hiển thị từ</span>
+          <span class="font-bold text-slate-800 dark:text-white">{{ (currentPage - 1) * pageSize + 1 }}</span>
+          <span>đến</span>
+          
+          <!-- Hộp chọn số dòng/trang trực tiếp ngay tại chân bảng -->
+          <div class="inline-flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-lg shadow-2xs hover:border-blue-500 transition-colors">
+            <select 
+              v-model.number="pageSize"
+              class="bg-transparent font-bold text-blue-600 dark:text-blue-400 focus:outline-none cursor-pointer text-xs pr-1"
+              title="Bấm để đổi số dòng hiển thị mỗi trang"
+            >
+              <option :value="10">10 dòng/trang</option>
+              <option :value="15">15 dòng/trang</option>
+              <option :value="25">25 dòng/trang</option>
+              <option :value="50">50 dòng/trang</option>
+              <option :value="100">100 dòng/trang</option>
+            </select>
+          </div>
+
+          <span>trong tổng số</span>
+          <span class="font-bold text-blue-600 dark:text-blue-400">{{ displayedLogs.length }}</span>
+          <span>nhật ký</span>
+        </div>
+
+        <!-- Các nút chuyển trang -->
+        <div class="flex items-center gap-1.5">
+          <!-- Trang đầu -->
+          <button 
+            @click="goToPage(1)" 
+            :disabled="currentPage === 1"
+            class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Trang đầu"
+          >
+            <ChevronsLeft size="15" />
+          </button>
+
+          <!-- Trang trước -->
+          <button 
+            @click="goToPage(currentPage - 1)" 
+            :disabled="currentPage === 1"
+            class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Trang trước"
+          >
+            <ChevronLeft size="15" />
+          </button>
+
+          <!-- Danh sách số trang (Smart Page Pills) -->
+          <template v-for="(page, idx) in visiblePages" :key="idx">
+            <span v-if="page === '...'" class="px-2 py-1 text-slate-400 font-bold text-xs">...</span>
+            <button 
+              v-else 
+              @click="goToPage(page)"
+              :class="[
+                'min-w-[34px] h-[34px] px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center',
+                currentPage === page 
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 border border-blue-600' 
+                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+              ]"
+            >
+              {{ page }}
+            </button>
+          </template>
+
+          <!-- Trang tiếp -->
+          <button 
+            @click="goToPage(currentPage + 1)" 
+            :disabled="currentPage === totalPages"
+            class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Trang tiếp"
+          >
+            <ChevronRight size="15" />
+          </button>
+
+          <!-- Trang cuối -->
+          <button 
+            @click="goToPage(totalPages)" 
+            :disabled="currentPage === totalPages"
+            class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Trang cuối"
+          >
+            <ChevronsRight size="15" />
+          </button>
+        </div>
+      </div>
+    </Card>
   </div>
 </template>

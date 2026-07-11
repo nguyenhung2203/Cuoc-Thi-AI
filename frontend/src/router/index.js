@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { authStore } from '../stores/auth.store'
+import { langStore } from '../stores/lang.store'
 
 const routes = [
   {
@@ -15,7 +16,7 @@ const routes = [
   { path: '/interview-consent', component: () => import('../views/candidate/InterviewWaitingRoom.vue') },
   { path: '/interview-expired', component: () => import('../views/shared/InterviewExpiredPage.vue') },
   { path: '/403', component: () => import('../views/shared/ForbiddenPage.vue') },
-  
+
   {
     path: '/',
     component: () => import('../components/layout/RecruiterLayout.vue'),
@@ -43,20 +44,22 @@ const routes = [
     component: () => import('../components/layout/CandidateLayout.vue'),
     children: [
       { path: 'home', component: () => import('../views/candidate/CandidateDashboard.vue') },
+      { path: 'profile', component: () => import('../views/candidate/ProfilePage.vue') },
       { path: 'job-board', component: () => import('../views/candidate/JobBoardPage.vue') },
+      { path: 'my-applications', component: () => import('../views/candidate/MyApplicationsPage.vue') },
+      { path: 'saved-jobs', component: () => import('../views/candidate/SavedJobsPage.vue') },
       { path: 'my-interviews', component: () => import('../views/candidate/MyInterviewsPage.vue') },
       { path: 'candidate-room', component: () => import('../views/candidate/CandidateInterviewRoom.vue') },
       { path: 'mock-setup', component: () => import('../views/candidate/MockSetupPage.vue') },
       { path: 'mock-room', component: () => import('../views/candidate/MockInterviewRoom.vue') },
       { path: 'mock-results', component: () => import('../views/candidate/PracticeHistoryPage.vue') },
       { path: 'mock-results/:id', component: () => import('../views/candidate/MockResultPage.vue') },
-      { path: 'profile', component: () => import('../views/candidate/ProfilePage.vue') },
-      { path: 'candidate-settings', component: () => import('../views/candidate/CandidateSettingsPage.vue') }
+      { path: 'candidate-settings', redirect: '/profile?tab=security' }
     ]
   },
   {
     path: '/careers/:company_id',
-    component: () => import('../components/layout/PublicLayout.vue'),
+    component: () => import('../components/layout/CandidateLayout.vue'),
     children: [
       { path: '', component: () => import('../views/public/CareerPage.vue') },
       { path: 'jobs/:job_id', component: () => import('../views/public/JobApplyPage.vue') }
@@ -78,11 +81,13 @@ const routes = [
       { path: 'settings', component: () => import('../views/admin/AdminSettingsPage.vue') }
     ]
   },
-  { path: '/:pathMatch(.*)*', redirect: () => {
-    const token = localStorage.getItem('access_token')
-    if (!token) return '/login'
-    return localStorage.getItem('user_role') === 'recruiter' ? '/dashboard' : '/'
-  }}
+  {
+    path: '/:pathMatch(.*)*', redirect: () => {
+      const token = localStorage.getItem('access_token')
+      if (!token) return '/login'
+      return localStorage.getItem('user_role') === 'recruiter' ? '/dashboard' : '/'
+    }
+  }
 ]
 
 const router = createRouter({
@@ -132,6 +137,14 @@ router.beforeEach((to, from) => {
   if (!authRequired && token && (to.path === '/login' || to.path === '/register' || (to.path === '/admin/login' && userRole === 'admin'))) {
     if (userRole === 'admin') return '/admin/dashboard'
     return userRole === 'recruiter' ? '/dashboard' : '/'
+  }
+})
+
+router.afterEach(() => {
+  if (typeof window !== 'undefined') {
+    setTimeout(() => {
+      langStore.runGlobalDomTranslator()
+    }, 200)
   }
 })
 

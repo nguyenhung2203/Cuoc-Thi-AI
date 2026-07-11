@@ -145,7 +145,7 @@ const handleAiAnalyze = async () => {
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
 
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center gap-4 p-6 rounded-2xl shadow-sm">
       <button @click="router.push('/jobs')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
         <ArrowLeft size="20" />
       </button>
@@ -158,12 +158,12 @@ const handleAiAnalyze = async () => {
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Jobs > {{ isNew ? 'New' : job.title }}</p>
       </div>
-    </div>
+    </Card>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
         <!-- Main Form Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card class="rounded-2xl shadow-sm p-6">
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin chung</h2>
           <form @submit="handleSave" class="space-y-5">
             <!-- Job Title -->
@@ -173,7 +173,7 @@ const handleAiAnalyze = async () => {
                 v-model="job.title" 
                 required 
                 minlength="2"
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
                 placeholder="Ví dụ: Frontend Developer"
               />
             </div>
@@ -183,7 +183,7 @@ const handleAiAnalyze = async () => {
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
               <select 
                 v-model="job.status" 
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200"
+                class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
               >
                 <option value="Open">Đang mở (Open)</option>
                 <option value="Closed">Đã đóng (Closed)</option>
@@ -199,7 +199,7 @@ const handleAiAnalyze = async () => {
                 placeholder="Nhập mô tả tổng quan về công việc (tối thiểu 10 ký tự)..."
                 required
                 minlength="10"
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
               ></textarea>
             </div>
 
@@ -211,7 +211,7 @@ const handleAiAnalyze = async () => {
                 v-model="job.requirements"
                 placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
               ></textarea>
             </div>
 
@@ -223,7 +223,7 @@ const handleAiAnalyze = async () => {
                 v-model="job.benefits"
                 placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
               ></textarea>
             </div>
 
@@ -236,21 +236,21 @@ const handleAiAnalyze = async () => {
               </Button>
             </div>
           </form>
-        </div>
+        </Card>
         
-        <div v-if="!isNew" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card v-if="!isNew" class="rounded-2xl shadow-sm p-6">
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên</h2>
           <div class="text-center text-slate-500 dark:text-slate-400 py-12">
             <Users size="48" class="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
             <p class="font-medium text-sm">Chưa có ứng viên nào nộp đơn.</p>
           </div>
-        </div>
+        </Card>
       </div>
 
       <!-- Right Column -->
       <div class="space-y-6">
         <!-- AI Analysis Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+        <Card class="rounded-2xl shadow-sm p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
           <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
@@ -332,7 +332,7 @@ const handleAiAnalyze = async () => {
           <div v-if="!job.description && !aiResult" class="mt-5 flex items-center gap-2 text-amber-500 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg border border-amber-100 dark:border-amber-500/20 text-sm relative z-10 font-medium">
             <AlertCircle size="16" class="shrink-0" /> Cần nhập JD để AI có thể phân tích.
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   </div>

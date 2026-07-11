@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import Card from '../../components/common/AppCard.vue'
 import { Users, Building, Video, Activity, ShieldCheck, UserCheck, Clock, ArrowRight, CheckCircle2, AlertCircle, Sparkles } from 'lucide-vue-next'
 import { apiService } from '../../services/api.service'
 
@@ -86,7 +87,7 @@ onMounted(() => {
       <div 
         v-for="stat in stats" 
         :key="stat.title" 
-        class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden group hover:shadow-md hover:border-blue-500/50 transition-all duration-300"
+        class="bg-[var(--surface)] p-6 rounded-2xl shadow-sm border border-[var(--border)] relative overflow-hidden group hover:shadow-md hover:border-blue-500/50 transition-all duration-300"
       >
         <div class="flex items-center justify-between mb-4">
           <div :class="`w-12 h-12 rounded-xl flex items-center justify-center border ${stat.colorClass} shadow-sm group-hover:scale-110 transition-transform duration-300`">
@@ -108,7 +109,7 @@ onMounted(() => {
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Left Column: Pending Approvals (Takes 2 Columns) -->
       <div class="lg:col-span-2 space-y-6">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card class="rounded-2xl shadow-sm p-6">
           <div class="flex items-center justify-between mb-6">
             <div>
               <h2 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -180,13 +181,13 @@ onMounted(() => {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       <!-- Right Column: Quick Links & System Health -->
       <div class="space-y-6">
         <!-- Quick Actions Panel -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card class="rounded-2xl shadow-sm p-6">
           <h2 class="text-lg font-bold text-slate-800 dark:text-white mb-4">Thao tác Quản trị</h2>
           <div class="grid grid-cols-1 gap-3">
             <button 
@@ -237,7 +238,7 @@ onMounted(() => {
               <ArrowRight size="16" class="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
             </button>
           </div>
-        </div>
+        </Card>
 
         <!-- System Health Widget -->
         <div class="bg-gradient-to-br from-slate-900 to-blue-950 rounded-2xl p-6 text-white shadow-md border border-slate-800 relative overflow-hidden">

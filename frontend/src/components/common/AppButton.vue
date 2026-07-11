@@ -47,13 +47,14 @@ defineProps({
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  background: var(--primary);
   color: white;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-glow);
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
@@ -71,12 +72,14 @@ defineProps({
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, var(--danger), #f43f5e);
+  background: var(--danger);
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 8px 24px -4px rgba(239, 68, 68, 0.4);
+  background: #b91c1c;
+  box-shadow: var(--shadow-md);
 }
 
 .btn-ghost {

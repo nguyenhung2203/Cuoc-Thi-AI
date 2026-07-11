@@ -1,7 +1,11 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
+import { usePlatformStore } from '../../stores/platform.store'
 import { Settings, Sliders, Bot, Shield, Save, RefreshCw, Plus, Edit3, CheckCircle2, AlertCircle, Trash2, Cpu, Key, FileText, Bell } from 'lucide-vue-next'
+
+const platformStore = usePlatformStore()
 
 const activeTab = ref('general')
 const loading = ref(false)
@@ -11,7 +15,12 @@ const errorMessage = ref('')
 
 // General & Security Settings State
 const settings = reactive({
-  system_name: 'WeMake AI Recruitment',
+  system_name: platformStore.systemName || 'ViệcLàm AI Recruitment',
+  brand_name: platformStore.brandName || 'ViệcLàm',
+  brand_badge: platformStore.brandBadge || 'AI',
+  brand_slogan: platformStore.brandSlogan || 'Nền tảng Phỏng vấn & Tuyển dụng Thông minh',
+  brand_logo_url: platformStore.brandLogoUrl || '',
+  support_email: platformStore.supportEmail || 'support@vieclam.ai',
   maintenance_mode: false,
   max_upload_size_mb: 20,
   default_passing_score: 70,
@@ -43,7 +52,11 @@ const fetchSettings = async () => {
     const res = await apiService.get('/admin/settings')
     const data = Array.isArray(res) ? res[0] : (res.data || res || {})
     if (data && typeof data === 'object') {
-      if (data.system_name !== undefined) settings.system_name = data.system_name
+      if (data.system_name !== undefined) {
+        settings.system_name = (data.system_name && data.system_name.includes('WeMake')) 
+          ? 'ViệcLàm AI Platform' 
+          : data.system_name
+      }
       if (data.maintenance_mode !== undefined) settings.maintenance_mode = data.maintenance_mode
       if (data.max_upload_size_mb !== undefined) settings.max_upload_size_mb = data.max_upload_size_mb
       if (data.default_passing_score !== undefined) settings.default_passing_score = data.default_passing_score
@@ -56,6 +69,11 @@ const fetchSettings = async () => {
       if (data.notify_on_new_applicant !== undefined) settings.notify_on_new_applicant = data.notify_on_new_applicant
       if (data.notify_on_report_ready !== undefined) settings.notify_on_report_ready = data.notify_on_report_ready
       if (data.notify_on_interview_cancelled !== undefined) settings.notify_on_interview_cancelled = data.notify_on_interview_cancelled
+      if (data.brand_name !== undefined) settings.brand_name = data.brand_name
+      if (data.brand_badge !== undefined) settings.brand_badge = data.brand_badge
+      if (data.brand_slogan !== undefined) settings.brand_slogan = data.brand_slogan
+      if (data.brand_logo_url !== undefined) settings.brand_logo_url = data.brand_logo_url
+      if (data.support_email !== undefined) settings.support_email = data.support_email
     }
   } catch (err) {
     console.error('Failed to load settings:', err)
@@ -69,8 +87,10 @@ const saveSettings = async () => {
   successMessage.value = ''
   errorMessage.value = ''
   try {
+    // Cập nhật cấu hình thương hiệu động trên toàn bộ ứng dụng
+    platformStore.updateConfig(settings)
     await apiService.put('/admin/settings', { ...settings })
-    successMessage.value = 'Cập nhật cấu hình hệ thống thành công!'
+    successMessage.value = 'Cập nhật cấu hình hệ thống & thương hiệu thành công!'
     setTimeout(() => { successMessage.value = '' }, 4000)
   } catch (err) {
     console.error('Failed to save settings:', err)
@@ -137,7 +157,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6 animate-fade-in pb-12">
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
           <Settings size="26" class="text-blue-600 dark:text-blue-400" />
@@ -154,7 +174,7 @@ onMounted(() => {
       >
         <RefreshCw size="16" :class="{ 'animate-spin': loading }" /> Làm mới cấu hình
       </button>
-    </div>
+    </Card>
 
     <!-- Alert Notifications -->
     <div v-if="successMessage" class="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-600 dark:text-emerald-400 font-semibold text-sm flex items-center gap-2">
@@ -209,7 +229,7 @@ onMounted(() => {
     </div>
 
     <!-- Tab 1: General Settings -->
-    <div v-if="activeTab === 'general'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6">
+    <Card v-if="activeTab === 'general'" class="rounded-2xl shadow-sm p-8 space-y-6">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
           <Sliders class="text-blue-600 dark:text-blue-400" size="20" />
@@ -223,12 +243,85 @@ onMounted(() => {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- System Name -->
         <div>
-          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
             Tên Hệ sinh thái / Platform Name
           </label>
+          <span class="block text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+            Tên đầy đủ của cả nền tảng máy chủ (Dùng trong báo cáo nội bộ, log kỹ thuật server & email hệ thống)
+          </span>
           <input 
             type="text" 
             v-model="settings.system_name"
+            placeholder="Ví dụ: ViệcLàm AI Platform"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+
+        <!-- Brand Name -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+            Tên Thương hiệu chính / Brand Name
+          </label>
+          <span class="block text-[11px] text-blue-600 dark:text-blue-400 font-semibold mb-2">
+            ⭐ Tên hiển thị trực tiếp ra giao diện (Navbar Logo, Footer, Tab Website, Admin Sidebar)
+          </span>
+          <input 
+            type="text" 
+            v-model="settings.brand_name"
+            placeholder="Ví dụ: ViệcLàm, Talent, TuyểnDụng"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+
+        <!-- Brand Badge -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+            Huy hiệu Logo / Brand Badge
+          </label>
+          <input 
+            type="text" 
+            v-model="settings.brand_badge"
+            placeholder="Ví dụ: AI, PRO, VN"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+
+        <!-- Support Email -->
+        <div>
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+            Email hỗ trợ hệ thống / Support Email
+          </label>
+          <input 
+            type="email" 
+            v-model="settings.support_email"
+            placeholder="Ví dụ: support@vieclam.ai"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+
+        <!-- Brand Slogan (Full width) -->
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+            Slogan & Tiêu đề phụ Website / Brand Slogan
+          </label>
+          <input 
+            type="text" 
+            v-model="settings.brand_slogan"
+            placeholder="Ví dụ: Nền tảng Phỏng vấn & Tuyển dụng Thông minh"
+            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+          />
+        </div>
+
+        <!-- Custom Logo URL (Full width) -->
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>Đường dẫn ảnh Logo riêng / Custom Logo URL (PNG, JPG, SVG)</span>
+            <span class="text-[11px] font-normal text-blue-600 dark:text-blue-400">Để trống nếu muốn dùng Icon Vector AI mặc định</span>
+          </label>
+          <input 
+            type="text" 
+            v-model="settings.brand_logo_url"
+            placeholder="Ví dụ: /images/logo.png hoặc https://example.com/logo.svg"
             class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
@@ -300,12 +393,12 @@ onMounted(() => {
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Cấu hình' }}
         </button>
       </div>
-    </div>
+    </Card>
 
     <!-- Tab 2: AI & Prompt Templates -->
     <div v-if="activeTab === 'ai'" class="space-y-6">
       <!-- Action Bar -->
-      <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <Card class="p-6 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <Cpu class="text-blue-600 dark:text-blue-400" size="20" />
@@ -321,7 +414,7 @@ onMounted(() => {
         >
           <Plus size="18" /> Thêm Prompt Template mới
         </button>
-      </div>
+      </Card>
 
       <!-- Prompts Grid -->
       <div v-if="loadingPrompts" class="py-12 text-center text-slate-500">
@@ -329,18 +422,18 @@ onMounted(() => {
         Đang tải danh sách Prompt Templates...
       </div>
 
-      <div v-else-if="promptTemplates.length === 0" class="bg-white dark:bg-slate-800 p-12 rounded-2xl text-center border border-slate-200 dark:border-slate-700">
+      <Card v-else-if="promptTemplates.length === 0" class="p-12 rounded-2xl text-center border">
         <Bot size="36" class="mx-auto mb-3 text-slate-400" />
         <h4 class="font-bold text-slate-800 dark:text-white">Chưa có Prompt Template nào được tùy biến</h4>
         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">Hệ thống đang sử dụng Prompt AI mặc định được nạp từ mã nguồn.</p>
         <button @click="openNewPromptModal" class="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl">Tạo Prompt mẫu ngay</button>
-      </div>
+      </Card>
 
       <div v-else class="grid grid-cols-1 gap-4">
         <div 
           v-for="tmpl in promptTemplates" 
           :key="tmpl.id"
-          class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+          class="bg-[var(--surface)] p-6 rounded-2xl border border-[var(--border)] shadow-sm hover:border-blue-400/60 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
         >
           <div class="space-y-2 flex-1">
             <div class="flex items-center gap-3">
@@ -371,7 +464,7 @@ onMounted(() => {
     </div>
 
     <!-- Tab 3: Security & Sessions -->
-    <div v-if="activeTab === 'security'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6">
+    <Card v-if="activeTab === 'security'" class="rounded-2xl shadow-sm p-8 space-y-6">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
           <Shield class="text-blue-600 dark:text-blue-400" size="20" />
@@ -424,10 +517,10 @@ onMounted(() => {
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Bảo mật' }}
         </button>
       </div>
-    </div>
+    </Card>
 
     <!-- Tab 4: Notification Settings -->
-    <div v-if="activeTab === 'notifications'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8 space-y-6 animate-fade-in">
+    <Card v-if="activeTab === 'notifications'" class="rounded-2xl shadow-sm p-8 space-y-6 animate-fade-in">
       <div class="border-b border-slate-200 dark:border-slate-700 pb-4">
         <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
           <Bell class="text-blue-600 dark:text-blue-400" size="20" />
@@ -532,11 +625,11 @@ onMounted(() => {
           {{ saving ? 'Đang lưu thiết lập...' : 'Lưu Thay đổi Cấu hình Thông báo' }}
         </button>
       </div>
-    </div>
+    </Card>
 
     <!-- Modal for Create/Edit Prompt -->
     <div v-if="showPromptModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
-      <div class="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-8 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6 max-h-[90vh] overflow-y-auto">
+      <div class="bg-[var(--surface)] rounded-3xl max-w-2xl w-full p-8 shadow-2xl border border-[var(--border)] space-y-6 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-4">
           <h3 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
             <Cpu class="text-blue-600 dark:text-blue-400" size="24" />

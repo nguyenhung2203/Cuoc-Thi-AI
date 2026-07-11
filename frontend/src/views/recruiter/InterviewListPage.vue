@@ -98,7 +98,7 @@ const formatDate = (isoString) => {
     <Toast v-if="routeMessage" type="success" :message="routeMessage" @close="routeMessage = ''" />
 
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Lịch phỏng vấn</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Quản lý các buổi phỏng vấn trực tiếp với ứng viên.</p>
@@ -106,10 +106,10 @@ const formatDate = (isoString) => {
       <Button @click="router.push('/interviews/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Tạo lịch phỏng vấn
       </Button>
-    </div>
+    </Card>
 
     <!-- Main Content Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <Card class="rounded-2xl shadow-sm overflow-hidden">
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
         <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -162,7 +162,7 @@ const formatDate = (isoString) => {
           </template>
         </Table>
       </div>
-    </div>
+    </Card>
 
     <!-- Modals -->
     <Modal :isOpen="showEnterRoomModal" @close="showEnterRoomModal = false" title="Vào phòng phỏng vấn">

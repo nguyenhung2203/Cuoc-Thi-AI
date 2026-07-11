@@ -38,7 +38,7 @@ func (r *SystemSettingsRepository) ensureTableAndDefault() {
 	}
 
 	defaults := map[string]interface{}{
-		"system_name":                    "WeMake AI Recruitment",
+		"system_name":                    "ViệcLàm AI Platform",
 		"maintenance_mode":               false,
 		"max_upload_size_mb":             20,
 		"default_passing_score":          70,

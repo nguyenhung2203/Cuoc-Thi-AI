@@ -119,7 +119,7 @@ const handleRetryReport = async () => {
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
     
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 mt-2">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm mt-2">
       <div class="flex items-center gap-4">
         <button @click="router.push('/interviews')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
           <ArrowLeft size="20" />
@@ -130,14 +130,14 @@ const handleRetryReport = async () => {
         </div>
       </div>
       <div class="flex gap-3 no-print">
-        <Button variant="secondary" @click="handleShare" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+        <Button variant="secondary" @click="handleShare" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
           <Share2 size="16" class="mr-1.5" /> Chia sẻ
         </Button>
         <Button @click="handleExportPDF" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
           <Download size="16" class="mr-1.5" /> Xuất PDF
         </Button>
       </div>
-    </div>
+    </Card>
 
     <!-- Loading State -->
     <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
@@ -159,16 +159,16 @@ const handleRetryReport = async () => {
       <!-- Top Overview Stats -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
         <!-- Score Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center items-center">
+        <Card class="rounded-2xl shadow-sm p-6 flex flex-col justify-center items-center">
           <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Điểm tổng quan</p>
           <div class="flex items-baseline gap-1">
-            <span class="text-4xl font-extrabold text-blue-600 dark:text-blue-400 leading-none">{{ report.overall_score }}</span>
+            <span class="text-[28px] font-extrabold text-blue-600 dark:text-blue-400 leading-none">{{ report.overall_score }}</span>
             <span class="text-xl font-bold text-slate-400 dark:text-slate-500">/10</span>
           </div>
-        </div>
+        </Card>
         
         <!-- Recommendation Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center items-center">
+        <Card class="rounded-2xl shadow-sm p-6 flex flex-col justify-center items-center">
           <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Đề xuất từ AI</p>
           <span 
             class="px-4 py-1.5 text-sm font-bold uppercase tracking-wider rounded-full border"
@@ -179,7 +179,7 @@ const handleRetryReport = async () => {
           >
             {{ report.ai_recommendation === 'hire' ? 'Nên tuyển (Hire)' : report.ai_recommendation }}
           </span>
-        </div>
+        </Card>
         
         <!-- Core Feedback Card -->
         <div class="md:col-span-2 bg-blue-50/50 dark:bg-blue-500/5 rounded-2xl shadow-sm border border-blue-100/50 dark:border-blue-500/10 p-6">
@@ -192,7 +192,7 @@ const handleRetryReport = async () => {
         
         <!-- Left Column: Scores & Decision -->
         <div class="space-y-6">
-          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <Card class="rounded-2xl shadow-sm p-6">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5">Điểm chi tiết (Rubric)</h2>
             <div class="space-y-5">
               <div v-if="!report.rubric_scores || report.rubric_scores.length === 0" class="text-center py-8 text-slate-500 dark:text-slate-400">
@@ -208,9 +208,9 @@ const handleRetryReport = async () => {
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
           
-          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <Card class="rounded-2xl shadow-sm p-6">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-5">Quyết định của Bạn</h2>
             <div class="space-y-4">
               <div class="space-y-2">
@@ -235,14 +235,14 @@ const handleRetryReport = async () => {
                 <Save size="16" class="mr-1.5" /> Lưu quyết định
               </Button>
             </div>
-          </div>
+          </Card>
         </div>
 
         <!-- Right Column: Insights & Evidence -->
         <div class="lg:col-span-2 space-y-6">
           
           <!-- Strengths & Weaknesses -->
-          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-blue-500">
+          <Card class="rounded-2xl shadow-sm p-6 border-t-4 border-t-blue-500">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Phân tích Điểm mạnh & Rủi ro</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -272,10 +272,10 @@ const handleRetryReport = async () => {
                 </ul>
               </div>
             </div>
-          </div>
+          </Card>
 
           <!-- Transcript Highlights -->
-          <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <Card class="rounded-2xl shadow-sm p-6">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
               <FileText size="18" class="text-blue-500" /> Trích xuất Transcript (Bằng chứng)
             </h2>
@@ -297,7 +297,7 @@ const handleRetryReport = async () => {
             <Button @click="handleViewTranscripts" variant="ghost" class="w-full mt-6 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 border-none font-semibold transition-colors">
               <FileText size="16" class="mr-1.5" /> Xem toàn bộ Transcript
             </Button>
-          </div>
+          </Card>
 
         </div>
       </div>
@@ -305,7 +305,7 @@ const handleRetryReport = async () => {
     
     <!-- Transcripts Modal -->
     <div v-if="showTranscriptModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div class="bg-[var(--surface)] rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden border border-[var(--border)]">
         <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
           <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <FileText size="18" class="text-blue-500" /> Toàn bộ Transcript
@@ -322,7 +322,7 @@ const handleRetryReport = async () => {
           <div v-else-if="!fullTranscripts.length" class="text-center text-slate-500 py-10">
              Chưa có dữ liệu transcript nào.
           </div>
-          <div v-else v-for="t in fullTranscripts" :key="t.id" class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
+          <div v-else v-for="t in fullTranscripts" :key="t.id" class="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm relative">
             <div class="flex items-center justify-between mb-2">
                <span class="font-bold text-sm" :class="t.speaker_type === 'recruiter' ? 'text-blue-600' : 'text-emerald-600'">
                  {{ t.speaker_name }}
@@ -334,7 +334,7 @@ const handleRetryReport = async () => {
             <p class="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{{ t.content }}</p>
           </div>
         </div>
-        <div class="p-4 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex justify-end">
+        <div class="p-4 border-t border-[var(--border)] bg-[var(--surface)] flex justify-end">
           <Button @click="showTranscriptModal = false" variant="ghost" class="text-slate-600 dark:text-slate-300">Đóng</Button>
         </div>
       </div>

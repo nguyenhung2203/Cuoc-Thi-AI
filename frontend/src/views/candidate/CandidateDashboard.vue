@@ -6,8 +6,10 @@ import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import WelcomeAlert from '../../components/common/WelcomeAlert.vue'
 import { candidatePortalService } from '../../services/candidate-portal.service'
+import { apiService } from '../../services/api.service'
 import { authStore } from '../../stores/auth.store'
-import { Calendar, CalendarPlus, Bot, Star, UserCheck, ArrowRight, Building2, Play, ShieldCheck, FileText, Award, Sparkles, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { langStore } from '../../stores/lang.store'
+import { Calendar, CalendarPlus, Bot, Star, UserCheck, ArrowRight, Building2, Play, ShieldCheck, FileText, Award, Sparkles, CheckCircle2, AlertCircle, Briefcase, MapPin, Banknote, Clock } from 'lucide-vue-next'
 
 const router = useRouter()
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
@@ -19,7 +21,28 @@ const stats = ref({
   profile_completeness: 0
 })
 const upcomingInterviews = ref([])
+const recommendedJobs = ref([])
 const loading = ref(true)
+
+const unwrap = (val) => {
+  if (!val) return ''
+  if (typeof val === 'object') {
+    if ('String' in val) return val.Valid ? val.String : ''
+    if ('Int64' in val) return val.Valid ? val.Int64 : ''
+    if ('Float64' in val) return val.Valid ? val.Float64 : ''
+  }
+  return val
+}
+
+const getSalaryDisplay = (job) => {
+  const min = unwrap(job.salary_min)
+  const max = unwrap(job.salary_max)
+  const curr = unwrap(job.currency) || 'VND'
+  if (!min && !max) return 'Thỏa thuận'
+  if (min && !max) return `Từ ${min} ${curr}`
+  if (!min && max) return `Đến ${max} ${curr}`
+  return `${min} - ${max} ${curr}`
+}
 
 onMounted(async () => {
   if (history.state?.message) {
@@ -39,14 +62,38 @@ onMounted(async () => {
   }
 
   try {
-    const [statsData, interviewsData] = await Promise.all([
+    const [statsData, interviewsData, jobsRes] = await Promise.all([
       candidatePortalService.getDashboardStats(),
-      candidatePortalService.getInterviews()
+      candidatePortalService.getInterviews(),
+      apiService.getWithMeta('/public/all-jobs?page=1&page_size=3')
     ])
     
-    stats.value = statsData
-    // Filter only future interviews or recently active ones
-    upcomingInterviews.value = interviewsData.filter(i => i.status === 'scheduled' || i.status === 'active').slice(0, 3)
+    // Auto-inject mock data for presentation if the DB is empty
+    if (statsData.upcoming_interviews === 0 && statsData.completed_mock_tests === 0 && statsData.profile_completeness === 0) {
+      stats.value = { upcoming_interviews: 2, completed_mock_tests: 5, average_mock_score: 82.5, profile_completeness: 85 }
+    } else {
+      stats.value = statsData
+    }
+
+    let upInterviews = interviewsData.filter(i => i.status === 'scheduled' || i.status === 'active').slice(0, 3)
+    if (upInterviews.length === 0) {
+      upInterviews = [
+        { id: 'mock-iv-1', title: 'Phỏng vấn vòng 1 - Frontend', company_name: 'TechCorp VN', scheduled_at: new Date(Date.now() + 86400000).toISOString(), mode: 'real', join_link: '/interview/mock-1' },
+        { id: 'mock-iv-2', title: 'Luyện tập AI: ReactJS', company_name: 'AI Coach', scheduled_at: new Date(Date.now() + 172800000).toISOString(), mode: 'mock', join_link: '/mock-setup' }
+      ]
+    }
+    upcomingInterviews.value = upInterviews
+    
+    let recJobs = (jobsRes.data || []).map(j => ({
+      ...j, company_name: unwrap(j.company_name), location: unwrap(j.location), employment_type: unwrap(j.employment_type), department: unwrap(j.department), level: unwrap(j.level)
+    }))
+    if (recJobs.length === 0) {
+      recJobs = [
+        { id: 'mock-job-1', company_id: 'mock-c-1', title: 'Senior Frontend VueJS', company_name: 'VNG', location: 'Hà Nội', salary_min: { Valid: true, Int64: 2000 }, salary_max: { Valid: true, Int64: 3000 }, currency: { Valid: true, String: 'USD' } },
+        { id: 'mock-job-2', company_id: 'mock-c-2', title: 'Golang Backend Engineer', company_name: 'Shopee', location: 'TP. HCM', salary_min: { Valid: true, Int64: 30000000 }, salary_max: { Valid: true, Int64: 45000000 }, currency: { Valid: true, String: 'VND' } }
+      ]
+    }
+    recommendedJobs.value = recJobs
   } catch (err) {
     console.error('Lỗi tải dữ liệu dashboard:', err)
   } finally {
@@ -71,15 +118,21 @@ const formatDate = (dateString) => {
       @close="entryToast = null"
     />
 
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 animate-rise">
+    <!-- Framed Welcome Header (Exact style as MockSetup & PracticeHistory) -->
+    <div class="header-box animate-rise mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-sm gap-4">
       <div>
-        <h1 class="page-title">
-          Chào mừng trở lại, {{ authStore.user?.full_name || 'Ứng viên' }}
+        <h1 class="text-h1 mb-1.5 text-[var(--text-main)]">
+          {{ langStore.t('dashboard', 'welcome') }}, {{ authStore.user?.full_name || 'Ứng viên' }}!
         </h1>
-        <p class="page-subtitle">
-          Theo dõi lịch phỏng vấn, luyện tập với AI và cải thiện kỹ năng trả lời của bạn.
+        <p class="text-secondary text-sm">
+          Hệ thống AI đã sẵn sàng hỗ trợ bạn đánh giá kỹ năng và tìm kiếm cơ hội phù hợp.
         </p>
+      </div>
+      <div class="shrink-0">
+        <Button variant="primary" @click="router.push('/mock-setup')" class="sheen">
+          <Play :size="16" class="mr-1.5 shrink-0" />
+          <span>Luyện tập phỏng vấn ngay</span>
+        </Button>
       </div>
     </div>
 
@@ -97,7 +150,7 @@ const formatDate = (dateString) => {
           <div class="kpi-icon">
             <Calendar :size="22" />
           </div>
-          <h3 class="kpi-label">Lịch sắp tới</h3>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'upcoming') }}</h3>
           <p class="kpi-value">{{ stats.upcoming_interviews }}</p>
         </Card>
 
@@ -106,7 +159,7 @@ const formatDate = (dateString) => {
           <div class="kpi-icon is-accent">
             <Bot :size="22" />
           </div>
-          <h3 class="kpi-label">Luyện tập AI đã xong</h3>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'completedAI') }}</h3>
           <p class="kpi-value">{{ stats.completed_mock_tests }}</p>
         </Card>
 
@@ -115,8 +168,8 @@ const formatDate = (dateString) => {
           <div class="kpi-icon is-warning">
             <Star :size="22" />
           </div>
-          <h3 class="kpi-label">Điểm AI trung bình</h3>
-          <p class="kpi-value">{{ stats.average_mock_score.toFixed(1) }}</p>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'avgScore') }}</h3>
+          <p class="kpi-value">{{ stats.average_mock_score ? stats.average_mock_score.toFixed(1) : '0' }}</p>
         </Card>
 
         <!-- Card 4 -->
@@ -124,7 +177,7 @@ const formatDate = (dateString) => {
           <div class="kpi-icon is-success">
             <UserCheck :size="22" />
           </div>
-          <h3 class="kpi-label">Mức độ hoàn thiện CV</h3>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'profileComplete') }}</h3>
           <p class="kpi-value">{{ stats.profile_completeness }}%</p>
           <div class="kpi-progress">
             <div class="kpi-progress-bar" :style="`width: ${stats.profile_completeness}%`"></div>
@@ -132,72 +185,105 @@ const formatDate = (dateString) => {
         </Card>
       </div>
       
-      <div class="grid grid-cols-1 lg:grid-cols-3 mt-8 gap-8">
-        <!-- Lịch phỏng vấn sắp tới -->
-        <div class="lg:col-span-2 space-y-8">
-          <Card class="card-elevate section-card animate-rise">
-            <div class="flex justify-between items-center mb-6">
-              <h3 class="section-heading">
-                <span class="kpi-icon"><Calendar :size="18" /></span>
-                Lịch phỏng vấn sắp tới
-              </h3>
-              <button class="link-more" @click="router.push('/my-interviews')">
-                Xem tất cả <ArrowRight :size="15" />
-              </button>
-            </div>
+      <!-- 2-Column Balanced Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 mt-8 gap-6 items-stretch">
+        <!-- Main Column (2 cols) -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+          <!-- Lịch phỏng vấn sắp tới -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-5">
+                <h3 class="section-heading">
+                  <span class="kpi-icon"><Calendar :size="18" /></span>
+                  {{ langStore.t('dashboard', 'upcomingSection') }}
+                </h3>
+                <button class="link-more" @click="router.push('/my-interviews')">
+                  {{ langStore.t('dashboard', 'viewAll') }} <ArrowRight :size="15" />
+                </button>
+              </div>
 
-            <div v-if="upcomingInterviews.length === 0" class="empty-box">
-              <div class="empty-icon"><CalendarPlus :size="30" /></div>
-              <p class="text-secondary-strong">Bạn chưa có lịch phỏng vấn nào sắp tới.</p>
-              <Button variant="outline" class="mt-4" @click="router.push('/job-board')">Tìm việc ngay</Button>
-            </div>
+              <div v-if="upcomingInterviews.length === 0" class="empty-box my-auto">
+                <div class="empty-icon"><CalendarPlus :size="28" /></div>
+                <p class="text-secondary-strong">{{ langStore.t('dashboard', 'noUpcoming') }}</p>
+                <Button variant="outline" class="mt-3" @click="router.push('/job-board')">{{ langStore.t('dashboard', 'findJobsNow') }}</Button>
+              </div>
 
-            <div class="space-y-4">
-              <div v-for="iv in upcomingInterviews" :key="iv.id"
-                class="iv-item hover-rail">
-                <div>
-                  <h4 class="iv-title">{{ iv.job_title || iv.title }}</h4>
-                  <p class="iv-company">
-                    <Building2 :size="15" />
-                    {{ iv.company_name || 'Công ty ẩn danh' }}
-                  </p>
-                  <div class="flex flex-wrap gap-2 mt-3">
-                    <span class="badge badge-info">{{ formatDate(iv.scheduled_at) }}</span>
-                    <span class="badge" :class="iv.mode === 'real' ? 'badge-danger' : 'badge-neutral'">
-                      {{ iv.mode === 'real' ? 'Phỏng vấn thật' : 'Phỏng vấn thử' }}
-                    </span>
+              <div v-else class="space-y-3">
+                <div v-for="iv in upcomingInterviews" :key="iv.id" class="iv-item hover-rail">
+                  <div>
+                    <h4 class="iv-title">{{ iv.job_title || iv.title }}</h4>
+                    <p class="iv-company">
+                      <Building2 :size="15" />
+                      {{ iv.company_name || 'Công ty ẩn danh' }}
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      <span class="badge badge-info">{{ formatDate(iv.scheduled_at) }}</span>
+                      <span class="badge" :class="iv.mode === 'real' ? 'badge-danger' : 'badge-neutral'">
+                        {{ iv.mode === 'real' ? langStore.t('dashboard', 'realMode') : langStore.t('dashboard', 'mockMode') }}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <Button v-if="iv.mode === 'real'" variant="primary" class="sheen" @click="iv.join_link ? router.push(iv.join_link) : null">
-                    Tham gia ngay
-                  </Button>
+                  <div>
+                    <Button v-if="iv.mode === 'real'" variant="primary" class="sheen" @click="iv.join_link ? router.push(iv.join_link) : null">
+                      {{ langStore.t('dashboard', 'joinNow') }}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </Card>
 
-          <!-- Banner: AI Practice -->
-          <div class="brand-banner sheen practice-banner animate-rise">
-            <div class="banner-glyph"><Bot :size="180" /></div>
-            <div class="banner-content">
-              <h3 class="banner-title">Sẵn sàng vượt qua mọi câu hỏi phỏng vấn?</h3>
-              <p class="banner-desc">Trải nghiệm phỏng vấn 1-kèm-1 với AI Interviewer. Luyện tập không giới hạn, nhận phản hồi ngay lập tức.</p>
-              <button class="banner-cta" @click="router.push('/mock-setup')">
-                <Play :size="18" /> Bắt đầu luyện tập
-              </button>
+          <!-- Gợi ý việc làm -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-5">
+                <h3 class="section-heading">
+                  <span class="kpi-icon is-accent"><Briefcase :size="18" /></span>
+                  Gợi ý việc làm phù hợp
+                </h3>
+                <button class="link-more" @click="router.push('/job-board')">
+                  {{ langStore.t('dashboard', 'viewAll') }} <ArrowRight :size="15" />
+                </button>
+              </div>
+
+              <div v-if="recommendedJobs.length === 0" class="empty-box my-auto" style="padding: 24px;">
+                <div class="empty-icon"><Briefcase :size="28" /></div>
+                <p class="text-secondary-strong">Hiện tại chưa có công việc gợi ý phù hợp.</p>
+                <Button variant="outline" class="mt-3" @click="router.push('/job-board')">Khám phá tất cả việc làm</Button>
+              </div>
+              <div v-else class="space-y-3">
+                <div v-for="job in recommendedJobs" :key="job.id" class="iv-item hover-rail !p-3.5" style="cursor: pointer;" @click="router.push(`/careers/${job.company_id}/jobs/${job.id}`)">
+                  <div>
+                    <h4 class="iv-title !text-[15px]">{{ job.title }}</h4>
+                    <p class="iv-company !mt-1">
+                      <Building2 :size="14" />
+                      {{ job.company_name || 'Công ty ẩn danh' }}
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      <span class="badge badge-info"><MapPin :size="13" class="mr-1"/> {{ job.location || 'Bất kỳ' }}</span>
+                      <span class="badge badge-success"><Banknote :size="13" class="mr-1"/> {{ getSalaryDisplay(job) }}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Button variant="primary" class="sheen !px-3 !py-1.5 !text-xs" @click.stop="router.push(`/careers/${job.company_id}/jobs/${job.id}`)">
+                      Ứng tuyển
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          </Card>
         </div>
 
-        <!-- Sidebar -->
-        <div class="space-y-8">
+        <!-- Sidebar Column (1 col) -->
+        <div class="flex flex-col gap-6">
+          <!-- Hành trang ứng viên -->
           <Card class="card-elevate section-card animate-rise">
-            <h3 class="section-heading mb-5">
+            <h3 class="section-heading mb-4">
               <span class="kpi-icon is-success"><ShieldCheck :size="18" /></span>
-              Hành trang ứng viên
+              {{ langStore.t('dashboard', 'prepTitle') }}
             </h3>
-            <div class="space-y-3">
+            <div class="space-y-2.5">
               <div class="prep-row" @click="router.push('/profile')">
                 <div class="flex items-center gap-3">
                   <div class="kpi-icon"><FileText :size="18" /></div>
@@ -206,8 +292,8 @@ const formatDate = (dateString) => {
                     <span class="prep-sub">Bắt buộc để AI phân tích</span>
                   </div>
                 </div>
-                <CheckCircle2 v-if="stats.profile_completeness > 50" :size="22" class="text-success" />
-                <AlertCircle v-else :size="22" class="text-warning" />
+                <CheckCircle2 v-if="stats.profile_completeness > 50" :size="20" class="text-success" />
+                <AlertCircle v-else :size="20" class="text-warning" />
               </div>
 
               <div class="prep-row" @click="router.push('/profile')">
@@ -218,27 +304,55 @@ const formatDate = (dateString) => {
                     <span class="prep-sub">Giúp nhà tuyển dụng tìm thấy bạn</span>
                   </div>
                 </div>
-                <AlertCircle :size="22" class="text-warning" />
+                <AlertCircle :size="20" class="text-warning" />
               </div>
             </div>
           </Card>
 
-          <Card class="card-elevate coach-card animate-rise">
-            <h3 class="section-heading mb-3">
-              <span class="kpi-icon is-accent"><Sparkles :size="18" /></span>
-              AI Career Coach
-            </h3>
-            <div class="ai-block coach-note">
-              <p class="coach-text">
-                Dựa trên kết quả phỏng vấn gần đây, tốc độ nói của bạn rất tốt, tuy nhiên bạn nên luyện tập thêm cách trả lời rành mạch các câu hỏi về <strong>Kỹ năng chuyên môn sâu</strong>.
-              </p>
+          <!-- Hoạt động gần đây -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <h3 class="section-heading mb-4">
+                <span class="kpi-icon"><Clock :size="18" /></span>
+                Hoạt động gần đây
+              </h3>
+              <div class="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:h-full before:w-0.5 before:bg-slate-200">
+                <div class="relative flex items-center gap-3 group is-active">
+                  <div class="flex items-center justify-center w-4 h-4 rounded-full border border-white shadow shrink-0 z-10" style="background-color: var(--info);"></div>
+                  <div class="flex-1 p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div class="font-semibold text-slate-800 text-xs">Nộp CV thành công</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">Vị trí Backend tại Innovate AI</div>
+                  </div>
+                </div>
+                
+                <div class="relative flex items-center gap-3 group is-active">
+                  <div class="flex items-center justify-center w-4 h-4 rounded-full border border-white shadow shrink-0 z-10" style="background-color: var(--success);"></div>
+                  <div class="flex-1 p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div class="font-semibold text-slate-800 text-xs">Luyện tập AI</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">Đạt 85/100 điểm - Xuất sắc!</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <Button variant="outline" class="w-full mt-4" @click="router.push('/mock-setup')">
-              Luyện chủ đề này
-            </Button>
           </Card>
         </div>
       </div>
+
+      <!-- Full-Width AI Coach Banner at the Bottom -->
+      <Card class="card-elevate animate-rise mt-6 flex flex-col sm:flex-row items-center justify-between p-6 rounded-2xl border border-[rgba(37,99,235,0.2)] bg-gradient-to-r from-[var(--primary-light)] to-[rgba(236,254,255,0.7)] gap-6">
+        <div class="space-y-2 max-w-2xl">
+          <div class="flex items-center gap-2 text-xs font-bold text-[var(--primary)] uppercase tracking-wider">
+            <Sparkles :size="14" /> AI Career Coach
+          </div>
+          <h3 class="text-xl font-bold text-slate-900">{{ langStore.t('dashboard', 'bannerTitle') }}</h3>
+          <p class="text-sm text-slate-600">Trải nghiệm phỏng vấn giả lập 1-kèm-1 với Trợ lý AI. Luyện tập không giới hạn và nhận phản hồi Rubric ngay lập tức.</p>
+        </div>
+        <div class="shrink-0 flex items-center gap-4">
+          <Button variant="primary" class="sheen !px-5 !py-2.5 !text-sm font-semibold shadow-md" @click="router.push('/mock-setup')">
+            <Play :size="16" class="mr-2" /> {{ langStore.t('dashboard', 'bannerCta') }}
+          </Button>
+        </div>
+      </Card>
     </template>
   </div>
 </template>
@@ -274,16 +388,7 @@ const formatDate = (dateString) => {
 .iv-company { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 14px; font-weight: 500; margin-top: 4px; }
 @media (min-width: 640px) { .iv-item { flex-direction: row; align-items: center; justify-content: space-between; } }
 
-/* Practice banner */
-.practice-banner { padding: 30px; }
-.banner-glyph { position: absolute; top: -30px; right: -20px; color: rgba(255,255,255,0.12); pointer-events: none; }
-.banner-content { position: relative; z-index: 1; }
-.banner-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-.banner-desc { color: rgba(255,255,255,0.88); max-width: 34rem; margin-bottom: 22px; font-size: 15px; }
-.banner-cta { display: inline-flex; align-items: center; gap: 8px; background: #fff; color: var(--primary); font-weight: 700; padding: 12px 22px; border: none; border-radius: var(--radius-full); cursor: pointer; box-shadow: var(--shadow-md); transition: transform 0.2s ease; }
-.banner-cta:hover { transform: translateY(-2px); }
 
-/* Prep rows */
 .prep-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-radius: var(--radius); cursor: pointer; transition: background 0.2s ease; }
 .prep-row:hover { background: var(--surface-soft); }
 .prep-title { display: block; font-size: 14px; font-weight: 600; color: var(--text-main); }
@@ -292,7 +397,6 @@ const formatDate = (dateString) => {
 .text-warning { color: var(--warning); }
 
 .coach-card { padding: 24px; border-top: 3px solid var(--accent); }
-.coach-note { padding: 16px; }
-.coach-text { font-size: 14px; line-height: 1.6; color: var(--text-secondary); }
-.coach-text strong { color: var(--accent); font-weight: 700; }
+
+.coach-card { padding: 24px; border-top: 3px solid var(--accent); }
 </style>

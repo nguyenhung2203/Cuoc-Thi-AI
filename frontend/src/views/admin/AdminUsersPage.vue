@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
 import { Users, Search, CheckCircle2, XCircle, Shield, FileText, Clock, RefreshCw, Filter, UserCheck } from 'lucide-vue-next'
 
@@ -91,7 +92,7 @@ onMounted(() => {
 <template>
   <div class="space-y-6 animate-fade-in">
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
           <Users size="26" class="text-blue-600 dark:text-blue-400" />
@@ -108,10 +109,10 @@ onMounted(() => {
       >
         <RefreshCw size="16" :class="{ 'animate-spin': loading }" /> Làm mới danh sách
       </button>
-    </div>
+    </Card>
 
     <!-- Filters Bar & Tabs -->
-    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <Card class="p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <!-- Tabs -->
       <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-900/60 p-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
         <button 
@@ -162,10 +163,10 @@ onMounted(() => {
           <option value="admin">Quản trị viên</option>
         </select>
       </div>
-    </div>
+    </Card>
 
     <!-- Data Table Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <Card class="rounded-2xl shadow-sm overflow-hidden">
       <!-- Loading Skeleton -->
       <div v-if="loading" class="p-12 text-center space-y-4">
         <div class="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -302,6 +303,6 @@ onMounted(() => {
           {{ activeTab === 'pending' ? 'Tất cả các nhà tuyển dụng đăng ký mới đã được xét duyệt xong!' : 'Chưa có tài khoản nào khớp với từ khóa tìm kiếm của bạn.' }}
         </p>
       </div>
-    </div>
+    </Card>
   </div>
 </template>

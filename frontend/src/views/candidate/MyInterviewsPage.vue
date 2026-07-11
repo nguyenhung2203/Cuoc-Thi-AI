@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import Button from '../../components/common/AppButton.vue'
 import { CalendarDays, Building2, Clock, Video } from 'lucide-vue-next'
+import { langStore } from '../../stores/lang.store'
 
 const router = useRouter()
 const interviews = ref([])
@@ -29,21 +30,29 @@ const formatDate = (dateString) => {
 
 <template>
   <div class="space-y-8 pb-12 max-w-6xl mx-auto px-4 md:px-0">
-    <div class="page-head animate-rise">
-      <h1 class="page-title">Phỏng vấn của tôi</h1>
-      <p class="page-subtitle">Quản lý các lịch phỏng vấn sắp tới và lịch sử phỏng vấn.</p>
+    <div class="header-box animate-rise flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-sm gap-4">
+      <div>
+        <h1 class="text-h1 mb-1.5 text-[var(--text-main)]">{{ langStore.t('interviews', 'title') }}</h1>
+        <p class="text-secondary text-sm">{{ langStore.t('interviews', 'subtitle') }}</p>
+      </div>
+      <div class="shrink-0">
+        <Button variant="primary" @click="router.push('/mock-setup')" class="sheen">
+          <Video :size="16" class="mr-1.5 shrink-0" />
+          <span>Luyện tập với AI ngay</span>
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex flex-col items-center justify-center py-20">
       <div class="mi-spinner mb-4"></div>
-      <p class="text-helper">Đang tải danh sách phỏng vấn...</p>
+      <p class="text-helper">{{ langStore.t('interviews', 'loadingText') }}</p>
     </div>
 
     <div v-else-if="interviews.length === 0" class="mi-empty">
       <div class="mi-empty-icon"><CalendarDays :size="34" /></div>
-      <h2 class="mi-empty-title">Chưa có lịch phỏng vấn</h2>
+      <h2 class="mi-empty-title">{{ langStore.t('interviews', 'emptyTitle') }}</h2>
       <p class="mi-empty-desc">
-        Bạn hiện chưa có lịch phỏng vấn nào sắp tới. Khi nhà tuyển dụng gửi lời mời, lịch sẽ xuất hiện tại đây.
+        {{ langStore.t('interviews', 'emptyDesc') }}
       </p>
     </div>
 
@@ -61,10 +70,10 @@ const formatDate = (dateString) => {
               <Clock :size="14" /> {{ formatDate(iv.scheduled_at) }}
             </span>
             <span class="badge" :class="iv.mode === 'real' ? 'badge-danger' : 'badge-neutral'">
-              {{ iv.mode === 'real' ? 'Phỏng vấn thật' : 'Phỏng vấn thử' }}
+              {{ iv.mode === 'real' ? langStore.t('interviews', 'realMode') : langStore.t('interviews', 'mockMode') }}
             </span>
-            <span v-if="iv.status === 'completed'" class="badge badge-success">Đã hoàn thành</span>
-            <span v-else-if="iv.status === 'cancelled'" class="badge badge-warning">Đã hủy</span>
+            <span v-if="iv.status === 'completed'" class="badge badge-success">{{ langStore.t('interviews', 'completed') }}</span>
+            <span v-else-if="iv.status === 'cancelled'" class="badge badge-warning">{{ langStore.t('interviews', 'cancelled') }}</span>
           </div>
         </div>
 
@@ -74,7 +83,7 @@ const formatDate = (dateString) => {
             variant="primary"
             class="sheen w-full md:w-auto"
             @click="iv.join_link ? router.push(iv.join_link) : null">
-            <Video :size="16" /> Tham gia
+            <Video :size="16" /> {{ langStore.t('interviews', 'joinBtn') }}
           </Button>
         </div>
       </div>
@@ -83,7 +92,6 @@ const formatDate = (dateString) => {
 </template>
 
 <style scoped>
-.page-head { border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 .mi-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--primary-light); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

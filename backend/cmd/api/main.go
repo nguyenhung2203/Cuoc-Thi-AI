@@ -188,6 +188,7 @@ func main() {
 		r.Route("/public", func(r chi.Router) {
 			publicJobHandler := handler.NewPublicJobHandler(jobSvc)
 			publicJobHandler.Routes(r)
+			r.Get("/companies/{company_id}", companyHandler.Get)
 		})
 
 		r.Route("/interviews", func(r chi.Router) {

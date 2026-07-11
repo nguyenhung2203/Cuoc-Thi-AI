@@ -6,6 +6,8 @@ import App from './App.vue'
 import router from './router'
 
 import { authStore } from './stores/auth.store'
+import { langStore } from './stores/lang.store'
+import { usePlatformStore } from './stores/platform.store'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -16,4 +18,11 @@ app.use(pinia)
 authStore.init().finally(() => {
   app.use(router)
   app.mount('#app')
+  
+  // Khởi tạo MutationObserver dịch tự động toàn cục
+  langStore.initAutoTranslator()
+
+  // Khởi tạo cấu hình thương hiệu từ Platform Store
+  const platformStore = usePlatformStore()
+  platformStore.init()
 })

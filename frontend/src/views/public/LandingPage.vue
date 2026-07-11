@@ -1,10 +1,20 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { Sparkles, BrainCircuit, Video, FileText, BarChart3, CheckCircle2, ArrowRight, ShieldCheck, Bot, ChevronDown, Star } from 'lucide-vue-next'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { langStore } from '../../stores/lang.store'
+import { authStore } from '../../stores/auth.store'
 
 const router = useRouter()
-const handleGetStarted = () => router.push('/login')
+const handleGetStarted = () => {
+  if (authStore.isAuthenticated && authStore.user?.role === 'candidate') {
+    router.push('/mock-setup')
+  } else {
+    router.push('/login')
+  }
+}
+
+const isCandidate = computed(() => authStore.isAuthenticated && authStore.user?.role === 'candidate')
 
 const currentImageIndex = ref(0)
 const images = ['/images/hero_office.png', '/images/hero_network.png', '/images/hero_dashboard.png']
@@ -49,13 +59,15 @@ onMounted(() => {
     })
   })
 
-  // Reveal on scroll — theo dõi cả section và lưới con, cuộn lên/xuống đều hiện lại
+  // Reveal on scroll — hiện dần khi cuộn tới rồi giữ luôn (tránh nội dung nhấp nháy/biến mất)
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) entry.target.classList.add('visible')
-      else entry.target.classList.remove('visible')
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible')
+        observer.unobserve(entry.target)
+      }
     })
-  }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' })
+  }, { threshold: 0.1, rootMargin: '0px 0px -8% 0px' })
   document.querySelectorAll('.animate-on-scroll, .reveal-children').forEach((el) => observer.observe(el))
 
   carouselInterval = setInterval(() => {
@@ -97,23 +109,23 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
         <div class="hero-copy">
           <div class="hero-badge fade-in-up" style="animation-delay: 0.05s">
             <Sparkles :size="16" />
-            <span>Giải pháp Chuyển đổi số Tuyển dụng 2026</span>
+            <span>{{ langStore.t('landing', 'badge') }}</span>
           </div>
 
           <h1 class="hero-title fade-in-up" style="animation-delay: 0.15s">
-            Tương lai của Tuyển dụng
-            <span class="hero-title-accent">Phỏng vấn thông minh cùng AI</span>
+            {{ langStore.t('landing', 'heroTitle') }}
+            <span class="hero-title-accent">{{ langStore.t('landing', 'heroAccent') }}</span>
           </h1>
 
           <p class="hero-subtitle fade-in-up" style="animation-delay: 0.25s">
-            Tự động bóc tách CV, chấm độ phù hợp với JD và phỏng vấn trực tuyến tích hợp trí tuệ nhân tạo. Chấm dứt kỷ nguyên lọc hồ sơ thủ công.
+            {{ langStore.t('landing', 'heroSub') }}
           </p>
 
           <div class="hero-actions fade-in-up" style="animation-delay: 0.35s">
             <button class="btn-primary-glow sheen" @click="handleGetStarted">
-              Trải nghiệm ngay <ArrowRight :size="18" style="margin-left: 8px" />
+              {{ langStore.t('landing', 'btnTry') }} <ArrowRight :size="18" style="margin-left: 8px" />
             </button>
-            <button class="btn-glass" @click="handleGetStarted">Luyện tập phỏng vấn</button>
+            <button class="btn-glass" @click="handleGetStarted">{{ langStore.t('landing', 'btnPractice') }}</button>
           </div>
 
           <div class="hero-trust fade-in-up" style="animation-delay: 0.45s">
@@ -122,7 +134,7 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
             </div>
             <div class="trust-text">
               <div class="trust-stars"><Star :size="14" fill="currentColor" /><Star :size="14" fill="currentColor" /><Star :size="14" fill="currentColor" /><Star :size="14" fill="currentColor" /><Star :size="14" fill="currentColor" /></div>
-              <span>Được tin dùng bởi hàng ngàn chuyên gia HR</span>
+              <span>{{ langStore.t('landing', 'trusted') }}</span>
             </div>
           </div>
         </div>
@@ -155,10 +167,10 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
             </div>
 
             <div class="float-chip chip-cv" style="transform: translateZ(110px);">
-              <FileText :size="16" /> CV.pdf đã bóc tách
+              <FileText :size="16" /> {{ langStore.t('landing', 'chipCv') }}
             </div>
             <div class="float-chip chip-radar" style="transform: translateZ(120px);">
-              <BarChart3 :size="16" /> Báo cáo Radar
+              <BarChart3 :size="16" /> {{ langStore.t('landing', 'chipRadar') }}
             </div>
           </div>
         </div>
@@ -170,10 +182,10 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <!-- 2. STATS -->
     <section class="stats-section animate-on-scroll fade-in-up">
       <div class="section-inner stats-grid reveal-children" data-stagger>
-        <div class="stat-card"><div class="stat-value gradient-text">98%</div><div class="stat-label">Độ chính xác AI Parsing</div></div>
-        <div class="stat-card"><div class="stat-value gradient-text">&lt; 2s</div><div class="stat-label">Tốc độ xử lý mỗi CV</div></div>
-        <div class="stat-card"><div class="stat-value gradient-text">-80%</div><div class="stat-label">Thời gian lọc hồ sơ</div></div>
-        <div class="stat-card"><div class="stat-value gradient-text">24/7</div><div class="stat-label">Luyện tập Mock Interview</div></div>
+        <div class="stat-card"><div class="stat-value gradient-text">98%</div><div class="stat-label">{{ langStore.t('landing', 'statsTitle1') }}</div></div>
+        <div class="stat-card"><div class="stat-value gradient-text">&lt; 2s</div><div class="stat-label">{{ langStore.t('landing', 'statsTitle2') }}</div></div>
+        <div class="stat-card"><div class="stat-value gradient-text">-80%</div><div class="stat-label">{{ langStore.t('landing', 'statsTitle3') }}</div></div>
+        <div class="stat-card"><div class="stat-value gradient-text">24/7</div><div class="stat-label">{{ langStore.t('landing', 'statsTitle4') }}</div></div>
       </div>
     </section>
 
@@ -181,39 +193,68 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="features-section animate-on-scroll fade-in-up">
       <div class="section-inner">
         <div class="section-header">
-          <h2 class="section-title">Tất cả trong <span class="gradient-text">một nền tảng</span></h2>
-          <p class="section-subtitle">Từ sàng lọc hồ sơ đến quyết định tuyển dụng — mọi công đoạn đều được AI hỗ trợ.</p>
+          <h2 class="section-title">{{ langStore.t('landing', 'featuresHeading') }} <span class="gradient-text">{{ langStore.t('landing', 'featuresHeadingAccent') }}</span></h2>
+          <p class="section-subtitle">{{ langStore.t('landing', 'featuresSub') }}</p>
         </div>
         <div class="feature-grid reveal-children" data-stagger>
           <div class="feature-card tilt-3d">
             <div class="feature-icon"><FileText :size="24" /></div>
-            <h3>Bóc tách CV tự động</h3>
-            <p>Số hóa mọi định dạng CV, trích xuất kỹ năng &amp; kinh nghiệm chỉ trong vài giây.</p>
+            <h3>{{ langStore.t('landing', 'f1Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f1Desc') }}</p>
           </div>
           <div class="feature-card tilt-3d">
             <div class="feature-icon is-accent"><BrainCircuit :size="24" /></div>
-            <h3>AI đối chiếu JD</h3>
-            <p>Thuật toán NLP chấm điểm độ phù hợp giữa ứng viên và mô tả công việc.</p>
+            <h3>{{ langStore.t('landing', 'f2Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f2Desc') }}</p>
           </div>
           <div class="feature-card tilt-3d">
             <div class="feature-icon"><Video :size="24" /></div>
-            <h3>Phỏng vấn LiveKit</h3>
-            <p>Phòng họp ảo thời gian thực, tự động ghi âm và bóc băng transcript.</p>
+            <h3>{{ langStore.t('landing', 'f3Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f3Desc') }}</p>
           </div>
           <div class="feature-card tilt-3d">
             <div class="feature-icon is-accent"><Bot :size="24" /></div>
-            <h3>AI Interviewer 24/7</h3>
-            <p>Luyện phỏng vấn thử không giới hạn, nhận feedback chi tiết ngay lập tức.</p>
+            <h3>{{ langStore.t('landing', 'f4Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f4Desc') }}</p>
           </div>
           <div class="feature-card tilt-3d">
             <div class="feature-icon"><BarChart3 :size="24" /></div>
-            <h3>Báo cáo Radar đa chiều</h3>
-            <p>Phân tích điểm mạnh, điểm yếu và gợi ý quyết định Hire / Reject.</p>
+            <h3>{{ langStore.t('landing', 'f5Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f5Desc') }}</p>
           </div>
           <div class="feature-card tilt-3d">
             <div class="feature-icon is-accent"><ShieldCheck :size="24" /></div>
-            <h3>Bảo mật &amp; phân quyền</h3>
-            <p>Dữ liệu tách biệt theo doanh nghiệp, phân quyền chặt chẽ theo vai trò.</p>
+            <h3>{{ langStore.t('landing', 'f6Title') }}</h3>
+            <p>{{ langStore.t('landing', 'f6Desc') }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3b. SHOWCASE (ảnh sản phẩm thật) -->
+    <section class="showcase-section animate-on-scroll fade-in-up">
+      <div class="section-inner showcase-grid">
+        <div class="showcase-copy">
+          <div class="hero-badge dark-badge"><Sparkles :size="16" /><span>{{ langStore.t('landing', 'showcaseBadge') }}</span></div>
+          <h2 class="section-title" style="text-align: left; margin-bottom: 16px;">{{ langStore.t('landing', 'showcaseTitle') }} <span class="gradient-text">{{ langStore.t('landing', 'showcaseTitleAccent') }}</span></h2>
+          <p class="section-subtitle" style="text-align: left; margin: 0 0 28px;">{{ langStore.t('landing', 'showcaseSub') }}</p>
+          <ul class="showcase-list">
+            <li><span class="sc-dot"></span> {{ langStore.t('landing', 'sc1') }}</li>
+            <li><span class="sc-dot"></span> {{ langStore.t('landing', 'sc2') }}</li>
+            <li><span class="sc-dot"></span> {{ langStore.t('landing', 'sc3') }}</li>
+          </ul>
+          <button class="btn-primary-glow sheen" style="margin-top: 28px;" @click="handleGetStarted">
+            {{ langStore.t('landing', 'btnExplore') }} <ArrowRight :size="18" style="margin-left: 8px" />
+          </button>
+        </div>
+
+        <div class="showcase-visual">
+          <div class="browser-frame tilt-3d">
+            <div class="browser-bar">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <div class="browser-url">app.interview-ai.vn/home</div>
+            </div>
+            <img src="/images/hero_dashboard.png" alt="Bảng điều khiển ứng viên" class="browser-img" />
           </div>
         </div>
       </div>
@@ -223,36 +264,36 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="workflow-section animate-on-scroll fade-in-up">
       <div class="section-inner">
         <div class="section-header">
-          <h2 class="section-title">Vận hành xuyên suốt <span class="gradient-text">4 Bước</span></h2>
-          <p class="section-subtitle">Quy trình tuyển dụng được tự động hóa từ khâu tiếp nhận đến khi ra quyết định.</p>
+          <h2 class="section-title">{{ langStore.t('landing', 'wfTitle') }} <span class="gradient-text">{{ langStore.t('landing', 'wfTitleAccent') }}</span></h2>
+          <p class="section-subtitle">{{ langStore.t('landing', 'wfSub') }}</p>
         </div>
         <div class="workflow-steps">
           <div class="step-card">
             <div class="step-number">1</div>
             <div class="step-icon"><FileText :size="28" /></div>
-            <h3>Tải lên JD &amp; CV</h3>
-            <p>Hệ thống tự động số hóa và chuẩn hóa dữ liệu từ mọi định dạng CV.</p>
+            <h3>{{ langStore.t('landing', 'w1Title') }}</h3>
+            <p>{{ langStore.t('landing', 'w1Desc') }}</p>
           </div>
           <div class="step-connector"></div>
           <div class="step-card">
             <div class="step-number">2</div>
             <div class="step-icon"><BrainCircuit :size="28" /></div>
-            <h3>AI Đối chiếu</h3>
-            <p>NLP đối chiếu kỹ năng ứng viên với JD, đưa ra Match Score.</p>
+            <h3>{{ langStore.t('landing', 'w2Title') }}</h3>
+            <p>{{ langStore.t('landing', 'w2Desc') }}</p>
           </div>
           <div class="step-connector"></div>
           <div class="step-card">
             <div class="step-number">3</div>
             <div class="step-icon"><Video :size="28" /></div>
-            <h3>Phỏng vấn LiveKit</h3>
-            <p>Phòng ảo thời gian thực, AI ghi âm, bóc băng và gợi ý câu hỏi.</p>
+            <h3>{{ langStore.t('landing', 'w3Title') }}</h3>
+            <p>{{ langStore.t('landing', 'w3Desc') }}</p>
           </div>
           <div class="step-connector"></div>
           <div class="step-card">
             <div class="step-number">4</div>
             <div class="step-icon"><BarChart3 :size="28" /></div>
-            <h3>Báo cáo Radar</h3>
-            <p>Báo cáo đa chiều về điểm mạnh, yếu và gợi ý quyết định.</p>
+            <h3>{{ langStore.t('landing', 'w4Title') }}</h3>
+            <p>{{ langStore.t('landing', 'w4Desc') }}</p>
           </div>
         </div>
       </div>
@@ -262,28 +303,28 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="audience-section animate-on-scroll fade-in-up">
       <div class="section-inner">
         <div class="section-header">
-          <h2 class="section-title">Đồng hành cùng bạn <span class="gradient-text">trước &amp; sau</span> phỏng vấn</h2>
-          <p class="section-subtitle">Từ lúc chuẩn bị hồ sơ đến khi bước vào buổi phỏng vấn thật, bạn luôn có AI hỗ trợ.</p>
+          <h2 class="section-title">{{ langStore.t('landing', 'audTitle') }} <span class="gradient-text">{{ langStore.t('landing', 'audTitleAccent') }}</span> {{ langStore.t('landing', 'audTitleEnd') }}</h2>
+          <p class="section-subtitle">{{ langStore.t('landing', 'audSub') }}</p>
         </div>
         <div class="audience-grid">
           <div class="audience-card recruiter-card">
             <div class="audience-icon"><FileText :size="30" color="white" /></div>
-            <h2>Chuẩn bị hồ sơ</h2>
+            <h2>{{ langStore.t('landing', 'audRecruiter') }}</h2>
             <ul class="benefit-list">
-              <li><CheckCircle2 :size="20" /> Tải CV lên, AI bóc tách kỹ năng &amp; kinh nghiệm.</li>
-              <li><CheckCircle2 :size="20" /> Biết ngay mức độ phù hợp với từng tin tuyển dụng.</li>
-              <li><CheckCircle2 :size="20" /> Gợi ý điểm cần bổ sung để hồ sơ nổi bật hơn.</li>
-              <li><CheckCircle2 :size="20" /> Ứng tuyển nhanh, theo dõi trạng thái mọi lúc.</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ar1') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ar2') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ar3') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ar4') }}</li>
             </ul>
           </div>
           <div class="audience-card candidate-card">
             <div class="audience-icon is-light"><Bot :size="30" /></div>
-            <h2>Luyện tập &amp; tự tin</h2>
+            <h2>{{ langStore.t('landing', 'audCandidate') }}</h2>
             <ul class="benefit-list">
-              <li><CheckCircle2 :size="20" /> Luyện phỏng vấn với AI Interviewer 24/7.</li>
-              <li><CheckCircle2 :size="20" /> Câu hỏi bám sát vị trí và cấp độ bạn chọn.</li>
-              <li><CheckCircle2 :size="20" /> Nhận feedback chi tiết cho từng câu trả lời.</li>
-              <li><CheckCircle2 :size="20" /> Phỏng vấn ngay trên trình duyệt, không cài App.</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ac1') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ac2') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ac3') }}</li>
+              <li><CheckCircle2 :size="20" /> {{ langStore.t('landing', 'ac4') }}</li>
             </ul>
           </div>
         </div>
@@ -294,24 +335,24 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="testi-section animate-on-scroll fade-in-up">
       <div class="section-inner">
         <div class="section-header">
-          <h2 class="section-title">Mẹo giúp bạn <span class="gradient-text">ghi điểm</span></h2>
-          <p class="section-subtitle">Vài nguyên tắc đơn giản giúp buổi phỏng vấn của bạn thuyết phục hơn.</p>
+          <h2 class="section-title">{{ langStore.t('landing', 'tipsTitle') }} <span class="gradient-text">{{ langStore.t('landing', 'tipsTitleAccent') }}</span></h2>
+          <p class="section-subtitle">{{ langStore.t('landing', 'tipsSub') }}</p>
         </div>
         <div class="testi-grid reveal-children" data-stagger>
           <div class="testi-card tilt-3d">
             <div class="tip-num">01</div>
-            <h3 class="tip-title">Trả lời theo cấu trúc STAR</h3>
-            <p>Với câu hỏi tình huống, hãy nêu rõ Situation – Task – Action – Result để câu trả lời mạch lạc và có kết quả cụ thể.</p>
+            <h3 class="tip-title">{{ langStore.t('landing', 't1Title') }}</h3>
+            <p>{{ langStore.t('landing', 't1Desc') }}</p>
           </div>
           <div class="testi-card tilt-3d">
             <div class="tip-num">02</div>
-            <h3 class="tip-title">Gắn câu trả lời với JD</h3>
-            <p>Đọc kỹ mô tả công việc và dẫn chứng đúng kỹ năng họ cần. Match Score của bạn sẽ cho biết nên nhấn mạnh điều gì.</p>
+            <h3 class="tip-title">{{ langStore.t('landing', 't2Title') }}</h3>
+            <p>{{ langStore.t('landing', 't2Desc') }}</p>
           </div>
           <div class="testi-card tilt-3d">
             <div class="tip-num">03</div>
-            <h3 class="tip-title">Luyện trước khi phỏng vấn thật</h3>
-            <p>Chạy vài buổi Mock Interview với AI, đọc kỹ feedback và cải thiện điểm yếu trước khi bước vào buổi phỏng vấn chính thức.</p>
+            <h3 class="tip-title">{{ langStore.t('landing', 't3Title') }}</h3>
+            <p>{{ langStore.t('landing', 't3Desc') }}</p>
           </div>
         </div>
       </div>
@@ -321,7 +362,7 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="faq-section animate-on-scroll fade-in-up">
       <div class="section-inner faq-inner">
         <div class="section-header">
-          <h2 class="section-title">Câu hỏi <span class="gradient-text">thường gặp</span></h2>
+          <h2 class="section-title">{{ langStore.t('landing', 'faqTitle') }} <span class="gradient-text">{{ langStore.t('landing', 'faqTitleAccent') }}</span></h2>
         </div>
         <div class="faq-list">
           <div v-for="(f, i) in faqs" :key="i" class="faq-item" :class="{ open: openFaq === i }">
@@ -339,10 +380,16 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     <section class="cta-section animate-on-scroll fade-in-up">
       <div class="section-inner">
         <div class="cta-content brand-banner">
-          <h2>Sẵn sàng để thay đổi cách tuyển dụng?</h2>
-          <p>Tham gia cùng hàng ngàn chuyên gia Nhân sự đang sử dụng Interview AI.</p>
+          <h2 v-if="isCandidate">Sẵn sàng chinh phục mọi cuộc phỏng vấn?</h2>
+          <h2 v-else>{{ langStore.t('landing', 'ctaTitle') }}</h2>
+          
+          <p v-if="isCandidate">Nâng cấp kỹ năng với AI Coach, nhận đánh giá chi tiết và tự tin ứng tuyển các công việc mơ ước ngay hôm nay.</p>
+          <p v-else>{{ langStore.t('landing', 'ctaSub') }}</p>
+          
           <button class="cta-btn sheen" @click="handleGetStarted">
-            Bắt đầu miễn phí ngay hôm nay <ArrowRight :size="18" />
+            <span v-if="isCandidate">Luyện tập AI ngay</span>
+            <span v-else>{{ langStore.t('landing', 'ctaBtn') }}</span>
+            <ArrowRight :size="18" />
           </button>
         </div>
       </div>
@@ -443,8 +490,24 @@ section { padding: 80px 20px; width: 100%; }
 .feature-card h3 { font-size: 1.15rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
 .feature-card p { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.55; }
 
+/* ===== 3b. SHOWCASE ===== */
+.showcase-section { background: var(--surface); }
+.showcase-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 56px; align-items: center; }
+.dark-badge { background: var(--primary-light); border: 1px solid transparent; color: var(--primary); margin-bottom: 18px; }
+.dark-badge :deep(svg) { color: var(--primary); }
+.showcase-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
+.showcase-list li { display: flex; align-items: center; gap: 12px; font-size: 1.02rem; font-weight: 500; color: var(--text-secondary); }
+.sc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gradient-brand); flex-shrink: 0; }
+.showcase-visual { perspective: 1200px; }
+.browser-frame { border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 40px 80px -30px rgba(15,23,42,0.4); }
+.browser-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; background: var(--surface-soft); border-bottom: 1px solid var(--border); }
+.browser-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+.browser-bar .dot.r { background: #ef4444; } .browser-bar .dot.y { background: #f59e0b; } .browser-bar .dot.g { background: #22c55e; }
+.browser-url { margin-left: 12px; flex: 1; font-size: 12px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-full); padding: 5px 14px; }
+.browser-img { display: block; width: 100%; height: auto; }
+
 /* ===== 4. WORKFLOW ===== */
-.workflow-section { background: var(--surface); }
+.workflow-section { background: var(--background); }
 .workflow-steps { display: flex; justify-content: space-between; align-items: flex-start; }
 .step-card { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; z-index: 2; }
 .step-number { width: 30px; height: 30px; background: var(--primary); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; margin-bottom: 14px; box-shadow: 0 4px 10px rgba(37,99,235,0.35); }
@@ -523,6 +586,10 @@ section { padding: 80px 20px; width: 100%; }
   .hero-grid { grid-template-columns: 1fr; gap: 40px; text-align: center; }
   .hero-copy { align-items: center; }
   .hero-visual { margin-top: 10px; }
+  .showcase-grid { grid-template-columns: 1fr; gap: 36px; }
+  .showcase-copy { text-align: center; }
+  .showcase-copy .section-title, .showcase-copy .section-subtitle { text-align: center !important; }
+  .showcase-list { align-items: flex-start; max-width: 340px; margin: 0 auto; }
   .workflow-steps { flex-direction: column; gap: 36px; }
   .step-connector { display: none; }
   .step-card { flex-direction: row; text-align: left; align-items: flex-start; gap: 18px; }

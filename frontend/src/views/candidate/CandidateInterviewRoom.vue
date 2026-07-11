@@ -246,8 +246,8 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="flex items-center gap-3 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 shadow-inner">
-        <span class="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-emerald-500" :class="{ 'animate-pulse': roomStore.isConnected }"></span>
+        <span class="text-xs font-medium text-[var(--success)] flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-[var(--success)]" :class="{ 'animate-pulse': roomStore.isConnected }"></span>
           <span class="hidden sm:inline">{{ roomStore.isConnected ? 'Đường truyền tốt' : 'Mất kết nối' }}</span>
         </span>
         <span class="w-px h-3.5 bg-slate-300"></span>
@@ -258,10 +258,10 @@ onUnmounted(() => {
           </span>
           <span v-else-if="roomStore.status === 'waiting'" class="text-amber-600">Đang chờ</span>
           <span v-else-if="roomStore.status === 'paused'" class="text-amber-600">⏸️ Tạm dừng</span>
-          <span v-else-if="roomStore.status === 'completed'" class="text-emerald-600">✅ Đã kết thúc</span>
+          <span v-else-if="roomStore.status === 'completed'" class="text-[var(--success)]">✅ Đã kết thúc</span>
           <span v-else>{{ roomStore.status }}</span>
           
-          <span v-if="roomStore.startedAt" class="text-blue-600 font-mono ml-1.5">{{ elapsedFormatted }}</span>
+          <span v-if="roomStore.startedAt" class="text-[var(--primary)] font-mono ml-1.5">{{ elapsedFormatted }}</span>
         </span>
       </div>
     </header>
@@ -276,15 +276,15 @@ onUnmounted(() => {
         <div 
           @mousemove="resetControlBarTimer"
           @click="resetControlBarTimer"
-          class="flex-1 relative rounded-xl overflow-hidden bg-slate-950 shadow-2xl border border-slate-800/80 ring-1 ring-white/5 flex items-center justify-center"
+          class="flex-1 relative rounded-xl overflow-hidden bg-slate-100 shadow-2xl border border-slate-200 ring-1 ring-white/5 flex items-center justify-center"
         >
           
           <!-- Floating Notification Banner inside video top-left (Dismissible) -->
-          <div v-if="showReminder" class="absolute top-4 left-4 z-10 max-w-lg bg-slate-900/85 backdrop-blur-md border border-indigo-500/30 rounded-xl px-4 py-2.5 flex items-center gap-3 text-indigo-200 text-xs md:text-sm shadow-xl transition-all">
-            <div class="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+          <div v-if="showReminder" class="absolute top-4 left-4 z-10 max-w-lg bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-2.5 flex items-center gap-3 text-cyan-800 text-xs md:text-sm shadow-xl transition-all">
+            <div class="w-7 h-7 rounded-lg bg-cyan-100 flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-cyan-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
             </div>
-            <p class="flex-1"><strong class="text-indigo-300 font-semibold">Lời nhắc:</strong> Hãy trả lời tự nhiên. Nhà tuyển dụng sẽ dẫn dắt buổi phỏng vấn.</p>
+            <p class="flex-1"><strong class="text-cyan-700 font-semibold">Lời nhắc:</strong> Hãy trả lời tự nhiên. Nhà tuyển dụng sẽ dẫn dắt buổi phỏng vấn.</p>
             <button @click="showReminder = false" class="text-slate-400 hover:text-white p-1 transition-colors">
               <X class="w-4 h-4" />
             </button>
@@ -296,37 +296,36 @@ onUnmounted(() => {
             <video ref="remoteVideoEl" autoplay playsinline class="w-full h-full object-cover"></video>
             
             <!-- Fallback if no video -->
-            <div v-if="!recruiterParticipant || recruiterParticipant.connection_state === 'offline'" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 z-0">
-              <div class="w-24 h-24 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center mb-4 text-4xl font-bold text-slate-500 shadow-inner">
+            <div v-if="!recruiterParticipant || recruiterParticipant.connection_state === 'offline'" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100 z-0">
+              <div class="w-24 h-24 rounded-full bg-slate-200 border-2 border-slate-300 flex items-center justify-center mb-4 text-4xl font-bold text-slate-500 shadow-inner">
                 R
               </div>
-              <p class="text-slate-400 font-medium animate-pulse">Đang chờ nhà tuyển dụng kết nối...</p>
+              <p class="text-slate-500 font-medium animate-pulse">Đang chờ nhà tuyển dụng kết nối...</p>
             </div>
             
             <!-- Recruiter Name Badge -->
             <div v-if="recruiterParticipant" class="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/10 z-10 shadow-lg flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+              <div class="w-2 h-2 rounded-full bg-[var(--success)]"></div>
               {{ recruiterParticipant.display_name }} (Nhà Tuyển Dụng)
             </div>
           </div>
           
           <!-- Candidate Self View (PiP) -->
-          <div class="absolute top-6 right-6 w-48 md:w-60 aspect-video bg-slate-900 rounded-xl overflow-hidden border-2 border-slate-700/80 shadow-2xl z-20 group hover:scale-105 transition-all duration-300 cursor-move">
+          <div class="absolute top-6 right-6 w-48 md:w-60 aspect-video bg-slate-200 rounded-xl overflow-hidden border-2 border-slate-300 shadow-lg z-20 group hover:scale-105 transition-all duration-300 cursor-move">
              <!-- Thẻ video thật cho LiveKit (Local) -->
              <video ref="localVideoEl" autoplay playsinline muted class="w-full h-full object-cover transform -scale-x-100"></video>
              
              <!-- Self Name Badge -->
-             <div class="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+             <div class="absolute bottom-2 left-2 bg-white/80 text-slate-800 px-2 py-1 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                Bạn
              </div>
              <!-- Mic Status icon on self view -->
-             <div class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
-               <Mic v-if="isMicOn" class="w-3 h-3 text-emerald-400" />
+             <div class="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/80 flex items-center justify-center">
+               <Mic v-if="isMicOn" class="w-3 h-3 text-[var(--success)]" />
                <MicOff v-else class="w-3 h-3 text-rose-500" />
              </div>
           </div>
 
-          <!-- Floating Control Bar inside bottom of Video Grid -->
           <div 
             @mouseenter="keepControlBarVisible"
             @mouseleave="resetControlBarTimer"
@@ -336,27 +335,27 @@ onUnmounted(() => {
               pointerEvents: isControlBarVisible ? 'auto' : 'none',
               transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)'
             }"
-            class="absolute bottom-6 left-1/2 bg-slate-900/90 backdrop-blur-xl border border-slate-700/80 px-4 py-2 rounded-full shadow-2xl flex items-center gap-3 z-30"
+            class="absolute bottom-6 left-1/2 bg-white border border-slate-200 px-4 py-2 rounded-full shadow-lg flex items-center gap-3 z-30"
           >
-            <button :title="isMicOn ? 'Tắt micro' : 'Bật micro'" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isMicOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500 hover:bg-rose-600 text-white'">
+            <button :title="isMicOn ? 'Tắt micro' : 'Bật micro'" @click="() => { toggleMic(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isMicOn ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-rose-500 hover:bg-rose-600 text-white'">
               <Mic v-if="isMicOn" class="w-5 h-5" />
               <MicOff v-else class="w-5 h-5" />
             </button>
             
-            <button :title="isCameraOn ? 'Tắt camera' : 'Bật camera'" @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isCameraOn ? 'bg-slate-800 hover:bg-slate-700 text-white' : 'bg-rose-500 hover:bg-rose-600 text-white'">
+            <button :title="isCameraOn ? 'Tắt camera' : 'Bật camera'" @click="() => { toggleCamera(); roomStore.updateMediaStatus(isMicOn, isCameraOn); }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isCameraOn ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-rose-500 hover:bg-rose-600 text-white'">
               <Video v-if="isCameraOn" class="w-5 h-5" />
               <VideoOff v-else class="w-5 h-5" />
             </button>
 
-            <button :title="isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'" @click="toggleScreenShare" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isScreenSharing ? 'bg-blue-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'">
+            <button :title="isScreenSharing ? 'Dừng chia sẻ màn hình' : 'Chia sẻ màn hình'" @click="toggleScreenShare" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="isScreenSharing ? 'bg-[var(--primary)] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'">
               <MonitorUp class="w-5 h-5" />
             </button>
 
-            <button title="Mở khung Chat" @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="activeTab === 'chat' && isPanelExpanded ? 'bg-blue-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'">
+            <button title="Mở khung Chat" @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 shadow-md" :class="activeTab === 'chat' && isPanelExpanded ? 'bg-[var(--primary)] text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'">
               <MessageSquare class="w-5 h-5" />
             </button>
             
-            <div class="w-px h-7 bg-slate-700/80 mx-1"></div>
+            <div class="w-px h-7 bg-slate-300 mx-1"></div>
             
             <button @click="handleLeave" class="h-11 px-6 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold shadow-lg shadow-rose-600/30 flex items-center gap-2 transition-all hover:scale-105 active:scale-95 text-sm">
               <PhoneOff class="w-4 h-4" /> <span class="hidden sm:inline">Rời phòng</span>
@@ -374,10 +373,10 @@ onUnmounted(() => {
             <ChevronsLeft class="w-4 h-4" />
           </button>
           <div class="w-6 h-px bg-slate-200 my-0.5"></div>
-          <button @click="() => { activeTab = 'info'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'info' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="JD & Ghi chú">
+          <button @click="() => { activeTab = 'info'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'info' ? 'bg-[var(--primary-light)] text-[var(--primary)] border border-[var(--primary-light)] shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="JD & Ghi chú">
             <FileText class="w-4 h-4" />
           </button>
-          <button @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'chat' ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Chat">
+          <button @click="() => { activeTab = 'chat'; isPanelExpanded = true; }" class="w-9 h-9 rounded-xl flex items-center justify-center transition-colors relative" :class="activeTab === 'chat' ? 'bg-[var(--primary-light)] text-[var(--primary)] border border-[var(--primary-light)] shadow-sm font-bold' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'" title="Chat">
             <MessageSquare class="w-4 h-4" />
             <span v-if="chatStore.messages.length > 0" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 border border-white"></span>
           </button>
@@ -388,10 +387,10 @@ onUnmounted(() => {
           <!-- Tabs Header -->
           <div class="flex border-b border-slate-200 shrink-0 bg-slate-50 items-center justify-between pr-3">
             <div class="flex flex-1">
-              <button @click="activeTab = 'info'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2" :class="activeTab === 'info' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
+              <button @click="activeTab = 'info'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2" :class="activeTab === 'info' ? 'text-[var(--primary)] border-[var(--primary)] bg-[var(--primary-light)]/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
                 <FileText class="w-4 h-4" /> JD & Ghi chú
               </button>
-              <button @click="activeTab = 'chat'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2 relative" :class="activeTab === 'chat' ? 'text-blue-600 border-blue-600 bg-blue-50/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
+              <button @click="activeTab = 'chat'" class="flex-1 py-3.5 flex items-center justify-center gap-2 font-medium text-sm transition-colors border-b-2 relative" :class="activeTab === 'chat' ? 'text-[var(--primary)] border-[var(--primary)] bg-[var(--primary-light)]/60 font-semibold' : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-800'">
                 <MessageSquare class="w-4 h-4" /> Chat
                 <span v-if="chatStore.messages.length > 0" class="absolute top-2.5 right-6 w-2 h-2 rounded-full bg-rose-500 border-2 border-white"></span>
               </button>
@@ -408,7 +407,7 @@ onUnmounted(() => {
             <div v-show="activeTab === 'info'" class="flex-1 p-5 flex flex-col gap-6">
               <div>
                 <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[var(--primary)]" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
                   Yêu cầu công việc
                 </h3>
                 <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-slate-700">
@@ -418,12 +417,12 @@ onUnmounted(() => {
               
               <div class="flex-1 flex flex-col">
                 <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[var(--success)]" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
                   Ghi chú cá nhân của bạn
                 </h3>
                 <textarea 
                   v-model="candidatePersonalNote"
-                  class="flex-1 w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 outline-none resize-none transition-all custom-scrollbar shadow-inner" 
+                  class="flex-1 w-full bg-white border border-slate-300 rounded-xl p-3.5 text-sm text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] outline-none resize-none transition-all custom-scrollbar shadow-inner" 
                   placeholder="Viết nháp ý chính hoặc ghi chú nhanh tại đây (Chỉ một mình bạn nhìn thấy)..."
                 ></textarea>
               </div>
@@ -443,7 +442,7 @@ onUnmounted(() => {
                   </span>
                   <div 
                     class="px-3.5 py-2 rounded-2xl text-sm max-w-[85%] shadow-sm leading-relaxed"
-                    :class="(msg.sender_type === 'candidate' || msg.sender_type === 'local') ? 'bg-blue-600 text-white rounded-tr-sm shadow-md' : 'bg-white text-slate-800 border border-slate-200 rounded-tl-sm shadow-sm'"
+                    :class="(msg.sender_type === 'candidate' || msg.sender_type === 'local') ? 'bg-[var(--primary)] text-white rounded-tr-sm shadow-md' : 'bg-white text-slate-800 border border-slate-200 rounded-tl-sm shadow-sm'"
                   >
                     {{ msg.message }}
                   </div>
@@ -451,7 +450,7 @@ onUnmounted(() => {
               </div>
               
               <div class="p-3 bg-white border-t border-slate-200 shrink-0">
-                <div class="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-full py-1 pl-4 pr-1.5 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all shadow-inner">
+                <div class="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-full py-1 pl-4 pr-1.5 focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 transition-all shadow-inner">
                   <input 
                     type="text" 
                     v-model="chatInput" 
@@ -461,7 +460,7 @@ onUnmounted(() => {
                   />
                   <button 
                     @click="handleSendMessage"
-                    class="w-8 h-8 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shrink-0 shadow-md"
+                    class="w-8 h-8 rounded-full bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shrink-0 shadow-md"
                     title="Gửi tin nhắn"
                   >
                     <Send class="w-4 h-4" />
