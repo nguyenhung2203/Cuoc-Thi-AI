@@ -41,14 +41,14 @@ func (r *CandidatePortalRepository) GetInterviewsByUserID(ctx context.Context, u
 }
 
 func (r *CandidatePortalRepository) GetCompletedMockCount(ctx context.Context, userID string) (int, error) {
-	q := `SELECT count(*) FROM mock_results WHERE user_id = $1`
+	q := `SELECT count(*) FROM mock_interviews WHERE user_id = $1 AND status = 'completed'`
 	var count int
 	err := r.db.GetContext(ctx, &count, q, userID)
 	return count, err
 }
 
 func (r *CandidatePortalRepository) GetAverageMockScore(ctx context.Context, userID string) (float64, error) {
-	q := `SELECT coalesce(avg(score), 0) FROM mock_results WHERE user_id = $1`
+	q := `SELECT coalesce(avg(final_score), 0) FROM mock_interviews WHERE user_id = $1 AND status = 'completed'`
 	var avg float64
 	err := r.db.GetContext(ctx, &avg, q, userID)
 	return avg, err
@@ -137,10 +137,47 @@ func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, compan
 	}
 
 	qJc := `
-		INSERT INTO job_candidates (company_id, candidate_id, job_id, pipeline_status)
-		VALUES ($1, $2, $3, 'new')
+		INSERT INTO job_candidates (company_id, candidate_id, job_id, pipeline_status, applied_at)
+		VALUES ($1, $2, $3, 'new', NOW())
 		ON CONFLICT (job_id, candidate_id) DO NOTHING
 	`
 	_, err = r.db.ExecContext(ctx, qJc, companyID, candidateID, jobID)
+	return err
+}
+
+func (r *CandidatePortalRepository) GetApplicationsByUserID(ctx context.Context, userID string) ([]response.CandidatePortalApplication, error) {
+	q := `
+		SELECT 
+			jc.id,
+			jc.job_id,
+			coalesce(j.title, '') as job_title,
+			jc.company_id,
+			coalesce(comp.name, '') as company_name,
+			jc.pipeline_status as status,
+			jc.applied_at,
+			coalesce(f.original_name, '') as cv_name
+		FROM job_candidates jc
+		JOIN candidates c ON jc.candidate_id = c.id
+		JOIN jobs j ON jc.job_id = j.id
+		LEFT JOIN companies comp ON jc.company_id = comp.id
+		LEFT JOIN files f ON c.cv_file_id = f.id
+		WHERE c.user_id = $1
+		ORDER BY jc.applied_at DESC NULLS LAST
+	`
+	var items []response.CandidatePortalApplication
+	err := r.db.SelectContext(ctx, &items, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *CandidatePortalRepository) CancelApplication(ctx context.Context, userID string, applicationID string) error {
+	q := `
+		DELETE FROM job_candidates jc
+		USING candidates c
+		WHERE jc.candidate_id = c.id AND jc.id = $1 AND c.user_id = $2
+	`
+	_, err := r.db.ExecContext(ctx, q, applicationID, userID)
 	return err
 }

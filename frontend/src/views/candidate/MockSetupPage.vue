@@ -958,17 +958,18 @@ const handleStart = async (e) => {
   box-shadow: var(--shadow-md);
 }
 
-/* AI Studio Tile Right Column — Strictly conforming to DESIGN_SYSTEM_SKILL.md (§5.1 & §8: AI block uses --accent / --accent-bg) */
+/* AI Studio Tile Right Column — Cohesive with Navy Brand Identity & Design System */
 .ai-studio-tile {
   position: relative;
   overflow: hidden;
   padding: 28px 24px;
   border-radius: var(--radius-lg, 16px);
-  background: var(--accent-bg, #ECFEFF);
+  background: var(--surface, #FFFFFF);
   color: var(--text-main, #0F172A);
   text-align: center;
   box-shadow: var(--shadow-md);
-  border: 1px solid rgba(8, 145, 178, 0.25);
+  border: 1px solid var(--border, #E2E8F0);
+  border-top: 4px solid var(--primary, #1E3A8A);
 }
 .studio-status-tag {
   display: inline-flex;
@@ -976,9 +977,9 @@ const handleStart = async (e) => {
   gap: 8px;
   padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
-  background: var(--surface, #FFFFFF);
-  border: 1px solid rgba(8, 145, 178, 0.3);
-  color: var(--accent, #0891B2);
+  background: var(--primary-light, #DBEAFE);
+  border: 1px solid rgba(30, 58, 138, 0.15);
+  color: var(--primary, #1E3A8A);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -990,13 +991,13 @@ const handleStart = async (e) => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--success, #16A34A);
+  background: var(--success, #10B981);
 }
 .dot-live-ping {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--success, #16A34A);
+  background: var(--success, #10B981);
   animation: aiPulse 1.8s ease-out infinite;
 }
 @keyframes aiPulse {
@@ -1012,16 +1013,16 @@ const handleStart = async (e) => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--surface, #FFFFFF);
-  color: var(--accent, #0891B2);
-  border: 2px solid rgba(8, 145, 178, 0.3);
+  background: var(--primary-light, #DBEAFE);
+  color: var(--primary, #1E3A8A);
+  border: 2px solid rgba(30, 58, 138, 0.2);
   box-shadow: var(--shadow-sm);
 }
 .avatar-ring {
   position: absolute;
   inset: -6px;
   border-radius: 50%;
-  border: 2px solid rgba(8, 145, 178, 0.25);
+  border: 2px solid rgba(30, 58, 138, 0.2);
   animation: aiPulse 2.4s ease-out infinite;
 }
 .studio-bot-name {
@@ -1032,12 +1033,12 @@ const handleStart = async (e) => {
 }
 .studio-bot-role {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--accent, #0891B2);
+  font-weight: 600;
+  color: var(--primary, #1E3A8A);
   margin: 0 0 20px 0;
 }
 .summary-box {
-  background: var(--surface, #FFFFFF);
+  background: var(--surface-soft, #F8FAFC);
   border-radius: var(--radius, 12px);
   padding: 14px 16px;
   border: 1px solid var(--border, #E2E8F0);

@@ -210,3 +210,11 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 
 	return nil
 }
+
+func (s *CandidatePortalService) GetApplications(ctx context.Context, userID string) ([]response.CandidatePortalApplication, error) {
+	return s.repo.GetApplicationsByUserID(ctx, userID)
+}
+
+func (s *CandidatePortalService) CancelApplication(ctx context.Context, userID string, applicationID string) error {
+	return s.repo.CancelApplication(ctx, userID, applicationID)
+}

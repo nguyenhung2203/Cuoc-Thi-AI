@@ -34,3 +34,14 @@ type CandidatePortalProfile struct {
 	CVName     string      `json:"cv_name"`
 	ParsedData interface{} `json:"parsed_data,omitempty"`
 }
+
+type CandidatePortalApplication struct {
+	ID          string     `json:"id" db:"id"`
+	JobID       string     `json:"job_id" db:"job_id"`
+	JobTitle    string     `json:"job_title" db:"job_title"`
+	CompanyID   string     `json:"company_id" db:"company_id"`
+	CompanyName string     `json:"company_name" db:"company_name"`
+	Status      string     `json:"status" db:"status"`
+	AppliedAt   *time.Time `json:"applied_at" db:"applied_at"`
+	CVName      string     `json:"cv_name" db:"cv_name"`
+}

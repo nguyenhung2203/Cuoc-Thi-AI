@@ -168,3 +168,29 @@ func (r *UserRepository) GetDashboardStats(ctx context.Context) (map[string]int,
 
 	return stats, nil
 }
+
+type MonthlyItem struct {
+	Month string `db:"month"`
+	Usage int64  `db:"usage"`
+}
+
+type GrowthItem struct {
+	Period string `db:"period"`
+	Users  int    `db:"users"`
+}
+
+func (r *UserRepository) GetReportsData(ctx context.Context) (totalUsers, totalCandidates, totalRecruiters, totalCompanies, totalInterviews int, tokensIn, tokensOut int64, monthlyItems []MonthlyItem, growthItems []GrowthItem, err error) {
+	_ = r.db.GetContext(ctx, &totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
+	_ = r.db.GetContext(ctx, &totalCandidates, "SELECT COUNT(*) FROM users WHERE role = 'candidate' AND deleted_at IS NULL")
+	_ = r.db.GetContext(ctx, &totalRecruiters, "SELECT COUNT(*) FROM users WHERE role = 'recruiter' AND deleted_at IS NULL")
+	_ = r.db.GetContext(ctx, &totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL")
+	_ = r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews WHERE deleted_at IS NULL")
+
+	_ = r.db.GetContext(ctx, &tokensIn, "SELECT COALESCE(SUM(tokens_in), 0) FROM ai_request_logs")
+	_ = r.db.GetContext(ctx, &tokensOut, "SELECT COALESCE(SUM(tokens_out), 0) FROM ai_request_logs")
+
+	_ = r.db.SelectContext(ctx, &monthlyItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') as month, COALESCE(SUM(tokens_in + tokens_out), 0) as usage FROM ai_request_logs GROUP BY month ORDER BY month ASC")
+	_ = r.db.SelectContext(ctx, &growthItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') as period, COUNT(*) as users FROM users WHERE deleted_at IS NULL GROUP BY period ORDER BY period ASC")
+
+	return totalUsers, totalCandidates, totalRecruiters, totalCompanies, totalInterviews, tokensIn, tokensOut, monthlyItems, growthItems, nil
+}

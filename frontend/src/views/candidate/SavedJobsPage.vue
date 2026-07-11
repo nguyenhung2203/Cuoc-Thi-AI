@@ -28,12 +28,14 @@ onMounted(async () => {
 
 const removeJob = (id, title) => {
   savedJobs.value = savedJobs.value.filter(job => job.id !== id)
+  localStorage.setItem('candidate_saved_jobs', JSON.stringify(savedJobs.value))
   toast.value = { type: 'success', message: `Đã bỏ lưu việc làm "${title || 'chọn'}" khỏi danh sách.` }
 }
 
 const clearAllSaved = () => {
   if (confirm('Bạn có chắc chắn muốn xóa toàn bộ danh sách việc làm đã lưu?')) {
     savedJobs.value = []
+    localStorage.setItem('candidate_saved_jobs', JSON.stringify([]))
     toast.value = { type: 'info', message: 'Đã làm trống danh sách việc làm đã lưu.' }
   }
 }

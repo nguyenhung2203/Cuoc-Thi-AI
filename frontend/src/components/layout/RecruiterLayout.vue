@@ -195,7 +195,7 @@ const currentMenu = computed(() => recruiterMenu)
       </nav>
 
       <div class="rc-foot" :class="{ 'is-collapsed': isCollapsed }">
-        <div class="rc-profile" :class="{ 'is-collapsed': isCollapsed }" :title="isCollapsed ? (authStore.user?.full_name || 'Recruiter User') : ''">
+        <div class="rc-profile" :class="{ 'is-collapsed': isCollapsed }" :title="isCollapsed ? (authStore.user?.full_name || 'Recruiter User') : ''" @click="router.push('/settings?tab=company')">
           <div class="rc-avatar">
             {{ authStore.user?.full_name ? authStore.user.full_name.charAt(0).toUpperCase() : 'R' }}
           </div>
@@ -305,13 +305,13 @@ const currentMenu = computed(() => recruiterMenu)
 .collapse-btn:hover { background: var(--surface-soft); color: var(--text-main); }
 
 .rc-nav { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 3px; }
-.rc-nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius); font-size: 14px; font-weight: 500; color: var(--text-secondary); transition: all 0.18s ease; }
+.rc-nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius); font-size: 14px; font-weight: 600; color: var(--text-main); transition: all 0.18s ease; }
 .rc-nav-item.is-collapsed { justify-content: center; padding: 10px 0; }
-.rc-nav-item :deep(svg) { color: var(--text-muted); transition: color 0.18s ease; flex-shrink: 0; }
-.rc-nav-item:hover { background: var(--surface-soft); color: var(--primary); }
+.rc-nav-item :deep(svg) { color: var(--text-secondary); transition: color 0.18s ease; flex-shrink: 0; }
+.rc-nav-item:hover { background: var(--surface-soft); color: var(--primary); font-weight: 600; }
 .rc-nav-item:hover :deep(svg) { color: var(--primary); }
-.rc-nav-item.is-active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
-.rc-nav-item.is-active :deep(svg) { color: var(--primary); }
+.rc-nav-item.is-active { background: var(--primary); color: #FFFFFF; font-weight: 700; box-shadow: var(--shadow-sm); }
+.rc-nav-item.is-active :deep(svg) { color: #FFFFFF; }
 
 .rc-foot { border-top: 1px solid var(--border); background: var(--surface-soft); padding: 16px; }
 .rc-foot.is-collapsed { padding: 8px; }
@@ -320,7 +320,7 @@ const currentMenu = computed(() => recruiterMenu)
 .rc-profile:hover { background: var(--surface); border-color: var(--border); }
 .rc-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
 .rc-name { font-size: 14px; font-weight: 600; color: var(--text-main); }
-.rc-org { font-size: 12px; color: var(--text-muted); }
+.rc-org { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .logout-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; background: transparent; border-radius: var(--radius); font-size: 14px; font-weight: 500; color: var(--danger); cursor: pointer; transition: background 0.2s ease; }
 .logout-btn.is-collapsed { justify-content: center; padding: 8px 0; }
 .logout-btn:hover { background: rgba(220,38,38,0.08); }

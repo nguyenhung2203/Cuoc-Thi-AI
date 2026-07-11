@@ -202,12 +202,12 @@ const handleUpdate = async () => {
     <!-- Empty state -->
     <div v-else-if="templates.length === 0">
       <Card style="text-align: center; padding: 60px">
-        <Bot size="48" style="margin: 0 auto 16px; opacity: 0.3" />
-        <p class="text-body" style="font-weight: 600; margin-bottom: 8px">Chưa có mẫu AI nào</p>
-        <p class="text-helper" style="margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto">
+        <Bot size="48" style="margin: 0 auto 16px; opacity: 0.6; color: var(--primary)" />
+        <p class="text-body" style="font-weight: 700; font-size: 16px; color: var(--text-main); margin-bottom: 8px">Chưa có mẫu AI nào</p>
+        <p class="text-helper" style="margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto; color: var(--text-secondary)">
           Tạo mẫu kịch bản phỏng vấn AI để sử dụng cho các việc làm.
         </p>
-        <Button @click="showCreateModal = true"><Plus size="16" /> Tạo mẫu đầu tiên</Button>
+        <Button variant="primary" @click="showCreateModal = true"><Plus size="16" /> Tạo mẫu đầu tiên</Button>
       </Card>
     </div>
 

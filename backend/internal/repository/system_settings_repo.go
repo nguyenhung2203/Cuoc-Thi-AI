@@ -43,6 +43,7 @@ func (r *SystemSettingsRepository) ensureTableAndDefault() {
 		"max_upload_size_mb":             20,
 		"default_passing_score":          70,
 		"default_ai_model":               "gemini-2.5-flash",
+		"default_ai_voice_model":         "gemini-2.0-flash-live-001",
 		"jwt_token_expiry_hours":         24,
 		"admin_2fa_required":             false,
 		"notification_ttl_days":          30,

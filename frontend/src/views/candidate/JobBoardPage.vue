@@ -110,7 +110,54 @@ const fetchJobs = async (page = 1) => {
   }
 }
 
-onMounted(() => fetchJobs(1))
+const savedJobIds = ref([])
+const loadSavedJobIds = () => {
+  const list = localStorage.getItem('candidate_saved_jobs')
+  if (list) {
+    try {
+      const parsed = JSON.parse(list)
+      savedJobIds.value = parsed.map(j => j.id)
+    } catch (e) {
+      savedJobIds.value = []
+    }
+  } else {
+    savedJobIds.value = []
+  }
+}
+
+const toggleSaveJob = (job) => {
+  const listStr = localStorage.getItem('candidate_saved_jobs')
+  let list = []
+  if (listStr) {
+    try { list = JSON.parse(listStr) } catch (e) { list = [] }
+  }
+  
+  const isSaved = list.some(item => item.id === job.id)
+  if (isSaved) {
+    list = list.filter(item => item.id !== job.id)
+    savedJobIds.value = savedJobIds.value.filter(id => id !== job.id)
+  } else {
+    const newItem = {
+      id: job.id,
+      company_id: job.company_id,
+      title: job.title,
+      company_name: job.company_name,
+      location: job.location,
+      salary_min: { Valid: job.salary_min != null, Int64: job.salary_min || 0 },
+      salary_max: { Valid: job.salary_max != null, Int64: job.salary_max || 0 },
+      currency: { Valid: true, String: job.currency || 'VND' },
+      saved_at: new Date().toISOString()
+    }
+    list.push(newItem)
+    savedJobIds.value.push(job.id)
+  }
+  localStorage.setItem('candidate_saved_jobs', JSON.stringify(list))
+}
+
+onMounted(() => {
+  fetchJobs(1)
+  loadSavedJobIds()
+})
 
 const handleSearch = () => {
   fetchJobs(1)
@@ -250,8 +297,8 @@ const viewJob = (job) => {
           class="job-card-new">
           
           <!-- Save Job Button -->
-          <button class="jb-save-btn" @click.stop="">
-            <Heart :size="20" />
+          <button class="jb-save-btn" @click.stop="toggleSaveJob(job)" :class="{ 'is-saved': savedJobIds.includes(job.id) }">
+            <Heart :size="20" :fill="savedJobIds.includes(job.id) ? 'currentColor' : 'none'" />
           </button>
 
           <!-- Company Logo -->
@@ -378,7 +425,7 @@ const viewJob = (job) => {
 .job-card-new:hover { border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }
 
 .jb-save-btn { position: absolute; bottom: 16px; right: 16px; color: var(--text-muted); cursor: pointer; transition: color 0.2s ease; background: transparent; border: none; z-index: 10; }
-.jb-save-btn:hover { color: var(--danger); }
+.jb-save-btn:hover, .jb-save-btn.is-saved { color: var(--danger); }
 
 .jb-logo { width: 64px; height: 64px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; display: flex; align-items: center; justify-content: center; }
 .jb-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }

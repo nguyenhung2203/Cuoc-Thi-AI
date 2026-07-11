@@ -72,6 +72,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  loadSavedJobIds()
 })
 
 const validateAndSetFile = (file) => {
@@ -132,6 +133,53 @@ const submitApplication = async () => {
   }
 }
 
+const savedJobIds = ref([])
+const loadSavedJobIds = () => {
+  const list = localStorage.getItem('candidate_saved_jobs')
+  if (list) {
+    try {
+      const parsed = JSON.parse(list)
+      savedJobIds.value = parsed.map(j => j.id)
+    } catch (e) {
+      savedJobIds.value = []
+    }
+  } else {
+    savedJobIds.value = []
+  }
+}
+
+const toggleSaveJob = () => {
+  if (!job.value) return
+  const listStr = localStorage.getItem('candidate_saved_jobs')
+  let list = []
+  if (listStr) {
+    try { list = JSON.parse(listStr) } catch (e) { list = [] }
+  }
+  
+  const isSaved = list.some(item => item.id === job.value.id)
+  if (isSaved) {
+    list = list.filter(item => item.id !== job.value.id)
+    savedJobIds.value = savedJobIds.value.filter(id => id !== job.value.id)
+    toast.value = { type: 'info', message: 'Đã bỏ lưu tin tuyển dụng.' }
+  } else {
+    const newItem = {
+      id: job.value.id,
+      company_id: companyId,
+      title: job.value.title,
+      company_name: company.value?.name || 'Công ty TNHH WeMake',
+      location: job.value.location,
+      salary_min: { Valid: job.value.salary_min != null, Int64: job.value.salary_min || 0 },
+      salary_max: { Valid: job.value.salary_max != null, Int64: job.value.salary_max || 0 },
+      currency: { Valid: true, String: job.value.currency || 'VND' },
+      saved_at: new Date().toISOString()
+    }
+    list.push(newItem)
+    savedJobIds.value.push(job.value.id)
+    toast.value = { type: 'success', message: 'Đã lưu tin tuyển dụng thành công.' }
+  }
+  localStorage.setItem('candidate_saved_jobs', JSON.stringify(list))
+}
+
 const scrollToApply = () => {
   const applySection = document.getElementById('apply-section')
   if (applySection) {
@@ -188,8 +236,13 @@ const scrollToApply = () => {
             <Button variant="primary" class="btn-apply-big" @click="scrollToApply">
               <UploadCloud size="18" style="margin-right: 8px" /> Ứng tuyển ngay
             </Button>
-            <Button variant="outline" class="btn-save">
-              Lưu tin
+            <Button 
+              variant="outline" 
+              class="btn-save" 
+              :class="{ 'is-saved': savedJobIds.includes(job.id) }" 
+              @click="toggleSaveJob"
+            >
+              {{ savedJobIds.includes(job.id) ? 'Đã lưu' : 'Lưu tin' }}
             </Button>
           </div>
         </Card>
@@ -514,6 +567,11 @@ const scrollToApply = () => {
   height: 48px;
   padding: 0 24px;
   font-weight: 600;
+}
+.btn-save.is-saved {
+  border-color: var(--danger);
+  color: var(--danger);
+  background-color: rgba(239, 68, 68, 0.05);
 }
 
 /* JD Details Section */

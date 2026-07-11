@@ -28,6 +28,8 @@ func (h *CandidatePortalHandler) Routes(r chi.Router) {
 	r.Put("/profile", h.UpdateProfile)
 	r.Post("/cv", h.UploadCV)
 	r.Post("/jobs/{jobID}/apply", h.ApplyJob)
+	r.Get("/applications", h.GetApplications)
+	r.Delete("/applications/{id}", h.CancelApplication)
 }
 
 func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request) {
@@ -193,5 +195,40 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		"cv_file_id":  fileRecord.ID,
 		"parsed_data": parsedData,
 	}, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) GetApplications(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+
+	apps, err := h.svc.GetApplications(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, apps, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) CancelApplication(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+	appID := chi.URLParam(r, "id")
+
+	err := h.svc.CancelApplication(r.Context(), userID, appID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"message": "withdrawn successfully"}, nil, requestID)
 }
 

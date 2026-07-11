@@ -68,10 +68,15 @@ const handleDownloadCv = (app) => {
   toast.value = { type: 'info', message: `Đang tải xuống CV: ${app.cv_name}...` }
 }
 
-const handleCancelApp = (app) => {
+const handleCancelApp = async (app) => {
   if (confirm(`Bạn có chắc chắn muốn rút hồ sơ ứng tuyển vị trí "${app.job_title}" tại ${app.company_name}?`)) {
-    applications.value = applications.value.filter(item => item.id !== app.id)
-    toast.value = { type: 'success', message: 'Đã rút/xóa hồ sơ ứng tuyển thành công.' }
+    try {
+      await candidatePortalService.cancelApplication(app.id)
+      applications.value = applications.value.filter(item => item.id !== app.id)
+      toast.value = { type: 'success', message: 'Đã rút/xóa hồ sơ ứng tuyển thành công.' }
+    } catch (err) {
+      toast.value = { type: 'error', message: err.message || 'Không thể rút hồ sơ ứng tuyển.' }
+    }
   }
 }
 </script>

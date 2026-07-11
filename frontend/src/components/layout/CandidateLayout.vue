@@ -93,8 +93,8 @@ const candidateMenu = computed(() => [
 
 const profileMenu = computed(() => [
   { path: '/profile?tab=profile', name: langStore.t('nav', 'myProfile'), icon: UserIcon },
-  { path: '/my-applications', name: 'Đã ứng tuyển', icon: FileText },
-  { path: '/saved-jobs', name: 'Đã lưu', icon: Bookmark }
+  { path: '/my-applications', name: langStore.t('nav', 'appliedJobs'), icon: FileText },
+  { path: '/saved-jobs', name: langStore.t('nav', 'savedJobs'), icon: Bookmark }
 ])
 
 const handleLogout = async () => {

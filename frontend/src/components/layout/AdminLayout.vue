@@ -140,12 +140,12 @@ onMounted(() => {
 
 .admin-nav { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
 .nav-group-label { padding: 4px 12px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.admin-nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 500; color: var(--text-secondary); transition: all 0.18s ease; }
+.admin-nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 600; color: var(--text-main); transition: all 0.18s ease; }
 .admin-nav-item.is-collapsed { justify-content: center; padding: 10px 0; }
-.admin-nav-item :deep(svg) { color: var(--text-muted); transition: color 0.18s ease; flex-shrink: 0; }
-.admin-nav-item:hover { background: var(--surface-soft); color: var(--primary); }
+.admin-nav-item :deep(svg) { color: var(--text-secondary); transition: color 0.18s ease; flex-shrink: 0; }
+.admin-nav-item:hover { background: var(--surface-soft); color: var(--primary); font-weight: 600; }
 .admin-nav-item:hover :deep(svg) { color: var(--primary); }
-.admin-nav-item.is-active { background: var(--primary); color: #fff; font-weight: 600; box-shadow: var(--shadow-sm); }
+.admin-nav-item.is-active { background: var(--primary); color: #fff; font-weight: 700; box-shadow: var(--shadow-sm); }
 .admin-nav-item.is-active :deep(svg) { color: #fff; }
 
 .admin-foot { border-top: 1px solid var(--border); background: var(--surface-soft); padding: 16px; }

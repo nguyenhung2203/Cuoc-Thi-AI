@@ -27,7 +27,9 @@ const dictionary = {
       justNow: 'Vừa xong',
       minutesAgo: 'phút trước',
       hoursAgo: 'giờ trước',
-      daysAgo: 'ngày trước'
+      daysAgo: 'ngày trước',
+      appliedJobs: 'Đã ứng tuyển',
+      savedJobs: 'Đã lưu'
     },
     // Mock Setup Page (`/mock-setup`)
     setup: {
@@ -276,7 +278,9 @@ const dictionary = {
       justNow: 'Just now',
       minutesAgo: 'minutes ago',
       hoursAgo: 'hours ago',
-      daysAgo: 'days ago'
+      daysAgo: 'days ago',
+      appliedJobs: 'Applied Jobs',
+      savedJobs: 'Saved Jobs'
     },
     // Mock Setup Page (`/mock-setup`)
     setup: {
@@ -630,7 +634,114 @@ const globalViToEnMap = {
   'Đăng nhập / Đăng ký': 'Sign In / Register',
   'Hủy': 'Cancel',
   'Xác nhận': 'Confirm',
-  'Đóng': 'Close'
+  'Đóng': 'Close',
+
+  // MockSetupPage (`/mock-setup`) & AI Studio Tile
+  'Nhập Vị trí khác / Dán JD tùy chỉnh': 'Enter Custom Position / Paste Custom JD',
+  'Tùy chỉnh 100% câu hỏi theo mô tả công việc cụ thể bạn đang ứng tuyển': '100% tailored questions based on your specific job description',
+  'Tên Chức danh / Vị trí cụ thể': 'Specific Job Title / Target Position',
+  'Ví dụ: Senior Frontend Engineer (React/Vue)': 'Example: Senior Frontend Engineer (React/Vue)',
+  'Dán toàn bộ Nội dung JD (Mô tả công việc) vào đây': 'Paste Complete Job Description (JD) Content Here',
+  'AI sẽ tự động đọc hiểu yêu cầu kỹ năng, dự án và trách nhiệm từ JD của bạn để đặt câu hỏi sát thực tế 100%.': 'AI will automatically analyze required skills, projects, and responsibilities from your JD to generate 100% realistic interview questions.',
+  'Dán JD (Job Description) vào đây...': 'Paste Job Description (JD) here...',
+  'Khuyến nghị 5 - 10 câu để đủ chiều sâu và đánh giá đa chiều nhất.': 'Recommended 5 - 10 questions for maximum depth and multi-dimensional evaluation.',
+  'Chuẩn Đánh giá Rubric Enterprise': 'Enterprise Rubric Evaluation Standards',
+  'AI tự động chấm điểm đa chiều theo 6 trục:': 'AI automatically evaluates across 6 dimensions:',
+  'Chuyên môn': 'Technical Competency',
+  'Cấu trúc STAR': 'STAR Methodology',
+  'Trade-offs': 'System Trade-offs',
+  'Giao tiếp': 'Communication & Clarity',
+  'Áp lực & Phản xạ': 'Pressure & Quick Reflexes',
+  'Thuật ngữ IT': 'IT Terminology & Vocabulary',
+  'Hướng dẫn Thực chiến': 'Live Practice Guide & Tips',
+  'Micro rõ ràng, không gian tĩnh.': 'Ensure clear microphone audio and quiet surroundings.',
+  'Nhấn giữ phím hoặc Gõ chữ đều được.': 'Press and hold spacebar to speak or type your answers.',
+  'Nhấn Kết thúc sớm để nhận Report.': 'Click End Early anytime to immediately generate your Report.',
+  'Đồng bộ & hỏi dựa theo CV thực tế trong hồ sơ ứng viên': 'Sync & ask questions verified against candidate profile resume (CV)',
+  '(Hồ sơ chưa tải CV lên)': '(No resume/CV uploaded in profile yet)',
+  '✓ Đã sẵn sàng': '✓ Ready & Synchronized',
+  'AI sẽ đọc kinh nghiệm, dự án (Projects) và công nghệ ghi trong CV của bạn để đặt câu hỏi xác thực': 'AI will read work experience, projects, and tech stack from your resume to verify real-world skills',
+  'AI Interviewer Pro': 'AI Interviewer Pro',
+  'Được phát triển trên nền tảng Gemini Real-time API': 'Powered by Gemini Real-time API Enterprise Engine',
+  'STUDIO ONLINE': 'STUDIO ONLINE',
+
+  // Profile Page (`/profile`)
+  'Hồ sơ cá nhân & CV': 'Personal Profile & Resume',
+  'Cập nhật thông tin để AI có thể đưa ra bài luyện tập chính xác nhất.': 'Keep your profile updated so AI can curate the most accurate practice questions.',
+  'Ảnh đại diện': 'Profile Avatar',
+  'Hỗ trợ JPG, PNG. Tối đa 2MB.': 'Supports JPG, PNG. Max file size 2MB.',
+  'Giới thiệu ngắn (Bio)': 'Short Bio & Summary',
+  'Viết một vài dòng giới thiệu về bản thân, mục tiêu, hoặc kinh nghiệm nổi bật...': 'Write a few lines about yourself, career objectives, or highlighted achievements...',
+  'Ngôn ngữ phỏng vấn (AI)': 'AI Interview Language',
+  'Tiếng Việt': 'Vietnamese',
+  'English': 'English',
+  'Số năm kinh nghiệm': 'Years of Experience',
+  'Ví dụ: 2.5': 'Example: 2.5',
+  'Tải CV lên (Nhiều file)': 'Upload Resume / CV (Multiple files)',
+  'PDF, DOCX (Tối đa 5MB/file)': 'PDF, DOCX (Max 5MB/file)',
+  
+  // Interview Waiting Room & Camera/Mic check
+  'Hệ thống sẽ yêu cầu quyền truy cập Camera và Micro ở bước tiếp theo để tiến hành phỏng vấn.': 'The system will request access to your Camera and Microphone in the next step to conduct the live interview.',
+  'Tôi đã đọc, hiểu rõ và đồng ý với việc sử dụng hệ thống AI phân tích và ghi âm trong buổi phỏng vấn này.': 'I have read, understood, and agree to the use of AI analysis and audio recording during this interview.',
+  'Từ chối & Quay lại': 'Decline & Go Back',
+  'Tham gia phỏng vấn': 'Join Live Interview',
+  
+  // Practice History Page & My Applications
+  'Đơn ứng tuyển của tôi': 'My Job Applications',
+  'Theo dõi tiến độ các vị trí bạn đã ứng tuyển và lịch phỏng vấn sắp tới.': 'Track the progress of your job applications and upcoming interview schedules.',
+
+  // My Applications Page (`/my-applications`) & Dropdown Menu items
+  'Việc làm đã ứng tuyển': 'Applied Jobs',
+  'Đã ứng tuyển': 'Applied Jobs',
+  'Quản lý và theo dõi tiến độ chi tiết từng hồ sơ bạn đã nộp cho doanh nghiệp.': 'Manage and track detailed progress of every job application submitted to employers.',
+  'Khám phá việc làm mới': 'Explore New Opportunities',
+  'Khám phá việc làm ngay': 'Explore Jobs Now',
+  'Tìm kiếm theo vị trí công việc hoặc tên công ty...': 'Search by job title or company name...',
+  'Tất cả': 'All',
+  'Đang chờ duyệt': 'Pending Review',
+  'HR đã xem': 'HR Reviewed',
+  'HR đã xem hồ sơ': 'HR Viewed Resume',
+  'Đang phỏng vấn / Test': 'Interview / Assessment',
+  'Đang phỏng vấn': 'Interviewing',
+  'Chưa phù hợp': 'Not Suitable at this Time',
+  'Hồ sơ đã được gửi đến bộ phận nhân sự và đang trong quá trình tiếp nhận.': 'Your resume has been delivered to HR and is currently pending review.',
+  'Nhà tuyển dụng đã mở xem CV và hồ sơ năng lực của bạn.': 'The employer has opened and viewed your resume and profile.',
+  'Bạn đã vượt qua vòng hồ sơ và đang tham gia phỏng vấn đánh giá.': 'You have passed the screening stage and are now participating in interviews.',
+  'Nhà tuyển dụng đã phản hồi hồ sơ chưa phù hợp với vị trí lúc này.': 'The employer has reviewed your profile and marked it not suitable at this time.',
+  'Không tìm thấy hồ sơ ứng tuyển nào': 'No job applications found',
+  'Bạn chưa nộp hồ sơ vào vị trí nào trong danh mục này hoặc từ khóa tìm kiếm chưa khớp.': 'You haven\'t applied to any positions in this category, or no keywords matched.',
+  'Xóa bộ lọc': 'Clear Filters',
+  'Ngày nộp:': 'Applied Date:',
+  'CV đã nộp:': 'Submitted CV:',
+  'Xem tin': `View Job`,
+  'Rút hồ sơ': 'Withdraw Application',
+  'Bạn có chắc chắn muốn rút hồ sơ ứng tuyển vị trí': 'Are you sure you want to withdraw your application for position',
+
+  // Saved Jobs Page (`/saved-jobs`) & Dropdown
+  'Việc làm đã lưu': 'Saved Jobs',
+  'Đã lưu': 'Saved Jobs',
+  'Danh sách các cơ hội nghề nghiệp bạn quan tâm để chuẩn bị ứng tuyển.': 'List of career opportunities you bookmarked for preparation and applying.',
+  'việc làm': 'jobs',
+  'Tìm thêm việc làm': 'Find More Jobs',
+  'Tìm theo tên công việc, kỹ năng hoặc công ty...': 'Search by job title, skills, or company...',
+  'Địa điểm:': 'Location:',
+  'Tất cả khu vực': 'All Locations',
+  'Hà Nội': 'Hanoi',
+  'TP. HCM': 'Ho Chi Minh City',
+  'Đà Nẵng': 'Da Nang',
+  'Làm việc từ xa (Remote)': 'Remote Work',
+  'Xóa tất cả': 'Clear All',
+  'Chưa có việc làm nào phù hợp': 'No matching saved jobs',
+  'Bạn chưa lưu công việc nào vào danh mục quan tâm. Hãy lướt xem bảng tin tuyển dụng để tìm vị trí ưng ý nhé!': 'You haven\'t bookmarked any jobs yet. Browse the job board to find roles you like!',
+  'Không tìm thấy việc làm nào khớp với từ khóa tìm kiếm hoặc bộ lọc hiện tại.': 'No saved jobs match your current search query or location filter.',
+  'Đã lưu:': 'Saved on:',
+  'Ứng tuyển': 'Apply Now',
+  'Bỏ lưu công việc này': 'Remove bookmark',
+  'Thỏa thuận': 'Negotiable',
+  'Từ': 'From',
+  'Đến': 'Up to',
+  'Ứng viên': 'Candidate',
+  'Chưa cập nhật': 'Not Updated'
 }
 
 // In-memory + LocalStorage Persistent Auto-Translation Cache

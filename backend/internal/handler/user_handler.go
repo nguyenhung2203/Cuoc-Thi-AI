@@ -30,6 +30,7 @@ func (h *UserHandler) Routes(r chi.Router) {
 	r.With(middleware.AuthMiddleware(h.jwtSecret), middleware.RoleMiddleware("admin")).Put("/admin/users/{user_id}/approve", h.ApproveUser)
 	r.With(middleware.AuthMiddleware(h.jwtSecret), middleware.RoleMiddleware("admin")).Put("/admin/users/{user_id}/status", h.UpdateUserStatus)
 	r.With(middleware.AuthMiddleware(h.jwtSecret), middleware.RoleMiddleware("admin")).Get("/admin/dashboard-stats", h.GetDashboardStats)
+	r.With(middleware.AuthMiddleware(h.jwtSecret), middleware.RoleMiddleware("admin")).Get("/admin/reports", h.GetReports)
 	r.With(middleware.AuthMiddleware(h.jwtSecret), middleware.RoleMiddleware("admin")).Get("/admin/companies", h.ListAllCompanies)
 }
 
@@ -40,6 +41,15 @@ func (h *UserHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	pkgresponse.JSON(w, http.StatusOK, stats, nil, "")
+}
+
+func (h *UserHandler) GetReports(w http.ResponseWriter, r *http.Request) {
+	reports, err := h.userSvc.GetReports(r.Context())
+	if err != nil {
+		pkgresponse.Error(w, errors.NewInternal("failed to get reports"), "")
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, reports, nil, "")
 }
 
 func (h *UserHandler) ListPendingUsers(w http.ResponseWriter, r *http.Request) {
