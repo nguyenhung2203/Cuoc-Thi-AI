@@ -29,8 +29,14 @@ type Config struct {
 	// Public base URL of the frontend (for links in emails)
 	FrontendURL string
 
+	// Public base URL of this backend (used to build downloadable file URLs served to browsers)
+	PublicBaseURL string
+
 	// Gemini
 	GeminiAPIKey string
+
+	// Google OAuth client ID (audience to validate Google id_token against)
+	GoogleClientID string
 
 	// JWT
 	JWTSecret     string
@@ -75,7 +81,9 @@ func Load() (*Config, error) {
 		SMTPPass:      getEnv("SMTP_PASS", ""),
 		SMTPFrom:      getEnv("SMTP_FROM", "no-reply@ai-interview.local"),
 		FrontendURL:   getEnv("FRONTEND_URL", "http://localhost:5173"),
-		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
+		PublicBaseURL: getEnv("PUBLIC_BASE_URL", "http://localhost:18080"),
+		GeminiAPIKey:   getEnv("GEMINI_API_KEY", ""),
+		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		JWTAccessTTL:  getEnv("JWT_ACCESS_TTL", "15m"),
 		JWTRefreshTTL: getEnv("JWT_REFRESH_TTL", "168h"), // 7 days

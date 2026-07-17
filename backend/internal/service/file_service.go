@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
@@ -21,10 +22,16 @@ import (
 
 type FileService struct {
 	fileRepo *repository.FileRepository
+	baseURL  string
 }
 
-func NewFileService(fileRepo *repository.FileRepository) *FileService {
-	return &FileService{fileRepo: fileRepo}
+func NewFileService(fileRepo *repository.FileRepository, baseURL string) *FileService {
+	return &FileService{fileRepo: fileRepo, baseURL: baseURL}
+}
+
+// PublicURL builds a browser-reachable URL for a stored file key.
+func (s *FileService) PublicURL(storageKey string) string {
+	return strings.TrimRight(s.baseURL, "/") + "/uploads/" + storageKey
 }
 
 func (s *FileService) ProcessUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID, companyID, fileType string) (*models.File, error) {
@@ -137,8 +144,6 @@ func (s *FileService) GetSignedURL(
 		return "", time.Time{}, errors.NewNotFound("file not found or access denied")
 	}
 
-	stubURL := "http://localhost:18080/uploads/" + file.StorageKey
 	expiresAt = time.Now().Add(15 * time.Minute)
-
-	return stubURL, expiresAt, nil
+	return s.PublicURL(file.StorageKey), expiresAt, nil
 }

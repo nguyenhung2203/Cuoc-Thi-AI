@@ -323,12 +323,6 @@ const viewJob = (job) => {
                 <MapPin :size="12" /> {{ unwrap(job.location) || 'Không xác định' }}
               </span>
             </div>
-            
-            <div class="jb-ai-badge">
-              <span class="jb-tag ai-tag">
-                <Sparkles :size="10" /> Match {{ 80 + (job.id?.length % 15 || 5) }}%
-              </span>
-            </div>
           </div>
         </div>
       </div>

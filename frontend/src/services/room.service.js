@@ -23,14 +23,5 @@ export const roomService = {
    */
   getRoomToken: (companyId, interviewId, data = { participant_type: 'recruiter' }) => {
     return apiService.post(`/companies/${companyId}/interviews/${interviewId}/room/token`, data);
-  },
-
-  /**
-   * Lấy lịch sử chat của phòng (REST fallback — chủ yếu dùng WebSocket)
-   * API_SPEC §7 (endpoint GET /api/v1/rooms/:room_id/chat từ Gateway của Hùng)
-   * @param {String} roomId
-   */
-  getChatHistory: (roomId) => {
-    return apiService.get(`/rooms/${roomId}/chat`);
   }
 };

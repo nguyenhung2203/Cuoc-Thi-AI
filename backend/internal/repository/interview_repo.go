@@ -113,6 +113,18 @@ func (r *InterviewRepository) UpdateRoomStatus(ctx context.Context, id, status s
 	return err
 }
 
+// GetCompanyIDByInterviewID returns the company that owns an interview.
+// The realtime gateway needs it to call company-scoped AI services (IDOR guard)
+// since the LiveKit room token carries only interview_id, not company_id.
+func (r *InterviewRepository) GetCompanyIDByInterviewID(ctx context.Context, interviewID string) (string, error) {
+	var companyID string
+	err := r.db.GetContext(ctx, &companyID, `SELECT company_id FROM interviews WHERE id = $1`, interviewID)
+	if err != nil {
+		return "", err
+	}
+	return companyID, nil
+}
+
 func (r *InterviewRepository) GetByInviteTokenHash(ctx context.Context, hash string) (*models.Interview, error) {
 	q := `SELECT * FROM interviews WHERE invite_token_hash = $1 AND status != 'cancelled' AND status != 'completed'`
 	var i models.Interview

@@ -5,6 +5,7 @@ type RegisterRequest struct {
 	Password string `json:"password" validate:"required,min=6"`
 	FullName string `json:"full_name" validate:"required"`
 	Role     string `json:"role"`
+	OTP      string `json:"otp"`
 }
 
 type LoginRequest struct {

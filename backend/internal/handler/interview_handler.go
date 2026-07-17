@@ -10,6 +10,7 @@ import (
 	"backend/internal/livekit"
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/pkg/pagination"
 	"backend/internal/pkg/response"
 	"backend/internal/service"
 )
@@ -38,8 +39,8 @@ func (h *InterviewHandler) ProtectedRoutes(r chi.Router) {
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/end", h.EndInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/cancel", h.CancelInterview)
 	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room", h.GetRoom)
-	r.Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
-	r.Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
+	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
+	r.With(middleware.RequirePermission("interview:read")).Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
 }
 
 func (h *InterviewHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +72,8 @@ func (h *InterviewHandler) ListInterviews(w http.ResponseWriter, r *http.Request
 	companyID := chi.URLParam(r, "company_id")
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	items, err := h.svc.ListInterviews(r.Context(), companyID, 100, 0) // stub pagination
+	p := pagination.FromRequest(r)
+	items, err := h.svc.ListInterviews(r.Context(), companyID, p.PageSize, p.Offset())
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return

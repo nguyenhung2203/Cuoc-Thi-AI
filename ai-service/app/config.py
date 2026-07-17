@@ -17,10 +17,14 @@ class Config:
     {data, evidence, confidence, insufficient_data}.
     """
 
+    # Deployment environment. In "production" a real Gemini key is mandatory and
+    # the service refuses to start in mock mode (no silent [MOCK] fallback).
+    APP_ENV: str = os.getenv("APP_ENV", "development").strip().lower()
+
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 
     # Default model used when the caller does not specify one.
-    DEFAULT_MODEL: str = os.getenv("AI_DEFAULT_MODEL", "gemini-1.5-flash")
+    DEFAULT_MODEL: str = os.getenv("AI_DEFAULT_MODEL", "gemini-2.5-flash")
 
     # Generation defaults (overridable per-request).
     DEFAULT_TEMPERATURE: float = float(os.getenv("AI_DEFAULT_TEMPERATURE", "0.2"))
@@ -43,6 +47,27 @@ class Config:
     def key_placeholder(cls) -> bool:
         """True when the configured key is empty or an obvious placeholder."""
         return cls.GEMINI_API_KEY in ("", "your-gemini-api-key", "changeme")
+
+    @classmethod
+    def is_production(cls) -> bool:
+        return cls.APP_ENV in ("production", "prod")
+
+    @classmethod
+    def validate(cls) -> None:
+        """Fail fast on misconfiguration.
+
+        In production a real Gemini key is mandatory: we refuse to serve
+        deterministic [MOCK] responses to real users. This turns a silent,
+        hard-to-notice data-quality bug into a loud startup crash.
+        """
+        if cls.is_production() and cls.use_mock():
+            reason = (
+                "AI_MOCK is enabled" if cls.MOCK_MODE else "GEMINI_API_KEY is missing or a placeholder"
+            )
+            raise RuntimeError(
+                f"AI service refuses to start in mock mode under APP_ENV={cls.APP_ENV}: {reason}. "
+                "Set a real GEMINI_API_KEY and unset AI_MOCK."
+            )
 
 
 config = Config()

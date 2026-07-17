@@ -109,6 +109,13 @@ func (r *MockRepository) CreateMessage(ctx context.Context, msg *models.MockInte
 	return stmt.QueryRowContext(ctx, msg).Scan(&msg.ID, &msg.CreatedAt)
 }
 
+// UpdateMessageScore sets score_json on a single message (used by AI scoring at End).
+func (r *MockRepository) UpdateMessageScore(ctx context.Context, messageID string, scoreJSON models.JSONB) error {
+	q := `UPDATE mock_interview_messages SET score_json = $1 WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, q, scoreJSON, messageID)
+	return err
+}
+
 func (r *MockRepository) ListMessages(ctx context.Context, mockID string) ([]models.MockInterviewMessage, error) {
 	q := `SELECT * FROM mock_interview_messages WHERE mock_interview_id = $1 ORDER BY created_at ASC`
 	var items []models.MockInterviewMessage

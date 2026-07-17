@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { publicService } from '../../services/public.service'
+import { candidatePortalService } from '../../services/candidate-portal.service'
 import { authStore } from '../../stores/auth.store'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -27,6 +28,24 @@ const fileInput = ref(null)
 
 const isLoggedIn = computed(() => authStore.isAuthenticated)
 const user = computed(() => authStore.user)
+
+// AI CV↔JD match (real, from backend). null = not loaded, {has_cv:false} = no CV yet.
+const match = ref(null)
+const matchLoading = ref(false)
+
+const loadMatch = async () => {
+  if (!isLoggedIn.value) return
+  matchLoading.value = true
+  try {
+    const res = await candidatePortalService.getJobMatch(jobId)
+    match.value = res.data || res
+  } catch (e) {
+    console.error('Failed to load AI match', e)
+    match.value = null
+  } finally {
+    matchLoading.value = false
+  }
+}
 
 const unwrap = (val) => {
   if (!val) return ''
@@ -73,6 +92,7 @@ onMounted(async () => {
     loading.value = false
   }
   loadSavedJobIds()
+  loadMatch()
 })
 
 const validateAndSetFile = (file) => {
@@ -256,64 +276,75 @@ const scrollToApply = () => {
             <div style="display: flex; align-items: center; gap: 8px;">
               <Sparkles :size="24" /> AI Career Coach
             </div>
-            <div class="ai-score-ring" style="--score: 85;">
+            <div v-if="match && match.has_cv" class="ai-score-ring" :style="`--score: ${Math.round(match.fit_score)};`">
               <div class="ai-score-inner">
-                <span class="ai-score-val">85%</span>
+                <span class="ai-score-val">{{ Math.round(match.fit_score) }}%</span>
                 <span class="ai-score-label">Phù hợp</span>
               </div>
             </div>
           </div>
 
-          <!-- Tóm tắt JD -->
-          <div class="ai-section">
-            <h4 class="ai-section-title">
-              <Target :size="18" class="text-info" /> Tóm tắt nhanh JD
-            </h4>
+          <!-- Loading state -->
+          <div v-if="matchLoading" class="ai-section">
             <div class="ai-summary-box">
-              <p><strong>Nhiệm vụ chính:</strong> Khớp nối với yêu cầu của hệ thống, xây dựng giao diện hoàn chỉnh.</p>
-              <p><strong>Điểm cộng:</strong> Phù hợp môi trường làm việc độc lập, không gò bó.</p>
+              <p>Đang phân tích mức độ phù hợp giữa CV của bạn và công việc...</p>
             </div>
           </div>
 
-          <div class="ai-grid">
-            <!-- Skill Gap Analysis -->
-            <div class="ai-card">
-              <h4 class="ai-section-title">
-                <AlertCircle :size="16" class="text-warning" /> Độ phù hợp kỹ năng (Theo CV)
-              </h4>
-              <ul class="ai-list">
-                <li class="ai-list-item text-success">
-                  <span class="ai-icon">✓</span>
-                  <span><strong>Kinh nghiệm nền tảng:</strong> Phù hợp (2+ năm)</span>
-                </li>
-                <li class="ai-list-item text-success">
-                  <span class="ai-icon">✓</span>
-                  <span><strong>Kiến trúc hệ thống:</strong> Khớp yêu cầu</span>
-                </li>
-                <li class="ai-list-item text-warning">
-                  <span class="ai-icon">!</span>
-                  <span><strong>State Management:</strong> Cần làm rõ hơn</span>
-                </li>
-              </ul>
+          <!-- No CV: honest CTA instead of fake numbers -->
+          <div v-else-if="match && !match.has_cv" class="ai-section">
+            <div class="ai-summary-box">
+              <p><strong>Chưa có dữ liệu phù hợp.</strong> Hãy tải lên CV của bạn để AI phân tích mức độ phù hợp với công việc này.</p>
             </div>
+          </div>
 
-            <!-- Upskill Suggestions -->
-            <div class="ai-card">
+          <!-- Real AI match result -->
+          <template v-else-if="match && match.has_cv">
+            <div class="ai-section">
               <h4 class="ai-section-title">
-                <BookOpen :size="16" class="text-info" /> Định hướng bổ sung (Upskill)
+                <Target :size="18" class="text-info" /> Nhận định của AI
               </h4>
-              <div class="ai-upskill-list">
-                <details class="ai-accordion">
-                  <summary class="ai-accordion-title">1. Bổ sung kiến thức Unit Test</summary>
-                  <div class="ai-accordion-content">Nhà tuyển dụng thường hỏi về Testing. Hãy học nhanh cú pháp cơ bản.</div>
-                </details>
-                <details class="ai-accordion">
-                  <summary class="ai-accordion-title">2. Củng cố Data Flow</summary>
-                  <div class="ai-accordion-content">Chuẩn bị cách bạn quản lý luồng dữ liệu phức tạp.</div>
-                </details>
+              <div class="ai-summary-box">
+                <p>{{ match.summary }}</p>
+                <p v-if="match.recommendation"><strong>Gợi ý:</strong> {{ match.recommendation }}</p>
               </div>
             </div>
-          </div>
+
+            <div class="ai-grid">
+              <!-- Matched skills -->
+              <div class="ai-card">
+                <h4 class="ai-section-title">
+                  <CheckSquare :size="16" class="text-success" /> Kỹ năng phù hợp
+                </h4>
+                <ul class="ai-list">
+                  <li v-for="(sk, i) in match.matched_skills" :key="'m'+i" class="ai-list-item text-success">
+                    <span class="ai-icon">✓</span>
+                    <span>{{ sk }}</span>
+                  </li>
+                  <li v-if="!match.matched_skills || match.matched_skills.length === 0" class="ai-list-item text-muted">
+                    <span>Chưa xác định được kỹ năng khớp.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Missing skills -->
+              <div class="ai-card">
+                <h4 class="ai-section-title">
+                  <AlertCircle :size="16" class="text-warning" /> Kỹ năng cần bổ sung
+                </h4>
+                <ul class="ai-list">
+                  <li v-for="(sk, i) in match.missing_skills" :key="'x'+i" class="ai-list-item text-warning">
+                    <span class="ai-icon">!</span>
+                    <span>{{ sk }}</span>
+                  </li>
+                  <li v-if="!match.missing_skills || match.missing_skills.length === 0" class="ai-list-item text-success">
+                    <span class="ai-icon">✓</span>
+                    <span>Không thiếu kỹ năng nổi bật.</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- JD Content (TopCV Style) -->

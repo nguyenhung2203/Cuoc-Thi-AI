@@ -85,14 +85,5 @@ export const fileService = {
       formData.append('company_id', companyId);
     }
     return apiService.post('/files', formData);
-  },
-
-  /**
-   * Lấy Signed URL để tải file về (có thời hạn)
-   * API_SPEC §12.2 — GET /files/:file_id/download-url
-   * @param {String} fileId
-   */
-  getDownloadUrl: (fileId) => {
-    return apiService.get(`/files/${fileId}/download-url`);
   }
 };

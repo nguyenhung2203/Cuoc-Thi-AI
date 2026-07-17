@@ -77,6 +77,7 @@ const routes = [
       { path: 'dashboard', component: () => import('../views/admin/AdminDashboard.vue') },
       { path: 'users', component: () => import('../views/admin/AdminUsersPage.vue') },
       { path: 'companies', component: () => import('../views/admin/AdminCompaniesPage.vue') },
+      { path: 'reports', component: () => import('../views/admin/AdminReportsPage.vue') },
       { path: 'logs', component: () => import('../views/admin/AdminLogsPage.vue') },
       { path: 'settings', component: () => import('../views/admin/AdminSettingsPage.vue') }
     ]

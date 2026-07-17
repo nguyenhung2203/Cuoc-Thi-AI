@@ -100,19 +100,23 @@ func main() {
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo, cvAnalyzer)
-	fileSvc := service.NewFileService(fileRepo)
+	fileSvc := service.NewFileService(fileRepo, cfg.PublicBaseURL)
 	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 	rubricSvc := service.NewRubricService(rubricRepo)
 	scoreSvc := service.NewScoreService(scoreRepo, transcriptRepo, rubricRepo, interviewRepo, aiOrchestrator)
 	reportSvc := service.NewReportService(reportRepo, transcriptRepo, scoreRepo, jobRepo, interviewRepo, notificationRepo, aiOrchestrator)
 	mailer := email.NewSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
+	otpSvc := service.NewOTPService(redisClient)
+	authSvc.WithOTP(otpSvc, mailer)
+	authSvc.WithGoogle(cfg.GoogleClientID)
 	interviewSvc := service.NewInterviewService(interviewRepo, reportSvc, notificationRepo).
 		WithMailer(candidateRepo, mailer, cfg.FrontendURL)
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
 	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
+	matchCache := service.NewMatchCacheService(redisClient)
 
-	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, notificationRepo)
+	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, aiOrchestrator, matchCache, notificationRepo, fileSvc)
 	userSvc := service.NewUserService(userRepo)
 
 	// 4b. Async queue (Redis/asynq). Best-effort: if Redis is unavailable the
@@ -121,7 +125,8 @@ func main() {
 		log.Printf("queue: Redis unavailable (%v) — reports will run inline", derr)
 	} else {
 		reportSvc.SetEnqueuer(dispatcher.EnqueueGenerateReport)
-		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc)
+		candidatePortalSvc.SetMatchEnqueuer(dispatcher.EnqueueRecomputeMatches)
+		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc, candidatePortalSvc)
 		go func() {
 			log.Println("queue: async worker started")
 			if werr := worker.Run(); werr != nil {

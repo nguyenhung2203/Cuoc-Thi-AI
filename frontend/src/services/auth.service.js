@@ -15,12 +15,44 @@ export const authService = {
   },
 
   /**
-   * Đăng ký
-   * @param {Object} payload - { email, password, full_name, role }
+   * Đăng ký (payload cần kèm otp đã xác thực qua email)
+   * @param {Object} payload - { email, password, full_name, role, otp }
    * @returns {Promise<Object>} { user, access_token, refresh_token }
    */
   register: (payload) => {
     return apiService.post('/auth/register', payload);
+  },
+
+  /**
+   * Gửi mã OTP xác nhận đăng ký về email
+   * @param {String} email
+   */
+  sendRegisterOtp: (email) => {
+    return apiService.post('/auth/register/send-otp', { email });
+  },
+
+  /**
+   * Quên mật khẩu — gửi OTP đặt lại về email
+   * @param {String} email
+   */
+  forgotPassword: (email) => {
+    return apiService.post('/auth/forgot-password', { email });
+  },
+
+  /**
+   * Xác thực OTP đặt lại mật khẩu (chưa tiêu thụ mã)
+   * @param {Object} data { email, otp }
+   */
+  verifyResetOtp: (data) => {
+    return apiService.post('/auth/verify-reset-otp', data);
+  },
+
+  /**
+   * Đặt lại mật khẩu với OTP đã xác thực
+   * @param {Object} data { email, otp, new_password }
+   */
+  resetPassword: (data) => {
+    return apiService.post('/auth/reset-password', data);
   },
 
   /**

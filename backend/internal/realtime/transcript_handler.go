@@ -3,6 +3,7 @@ package realtime
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -129,4 +130,41 @@ func (r *MessageRouter) processTranscriptWebSocketEvent(conn *ClientConnection, 
 	if r.transcriptPipeline != nil {
 		r.transcriptPipeline.Push(conn.RoomID, updatePayload)
 	}
+
+	// Auto-trigger an AI follow-up suggestion when the CANDIDATE finishes a
+	// substantive answer, so the recruiter gets live help without clicking.
+	// Guards: candidate-only, long-enough content (skip "vâng"/"ừ"), and the
+	// existing per-interview rate limiter (10/10min) to protect the AI quota.
+	if isFinal && resolvedType == events.SpeakerCandidate {
+		r.maybeAutoSuggest(room, content)
+	}
+}
+
+// maybeAutoSuggest fires the suggestion worker for a candidate's final answer
+// when it is long enough and the rate limiter allows it. Best-effort and
+// non-blocking: it never fails the transcript path.
+func (r *MessageRouter) maybeAutoSuggest(room *Room, content string) {
+	if r.suggestionSvc == nil || r.interviewRepo == nil {
+		return // no real AI wired (dev) — skip auto-suggest
+	}
+	if len([]rune(strings.TrimSpace(content))) < 40 {
+		return // too short to be worth an AI call
+	}
+	if r.aiRateLimiter != nil && !r.aiRateLimiter.Allow(room.InterviewID) {
+		return // respect the 10/10min budget; recruiter can still ask manually
+	}
+
+	reqID := uuid.New().String()
+	thinkingPayload := events.AIThinkingPayload{
+		Task:               events.AITaskSuggestFollowUp,
+		RequestID:          reqID,
+		Message:            "AI đang phân tích câu trả lời...",
+		ExpectedDurationMs: 3000,
+	}
+	if thinkEnv, err := events.NewEnvelope(events.EventAIThinking, reqID, room.ID, room.InterviewID, thinkingPayload); err == nil {
+		rawThink, _ := thinkEnv.ToJSON()
+		room.BroadcastWithVisibility(events.EventAIThinking, "", rawThink)
+	}
+
+	go r.processAISuggestionWorker(room.ID, room.InterviewID, reqID, "", "")
 }

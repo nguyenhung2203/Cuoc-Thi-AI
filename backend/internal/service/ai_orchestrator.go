@@ -214,15 +214,15 @@ type ScoreResult struct {
 // ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
 func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide string) (*ScoreResult, error) {
 	variables := map[string]string{
-		"TRANSCRIPT":     transcriptText,
-		"CRITERION_NAME": criterionName,
-		"CRITERION_DESC": criterionDesc,
-		"MIN_SCORE":      fmt.Sprintf("%d", minScore),
-		"MAX_SCORE":      fmt.Sprintf("%d", maxScore),
-		"SCORING_GUIDE":  scoringGuide,
+		"transcript":     transcriptText,
+		"criterion_name": criterionName,
+		"criterion_desc": criterionDesc,
+		"min_score":      fmt.Sprintf("%d", minScore),
+		"max_score":      fmt.Sprintf("%d", maxScore),
+		"scoring_guide":  scoringGuide,
 	}
 
-	fullResp, err := s.CallAIWithFullResponse(ctx, "SCORE_ANSWER", companyID, variables)
+	fullResp, err := s.CallAIWithFullResponse(ctx, "score_answer", companyID, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -244,12 +244,12 @@ func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID strin
 // GenerateReport calls AI to generate a final interview report based on transcript, scores, and job requirements.
 func (s *AIOrchestratorService) GenerateReport(ctx context.Context, companyID string, jobRequirements string, transcript string, scoresJSON string) (*ai.ReportGenerationResult, error) {
 	variables := map[string]string{
-		"JOB_REQUIREMENTS": jobRequirements,
-		"TRANSCRIPT":       transcript,
-		"SCORES":           scoresJSON,
+		"job_requirements": jobRequirements,
+		"transcript":       transcript,
+		"scores":           scoresJSON,
 	}
 
-	fullResp, err := s.CallAIWithFullResponse(ctx, "GENERATE_REPORT", companyID, variables)
+	fullResp, err := s.CallAIWithFullResponse(ctx, "generate_report", companyID, variables)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"backend/internal/dto/response"
+	"backend/internal/models"
 )
 
 type CandidatePortalRepository struct {
@@ -143,6 +144,48 @@ func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, compan
 	`
 	_, err = r.db.ExecContext(ctx, qJc, companyID, candidateID, jobID)
 	return err
+}
+
+// GetCandidateIDByUserCompany resolves the candidate row id for a user in a company.
+func (r *CandidatePortalRepository) GetCandidateIDByUserCompany(ctx context.Context, userID, companyID string) (string, error) {
+	q := `SELECT id FROM candidates WHERE user_id = $1 AND company_id = $2 AND deleted_at IS NULL LIMIT 1`
+	var id string
+	err := r.db.GetContext(ctx, &id, q, userID, companyID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return id, err
+}
+
+// UpdateMatch persists the AI-computed fit score and match JSON onto a job application.
+func (r *CandidatePortalRepository) UpdateMatch(ctx context.Context, jobID, candidateID string, fitScore sql.NullFloat64, matchJSON models.JSONB) error {
+	q := `UPDATE job_candidates SET fit_score = $1, ai_match_json = $2 WHERE job_id = $3 AND candidate_id = $4`
+	_, err := r.db.ExecContext(ctx, q, fitScore, matchJSON, jobID, candidateID)
+	return err
+}
+
+// UserApplication is a (job, candidate) pair for a user's job application, used
+// to recompute fit scores when the user's CV changes.
+type UserApplication struct {
+	JobID       string `db:"job_id"`
+	CandidateID string `db:"candidate_id"`
+}
+
+// ListUserApplications returns all (job_id, candidate_id) pairs the user has
+// applied to, so their fit scores can be recomputed after a CV change.
+func (r *CandidatePortalRepository) ListUserApplications(ctx context.Context, userID string) ([]UserApplication, error) {
+	q := `
+		SELECT jc.job_id, jc.candidate_id
+		FROM job_candidates jc
+		JOIN candidates c ON jc.candidate_id = c.id
+		WHERE c.user_id = $1 AND c.deleted_at IS NULL
+	`
+	var items []UserApplication
+	err := r.db.SelectContext(ctx, &items, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (r *CandidatePortalRepository) GetApplicationsByUserID(ctx context.Context, userID string) ([]response.CandidatePortalApplication, error) {

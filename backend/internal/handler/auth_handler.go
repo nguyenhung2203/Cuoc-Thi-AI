@@ -28,10 +28,14 @@ func NewAuthHandler(authService *service.AuthService, jwtSecret string, auditSvc
 
 func (h *AuthHandler) Routes(r chi.Router) {
 	r.Post("/register", h.Register)
+	r.Post("/register/send-otp", h.SendRegistrationOTP)
 	r.Post("/login", h.Login)
 	r.Post("/google-login", h.GoogleLogin)
 	r.Post("/google", h.GoogleLogin)
 	r.Post("/refresh", h.Refresh)
+	r.Post("/forgot-password", h.ForgotPassword)
+	r.Post("/verify-reset-otp", h.VerifyResetOTP)
+	r.Post("/reset-password", h.ResetPassword)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout", h.Logout)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Post("/logout-all", h.LogoutAll)
 	r.With(middleware.AuthMiddleware(h.jwtSecret)).Get("/me", h.Me)
@@ -100,6 +104,89 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	setRefreshTokenCookie(w, refreshToken)
 	pkgresponse.JSON(w, http.StatusCreated, authResp, nil, "")
+}
+
+// SendRegistrationOTP emails a one-time code to verify a new registration email.
+func (h *AuthHandler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+	if err := h.authService.SendRegistrationOTP(r.Context(), body.Email); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to send otp"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
+}
+
+// ForgotPassword emails a password-reset OTP. Always returns 200 to avoid account enumeration.
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+	if err := h.authService.ForgotPassword(r.Context(), body.Email); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to process request"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
+}
+
+// VerifyResetOTP validates a password-reset code without consuming it.
+func (h *AuthHandler) VerifyResetOTP(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email string `json:"email"`
+		OTP   string `json:"otp"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+	if err := h.authService.VerifyResetOTP(r.Context(), body.Email, body.OTP); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to verify otp"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_valid"}, nil, "")
+}
+
+// ResetPassword verifies the reset OTP and sets a new password.
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Email       string `json:"email"`
+		OTP         string `json:"otp"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+	if err := h.authService.ResetPassword(r.Context(), body.Email, body.OTP, body.NewPassword); err != nil {
+		if appErr, ok := errors.IsAppError(err); ok {
+			pkgresponse.Error(w, appErr, "")
+		} else {
+			pkgresponse.Error(w, errors.NewInternal("failed to reset password"), "")
+		}
+		return
+	}
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "password_reset"}, nil, "")
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {

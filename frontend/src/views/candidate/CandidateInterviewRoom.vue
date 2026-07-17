@@ -5,6 +5,7 @@ import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, CheckCircle, FileText, ChevronsRight, ChevronsLeft, X, Send } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
+import { useSpeechToText } from '../../composables/useSpeechToText'
 
 // Import Stores
 import { useRoomStore } from '../../stores/room.store'
@@ -22,6 +23,27 @@ const {
   localVideoEl, remoteVideoEl,
   connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
 } = useLiveKit()
+
+// Live transcription of THIS candidate's mic (free Web Speech API). Pushes
+// transcript:partial/final up the realtime WS; the gateway attributes the
+// speaker, broadcasts, persists, and triggers AI suggestion/scoring.
+const { supported: sttSupported, listening: sttListening, start: startSTT, stop: stopSTT } = useSpeechToText()
+
+const syncSTT = () => {
+  const shouldRun = roomStore.status === 'active' && isMicOn.value && sttSupported.value
+  if (shouldRun && !sttListening.value) {
+    startSTT({
+      roomId: roomStore.roomId,
+      interviewId: roomStore.interviewId,
+      speakerType: 'candidate',
+      speakerName: 'Ứng viên',
+    })
+  } else if (!shouldRun && sttListening.value) {
+    stopSTT()
+  }
+}
+
+watch(() => [roomStore.status, isMicOn.value], syncSTT)
 
 const activeTab = ref(sessionStorage.getItem('candidate_active_tab') || 'info')
 watch(activeTab, (val) => {
@@ -80,7 +102,7 @@ onMounted(async () => {
       setTimeout(() => tryJoinAsCandidate(), 500)
 
       // Connect LiveKit (hoặc native getUserMedia nếu không có server)
-      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:17880'
       await connectToRoom(livekitUrl, token)
     } catch (err) {
       console.error('Không thể vào phòng', err)
@@ -127,6 +149,7 @@ const handleCandidateCancelLeave = () => {
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleCandidateBeforeUnload)
+  stopSTT()
   liveKitDisconnect()
   roomStore.disconnectRoom()
   chatStore.cleanupListeners()

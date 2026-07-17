@@ -32,6 +32,16 @@ export const candidatePortalService = {
     return apiService.get('/portal/applications');
   },
 
+  /**
+   * Lấy độ phù hợp CV↔công việc do AI tính (dùng cho trang ứng tuyển).
+   * Trả về { has_cv, fit_score, matched_skills, missing_skills, summary, recommendation }.
+   * @param {string} jobID
+   * @returns {Promise<Object>}
+   */
+  getJobMatch: (jobID) => {
+    return apiService.get(`/portal/jobs/${jobID}/match`);
+  },
+
   cancelApplication: (id) => {
     return apiService.delete(`/portal/applications/${id}`);
   },

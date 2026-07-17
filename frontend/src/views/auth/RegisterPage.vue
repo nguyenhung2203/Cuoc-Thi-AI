@@ -2,6 +2,8 @@
 import { ref, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
+import { authService } from '../../services/auth.service'
+import { useGoogleAuth } from '../../composables/useGoogleAuth'
 import AppLogo from '../../components/common/AppLogo.vue'
 import { ShieldCheck, ArrowRight, ArrowLeft, Mail, Lock, User, CheckCircle2, RefreshCw, Sparkles, Building2, UserCheck, AlertCircle, FileCode, TrendingUp } from 'lucide-vue-next'
 
@@ -22,8 +24,8 @@ const form = reactive({
 const error = ref('')
 const loading = ref(false)
 
-// Google Auth Simulation State
-const showGoogleModal = ref(false)
+// Real Google Sign-In via Google Identity Services
+const { available: googleAvailable, signIn: googleSignIn } = useGoogleAuth()
 
 // Step 2 OTP Data (6 digits)
 const otpDigits = ref(['', '', '', '', '', ''])
@@ -63,15 +65,23 @@ const handleStep1Submit = async (e) => {
   error.value = ''
   loading.value = true
 
-  // Simulate sending real OTP verification email via backend mailer
-  setTimeout(() => {
-    loading.value = false
+  try {
+    // Gửi OTP thật qua email (backend cũng kiểm tra email đã tồn tại chưa)
+    await authService.sendRegistrationOtp(form.email)
     step.value = 2
     startOtpTimer()
     nextTick(() => {
       if (otpInputs.value[0]) otpInputs.value[0].focus()
     })
-  }, 700)
+  } catch (err) {
+    if (err.message === 'email already exists') {
+      error.value = 'Email này đã được đăng ký trong hệ thống. Vui lòng dùng email khác hoặc đăng nhập.'
+    } else {
+      error.value = err.message || 'Không thể gửi mã xác nhận. Vui lòng thử lại.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 // Handle OTP digit inputs
@@ -130,13 +140,18 @@ const handleOtpPaste = (e) => {
   }
 }
 
-const resendOtp = () => {
+const resendOtp = async () => {
   if (timer.value > 0) return
-  startOtpTimer()
-  otpDigits.value = ['', '', '', '', '', '']
-  nextTick(() => {
-    if (otpInputs.value[0]) otpInputs.value[0].focus()
-  })
+  try {
+    await authService.sendRegistrationOtp(form.email)
+    startOtpTimer()
+    otpDigits.value = ['', '', '', '', '', '']
+    nextTick(() => {
+      if (otpInputs.value[0]) otpInputs.value[0].focus()
+    })
+  } catch (err) {
+    error.value = err.message || 'Không thể gửi lại mã xác nhận.'
+  }
 }
 
 const handleVerifyOtp = async () => {
@@ -150,10 +165,10 @@ const handleVerifyOtp = async () => {
   loading.value = true
 
   try {
-    // 1. Register user
-    await authStore.register(form.email, form.password, form.name, form.role)
-    
-    // 2. Auto login right after successful OTP verification
+    // 1. Register user (backend verifies the OTP code before creating the account)
+    await authStore.register(form.email, form.password, form.name, form.role, code)
+
+    // 2. Auto login right after successful registration
     await authStore.login(form.email, form.password)
     
     if (form.role === 'recruiter') {
@@ -172,12 +187,12 @@ const handleVerifyOtp = async () => {
   }
 }
 
-const handleGoogleSelect = async (roleType, emailChoice) => {
-  showGoogleModal.value = false
-  loading.value = true
+const handleGoogleLogin = async () => {
   error.value = ''
+  loading.value = true
   try {
-    const user = await authStore.loginWithGoogle(roleType, emailChoice)
+    const idToken = await googleSignIn()
+    const user = await authStore.loginWithGoogle(idToken, form.role)
     if (user.role === 'recruiter') {
       router.push({ path: '/dashboard', state: { message: `Đăng nhập Google thành công! Chào mừng Nhà tuyển dụng ${user.full_name}.` } })
     } else {
@@ -294,59 +309,6 @@ const handleGoogleSelect = async (roleType, emailChoice) => {
       </div>
     </div>
 
-    <!-- Google OAuth Selection Modal -->
-    <div v-if="showGoogleModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-      <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6">
-        <div class="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-700">
-          <svg class="w-8 h-8" viewBox="0 0 24 24">
-            <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.3 8.9 5 12 5z"/>
-            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
-            <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.5.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z"/>
-            <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.2L1.6 15.9C3.5 19.7 7.4 23 12 23z"/>
-          </svg>
-          <div>
-            <h3 class="font-bold text-slate-800 dark:text-white text-lg">Đăng ký bằng tài khoản Google</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Chọn tài khoản Google để tiếp tục với WeMake AI</p>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <button @click="handleGoogleSelect('candidate', 'candidate@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
-                N
-              </div>
-              <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">Nguyễn Văn A (Ứng viên)</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">candidate@wemake.vn</div>
-              </div>
-            </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Candidate</span>
-          </button>
-
-          <button @click="handleGoogleSelect('recruiter', 'recruiter@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
-                H
-              </div>
-              <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">HR Manager (Nhà tuyển dụng)</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">recruiter@wemake.vn</div>
-              </div>
-            </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Recruiter</span>
-          </button>
-        </div>
-
-        <div class="pt-2 flex justify-end">
-          <button @click="showGoogleModal = false" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors">
-            Hủy bỏ
-          </button>
-        </div>
-      </div>
-    </div>
 
     <!-- Main Registration Box -->
     <div class="w-full max-w-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-800/80 p-8 sm:p-10 relative z-10 transition-all duration-500">
@@ -471,7 +433,7 @@ const handleGoogleSelect = async (roleType, emailChoice) => {
         </div>
 
         <!-- Google Sign Up Button -->
-        <button @click="showGoogleModal = true"
+        <button v-if="googleAvailable" @click="handleGoogleLogin"
                 type="button"
                 class="w-full py-3 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-3 group">
           <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">

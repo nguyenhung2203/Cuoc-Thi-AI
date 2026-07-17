@@ -47,7 +47,7 @@ OUTPUT JSON đúng schema sau:
       "expected_signals": ["string"]
     }
   ]
-}', '{"job_description":"string","job_title":"string","job_level":"string","department":"string"}', 'gemini-1.5-pro', '{"temperature": 0.2, "max_tokens": 2048}', true),
+}', '{"job_description":"string","job_title":"string","job_level":"string","department":"string"}', 'gemini-2.5-flash', '{"temperature": 0.2, "max_tokens": 2048}', true),
 
 ('analyze_cv', 1, 'Bạn là AI assistant hỗ trợ recruiter đọc CV.
 
@@ -100,7 +100,7 @@ OUTPUT JSON:
   "potential_concerns": ["string"],
   "questions_to_verify": ["string"],
   "confidence": 0.0
-}', '{"cv_text":"string","job_context":"string"}', 'gemini-1.5-pro', '{"temperature": 0.2, "max_tokens": 2048}', true),
+}', '{"cv_text":"string","job_context":"string"}', 'gemini-2.5-flash', '{"temperature": 0.2, "max_tokens": 2048}', true),
 
 ('generate_questions', 1, 'Bạn là AI chuyên thiết kế câu hỏi phỏng vấn tuyển dụng.
 
@@ -143,5 +143,5 @@ OUTPUT JSON:
       "red_flags": ["string"]
     }
   ]
-}', '{"job":"string","candidate_cv_summary":"string","rubric":"string","level":"string","count":"number","question_types":"string"}', 'gemini-1.5-pro', '{"temperature": 0.7, "max_tokens": 2048}', true)
+}', '{"job":"string","candidate_cv_summary":"string","rubric":"string","level":"string","count":"number","question_types":"string"}', 'gemini-2.5-flash', '{"temperature": 0.7, "max_tokens": 2048}', true)
 ON CONFLICT DO NOTHING;

@@ -28,6 +28,7 @@ func (h *CandidatePortalHandler) Routes(r chi.Router) {
 	r.Put("/profile", h.UpdateProfile)
 	r.Post("/cv", h.UploadCV)
 	r.Post("/jobs/{jobID}/apply", h.ApplyJob)
+	r.Get("/jobs/{jobID}/match", h.GetJobMatch)
 	r.Get("/applications", h.GetApplications)
 	r.Delete("/applications/{id}", h.CancelApplication)
 }
@@ -47,9 +48,16 @@ func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request
 	var cvFileID, cvOriginalName string
 	if err == nil && file != nil {
 		defer file.Close()
-		// Here you would normally upload the file to S3 or save it locally and get the file ID
-		// For now we simulate saving it and just use the filename
-		cvFileID = "local-" + header.Filename
+		fileRecord, upErr := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, "", "cv")
+		if upErr != nil {
+			if appErr, ok := errors.IsAppError(upErr); ok {
+				response.Error(w, appErr, requestID)
+			} else {
+				response.Error(w, errors.NewInternal("failed to process cv upload"), requestID)
+			}
+			return
+		}
+		cvFileID = fileRecord.ID
 		cvOriginalName = header.Filename
 	}
 
@@ -64,6 +72,38 @@ func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "applied successfully"}, nil, requestID)
+}
+
+// GetJobMatch returns an on-demand AI CV↔job match for the Apply page preview.
+// When the user has no parsed CV, it returns 200 with has_cv=false so the
+// frontend can show a "upload CV" CTA instead of a fake score.
+func (h *CandidatePortalHandler) GetJobMatch(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	jobID := chi.URLParam(r, "jobID")
+
+	result, err := h.svc.GetJobMatch(r.Context(), userID, jobID)
+	if err != nil {
+		if err == service.ErrNoCV {
+			response.JSON(w, http.StatusOK, map[string]interface{}{"has_cv": false}, nil, requestID)
+			return
+		}
+		if appErr, ok := errors.IsAppError(err); ok {
+			response.Error(w, appErr, requestID)
+		} else {
+			response.Error(w, errors.NewInternal("failed to compute match"), requestID)
+		}
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"has_cv":         true,
+		"fit_score":      result.FitScore,
+		"matched_skills": result.MatchedSkills,
+		"missing_skills": result.MissingSkills,
+		"summary":        result.Summary,
+		"recommendation": result.Recommendation,
+	}, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
@@ -179,7 +219,7 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	cvUrl := "http://localhost:18080/uploads/" + fileRecord.StorageKey
+	cvUrl := h.fileSvc.PublicURL(fileRecord.StorageKey)
 
 	// Fetch the freshly parsed profile so the client can show real extracted data.
 	profile, _ := h.svc.GetProfile(r.Context(), userID)

@@ -14,92 +14,7 @@ const id = route.query.mock_id || route.params.id
 
 const loading = ref(true)
 const sessionData = ref(null)
-
-const demoMockReports = {
-  'mock-01': {
-    role: 'Senior AI Engineer (LLM / RAG Pipeline)',
-    level: 'Senior Tier 2',
-    date: '11/07/2026',
-    overallScore: '9.4',
-    summaryFeedback: 'Ứng viên thể hiện hiểu biết sâu sắc về kiến trúc LLM hiện đại, làm chủ hoàn toàn luồng RAG Pipeline và có tư duy tối ưu chi phí hạ tầng xuất sắc. Sẵn sàng cho vị trí Senior AI Engineer tại các hệ thống Enterprise.',
-    questions: [
-      {
-        id: 1,
-        question: 'Giải thích sự khác biệt cốt lõi giữa Fine-tuning LLM và RAG Pipeline? Trong kịch bản doanh nghiệp nào bạn sẽ ưu tiên chọn RAG thay vì Fine-tuning?',
-        candidateAnswer: 'RAG giúp bổ sung kiến thức động từ cơ sở dữ liệu bên ngoài mà không cần huấn luyện lại mô hình, rất tốt cho dữ liệu doanh nghiệp thay đổi liên tục hàng ngày. Fine-tuning giúp thay đổi văn phong, định dạng đầu ra JSON hoặc kiến thức miền chuyên sâu cố định, nhưng tốn chi phí và không cập nhật real-time được.',
-        score: 9.5,
-        feedback: 'Trả lời chính xác, phân định rõ ràng trade-off giữa chi phí huấn luyện và tính thời gian thực của dữ liệu.',
-        goodPoints: [
-          'Nắm vững nguyên lý hoạt động của Vector DB và Embedding retrieval pipeline.',
-          'Đề cập chính xác đến bài toán chi phí (Cost optimization) và độ trễ (Latency).'
-        ],
-        improvePoints: [
-          'Có thể bổ sung thêm kỹ thuật Hybrid Search (BM25 + Semantic Search) để tối ưu độ chính xác truy xuất từ khóa đặc thù.'
-        ]
-      },
-      {
-        id: 2,
-        question: 'Làm thế nào để giảm thiểu tối đa hiện tượng Hallucination (ảo giác) trong các hệ thống RAG quy mô lớn?',
-        candidateAnswer: 'Sử dụng kỹ thuật Re-ranking bằng Cohere/BGE reranker sau khi retrieve từ Vector DB, áp dụng Prompt Engineering yêu cầu mô hình chỉ trả lời dựa trên context được cung cấp (Grounding), và thiết lập Self-Check / Guardrails để kiểm duyệt đầu ra.',
-        score: 9.3,
-        feedback: 'Đưa ra giải pháp đa tầng (Multi-stage RAG) đạt chuẩn hệ thống cấp doanh nghiệp lớn.',
-        goodPoints: [
-          'Khả năng áp dụng Re-ranking và Guardrails để kiểm soát chất lượng đầu ra chặt chẽ.',
-          'Tư duy phân lớp bảo mật và độ tin cậy của AI response.'
-        ],
-        improvePoints: [
-          'Nên định lượng thêm bộ chỉ số kiểm thử tự động RAGAs (Faithfulness, Answer Relevance) trong quy trình CI/CD.'
-        ]
-      }
-    ]
-  },
-  'mock-02': {
-    role: 'Backend Tech Lead (High-concurrency)',
-    level: 'Tech Lead',
-    date: '08/07/2026',
-    overallScore: '8.7',
-    summaryFeedback: 'Nền tảng hệ thống phân tán (Distributed Systems) và tư duy thiết kế Microservices vững vàng. Có kinh nghiệm thực chiến với tải cao, cần làm rõ thêm các chi tiết khóa phân tán trên Redis Cluster.',
-    questions: [
-      {
-        id: 1,
-        question: 'Thiết kế kiến trúc hệ thống xử lý 10,000 requests/giây (RPS) cho tính năng đặt vé flash-sale mà không bị sập cơ sở dữ liệu?',
-        candidateAnswer: 'Sử dụng Redis Cluster để giữ chỗ (reservation) trong bộ nhớ tạm thời, áp dụng rate limiting bằng Token Bucket tại API Gateway, và đưa giao dịch ghi DB vào Kafka message queue để xử lý bất đồng bộ (Asynchronous processing).',
-        score: 8.8,
-        feedback: 'Cấu trúc giải pháp rất tốt, phân tách luồng Synchronous và Asynchronous hiệu quả nhằm bảo vệ Database.',
-        goodPoints: [
-          'Sử dụng Redis giữ chỗ trong RAM giúp giảm 95% tải trực tiếp vào Relational DB.',
-          'Áp dụng Message Queue (Kafka) để điều tiết lưu lượng (Traffic shaping / Peak clipping).'
-        ],
-        improvePoints: [
-          'Cần giải thích sâu hơn cách xử lý Race-condition khi 2 user cùng tranh 1 vé cuối cùng (sử dụng Lua script trên Redis hoặc Distributed Lock).'
-        ]
-      }
-    ]
-  },
-  'mock-03': {
-    role: 'Fullstack Systems Architect (Vue / Go)',
-    level: 'Principal',
-    date: '03/07/2026',
-    overallScore: '8.2',
-    summaryFeedback: 'Tư duy tổng thể vững vàng từ Frontend đến Backend. Trình bày cấu trúc STAR rõ ràng, logic phản biện sắc bén và hiểu rõ vòng đời phát triển phần mềm Agile.',
-    questions: [
-      {
-        id: 1,
-        question: 'Làm thế nào để tối ưu Core Web Vitals (LCP, INP, CLS) cho một ứng dụng Vue 3 quy mô lớn có hàng ngàn component?',
-        candidateAnswer: 'Áp dụng Lazy loading cho các route và heavy component, sử dụng Vite dynamic code-splitting, tối ưu hình ảnh sang định dạng WebP/AVIF và tránh thay đổi layout đột ngột (CLS) bằng cách giữ chỗ (skeleton/placeholder) trước khi tải dữ liệu.',
-        score: 8.5,
-        feedback: 'Nắm vững các kỹ thuật tối ưu Frontend hiệu năng cao và cấu hình Vite/Vue Router hiện đại.',
-        goodPoints: [
-          'Đưa ra các giải pháp thực tế có thể tích hợp ngay vào quy trình build Vite.',
-          'Hiểu rõ cơ chế Virtual DOM và reactive performance của Vue 3 Composition API.'
-        ],
-        improvePoints: [
-          'Có thể bổ sung thêm kiến trúc Server-Side Rendering (SSR) hoặc Nuxt 3 để giảm tối đa thời gian Time-to-First-Byte (TTFB).'
-        ]
-      }
-    ]
-  }
-}
+const loadError = ref(false)
 
 onMounted(async () => {
   if (!id) {
@@ -109,20 +24,23 @@ onMounted(async () => {
   try {
     const data = await apiService.get(`/mock-interviews/${id}`)
     const messages = await mockService.getMessages(id)
-    
+
     let formattedQuestions = []
     let lastQ = null
     if (Array.isArray(messages)) {
       for (let m of messages) {
         if (m.sender_type === 'ai') {
-          if (m.question_type) lastQ = m.content
+          lastQ = m.content
         } else if (m.sender_type === 'candidate') {
           const nextAi = messages.find(m2 => m2.sender_type === 'ai' && m2.created_at > m.created_at)
           let score = 0, feedback = ''
+          let goodPoints = [], improvePoints = []
           if (nextAi && nextAi.score_json) {
-             const sj = JSON.parse(nextAi.score_json)
+             const sj = typeof nextAi.score_json === 'string' ? JSON.parse(nextAi.score_json) : nextAi.score_json
              score = sj.score
              feedback = nextAi.content
+             if (Array.isArray(sj.good_points)) goodPoints = sj.good_points
+             if (Array.isArray(sj.improve_points)) improvePoints = sj.improve_points
           }
           if (lastQ) {
             formattedQuestions.push({
@@ -131,8 +49,8 @@ onMounted(async () => {
               candidateAnswer: m.content,
               score: score,
               feedback: feedback,
-              goodPoints: ['Trình bày logic mạch lạc', 'Bám sát trọng tâm câu hỏi'],
-              improvePoints: ['Có thể định lượng thêm các chỉ số hiệu năng cụ thể']
+              goodPoints: goodPoints,
+              improvePoints: improvePoints
             })
           }
         }
@@ -143,18 +61,18 @@ onMounted(async () => {
     if (finalScore == null && formattedQuestions.length > 0) {
        finalScore = formattedQuestions.reduce((sum, q) => sum + q.score, 0) / formattedQuestions.length
     }
-    
+
     sessionData.value = {
-      role: data.target_role || 'Candidate Interview',
-      level: data.target_level || 'Senior',
-      date: data.created_at ? new Date(data.created_at).toLocaleDateString('vi-VN') : '11/07/2026',
-      overallScore: finalScore ? Number(finalScore).toFixed(1) : '8.5',
-      summaryFeedback: data.feedback_json || 'Nhận xét tổng hợp tự động từ Trí tuệ Nhân tạo.',
-      questions: formattedQuestions.length > 0 ? formattedQuestions : (demoMockReports['mock-01'].questions)
+      role: data.target_role || 'Phỏng vấn thử',
+      level: data.target_level || '',
+      date: data.created_at ? new Date(data.created_at).toLocaleDateString('vi-VN') : '',
+      overallScore: finalScore != null ? Number(finalScore).toFixed(1) : null,
+      summaryFeedback: data.feedback_json || '',
+      questions: formattedQuestions
     }
   } catch (err) {
-    console.warn('Sử dụng dữ liệu mô phỏng AI Báo cáo chi tiết cho ID:', id)
-    sessionData.value = demoMockReports[id] || demoMockReports['mock-01']
+    console.error('Lỗi tải kết quả phỏng vấn thử:', err)
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -180,7 +98,7 @@ onMounted(async () => {
       <p class="text-helper">Đang tải kết quả đánh giá...</p>
     </div>
 
-    <div v-else-if="!sessionData" class="mr-error">
+    <div v-else-if="loadError || !sessionData" class="mr-error">
       <AlertCircle :size="42" />
       <p>Không thể tải kết quả bài luyện tập.</p>
     </div>
@@ -195,17 +113,17 @@ onMounted(async () => {
           <div class="score-ring">
             <svg class="score-svg" viewBox="0 0 100 100">
               <circle class="ring-bg" stroke-width="8" cx="50" cy="50" r="40" fill="transparent"></circle>
-              <circle class="ring-fg" stroke-width="8" stroke-linecap="round" cx="50" cy="50" r="40" fill="transparent" :stroke-dasharray="251.2" :stroke-dashoffset="251.2 - (251.2 * (parseFloat(sessionData.overallScore) * 10)) / 100"></circle>
+              <circle class="ring-fg" stroke-width="8" stroke-linecap="round" cx="50" cy="50" r="40" fill="transparent" :stroke-dasharray="251.2" :stroke-dashoffset="251.2 - (251.2 * (parseFloat(sessionData.overallScore || 0) * 10)) / 100"></circle>
             </svg>
             <div class="score-center">
-              <span class="score-val">{{ sessionData.overallScore }}</span>
+              <span class="score-val">{{ sessionData.overallScore != null ? sessionData.overallScore : '—' }}</span>
               <span class="score-max">/10</span>
             </div>
           </div>
 
           <div class="score-note">
             <h3 class="score-note-title"><Sparkles :size="18" /> Nhận xét chung</h3>
-            <p class="score-note-text">{{ sessionData.summaryFeedback }}</p>
+            <p class="score-note-text">{{ sessionData.summaryFeedback || 'Chưa có nhận xét tổng hợp cho bài luyện tập này.' }}</p>
           </div>
         </Card>
       </div>
@@ -219,6 +137,10 @@ onMounted(async () => {
           </h2>
 
           <div class="space-y-10">
+            <div v-if="sessionData.questions.length === 0" class="mr-empty-q">
+              <MessageCircle :size="34" />
+              <p>Bài luyện tập này chưa có câu hỏi và câu trả lời nào được ghi nhận.</p>
+            </div>
             <div v-for="(q, index) in sessionData.questions" :key="q.id">
               <div class="flex items-start gap-4 mb-4">
                 <div class="q-badge">Q{{ index + 1 }}</div>
@@ -281,6 +203,8 @@ onMounted(async () => {
 .mr-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--primary-light); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .mr-error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px; text-align: center; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.2); border-radius: var(--radius-lg); color: var(--danger); font-weight: 600; }
+.mr-empty-q { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; text-align: center; color: var(--text-secondary); }
+.mr-empty-q :deep(svg) { color: var(--text-muted); }
 
 .score-card { padding: 28px; text-align: center; }
 .score-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 22px; }
