@@ -67,7 +67,7 @@ const handleStep1Submit = async (e) => {
 
   try {
     // Gửi OTP thật qua email (backend cũng kiểm tra email đã tồn tại chưa)
-    await authService.sendRegistrationOtp(form.email)
+    await authService.sendRegisterOtp(form.email)
     step.value = 2
     startOtpTimer()
     nextTick(() => {
@@ -143,7 +143,7 @@ const handleOtpPaste = (e) => {
 const resendOtp = async () => {
   if (timer.value > 0) return
   try {
-    await authService.sendRegistrationOtp(form.email)
+    await authService.sendRegisterOtp(form.email)
     startOtpTimer()
     otpDigits.value = ['', '', '', '', '', '']
     nextTick(() => {

@@ -169,7 +169,7 @@ func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.
 	q := `
 		SELECT 
 			i.id as interview_id,
-			coalesce(i.room_id::text, '') as room_id,
+			coalesce(ir.room_code, 'room-' || i.id::text) as room_id,
 			i.candidate_id as candidate_id,
 			c.user_id as user_id,
 			c.full_name as candidate_name,
@@ -181,6 +181,7 @@ func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.
 		JOIN candidates c ON i.candidate_id = c.id
 		LEFT JOIN companies comp ON i.company_id = comp.id
 		LEFT JOIN jobs j ON i.job_id = j.id
+		LEFT JOIN interview_rooms ir ON ir.interview_id = i.id
 		WHERE i.invite_token_hash = $1 AND i.status != 'cancelled' AND i.status != 'completed'
 	`
 	var info CandidateJoinRepoInfo

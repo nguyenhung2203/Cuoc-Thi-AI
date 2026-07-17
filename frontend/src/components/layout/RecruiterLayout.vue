@@ -126,7 +126,6 @@ const recruiterMenu = [
   { path: '/jobs', name: 'Việc làm', icon: Briefcase },
   { path: '/candidates', name: 'Ứng viên', icon: Users },
   { path: '/interviews', name: 'Lịch phỏng vấn', icon: Calendar },
-  { path: '/reports', name: 'Báo cáo', icon: BarChart2 },
   { path: '/question-bank', name: 'Kho câu hỏi', icon: BookOpen },
   { path: '/rubrics', name: 'Tiêu chí (Rubric)', icon: Scale },
   { path: '/templates', name: 'Mẫu AI', icon: Bot },

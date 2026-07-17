@@ -77,7 +77,7 @@ const handleVerifyOTP = async (e) => {
   if (!otp.value) return
   loading.value = true
   try {
-    await authService.verifyResetOtp(email.value, otp.value)
+    await authService.verifyResetOtp({ email: email.value, otp: otp.value })
     step.value = 3
   } catch (err) {
     toast.value = { type: 'error', message: err.message || 'Mã xác nhận không hợp lệ hoặc đã hết hạn.' }
@@ -99,7 +99,7 @@ const handleResetPassword = async (e) => {
   }
   loading.value = true
   try {
-    await authService.resetPassword(email.value, otp.value, password.value)
+    await authService.resetPassword({ email: email.value, otp: otp.value, new_password: password.value })
     router.push({ path: '/login', state: { message: 'Đổi mật khẩu thành công! Vui lòng đăng nhập lại.' } })
   } catch (err) {
     toast.value = { type: 'error', message: err.message || 'Không thể đổi mật khẩu. Vui lòng thử lại.' }

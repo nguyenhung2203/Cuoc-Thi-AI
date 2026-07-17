@@ -3,11 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
 
-	"backend/internal/livekit"
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
 	"backend/internal/pkg/pagination"
@@ -224,7 +222,7 @@ func (h *InterviewHandler) GetRoomAccessToken(w http.ResponseWriter, r *http.Req
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	token, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
+	token, _, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -234,30 +232,12 @@ func (h *InterviewHandler) GetRoomAccessToken(w http.ResponseWriter, r *http.Req
 }
 
 func (h *InterviewHandler) GetRecruiterRoomToken(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
 	interviewID := chi.URLParam(r, "interview_id")
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	roomID := "room-" + interviewID
-
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
-	}
-
-	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
-		roomID,
-		userID,
-		"Recruiter",
-		"recruiter",
-		interviewID,
-	)
+	tokenString, roomName, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
 	if err != nil {
 		response.Error(w, apierrors.NewInternal("Failed to generate token"), requestID)
 		return
@@ -267,5 +247,6 @@ func (h *InterviewHandler) GetRecruiterRoomToken(w http.ResponseWriter, r *http.
 		"token":             tokenString,
 		"livekit_token":     tokenString,
 		"room_access_token": tokenString,
+		"room_id":           roomName,
 	}, nil, requestID)
 }

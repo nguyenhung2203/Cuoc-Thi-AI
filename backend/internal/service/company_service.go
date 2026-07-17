@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/google/uuid"
@@ -26,9 +27,9 @@ func (s *CompanyService) CreateCompany(ctx context.Context, userID, name, websit
 		ID:        uuid.NewString(),
 		Name:      name,
 		Slug:      slug,
-		Website:   website,
-		Industry:  industry,
-		Size:      size,
+		Website:   sql.NullString{String: website, Valid: website != ""},
+		Industry:  sql.NullString{String: industry, Valid: industry != ""},
+		Size:      sql.NullString{String: size, Valid: size != ""},
 		CreatedBy: userID,
 	}
 
@@ -71,9 +72,9 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id, name, website, i
 	}
 	
 	company.Name = name
-	company.Website = website
-	company.Industry = industry
-	company.Size = size
+	company.Website = sql.NullString{String: website, Valid: website != ""}
+	company.Industry = sql.NullString{String: industry, Valid: industry != ""}
+	company.Size = sql.NullString{String: size, Valid: size != ""}
 
 	if err := s.companyRepo.Update(ctx, company); err != nil {
 		return nil, errors.NewInternal("failed to update company")
