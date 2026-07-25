@@ -4,25 +4,19 @@ import { useRouter, useRoute } from 'vue-router'
 import Toast from '../../components/common/AppToast.vue'
 import AppLogo from '../../components/common/AppLogo.vue'
 import { authStore } from '../../stores/auth.store'
-import { Mail, Lock, ArrowRight, ArrowLeft, ShieldCheck, CheckCircle2, RefreshCw, AlertCircle, Sparkles, KeyRound, FileCode, TrendingUp } from 'lucide-vue-next'
+import { useGoogleAuth } from '../../composables/useGoogleAuth'
+import { Mail, Lock, ArrowRight, ShieldCheck, AlertCircle, Sparkles, KeyRound, FileCode, TrendingUp } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 
-// Login Step: 1 = Email/Password & Google, 2 = 2FA OTP Verification
-const step = ref(1)
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
-const showGoogleModal = ref(false)
 const entryToast = ref(history.state?.message ? { type: history.state.type || 'success', message: history.state.message } : null)
 
-// Step 2 OTP Data (6 digits)
-const otpDigits = ref(['', '', '', '', '', ''])
-const otpInputs = ref([])
-const timer = ref(59)
-let timerInterval = null
+const { available: googleAvailable, signIn: googleSignIn } = useGoogleAuth()
 
 onMounted(() => {
   if (history.state?.message) {
@@ -30,16 +24,16 @@ onMounted(() => {
   }
 })
 
-const startOtpTimer = () => {
-  clearInterval(timerInterval)
-  timer.value = 59
-  timerInterval = setInterval(() => {
-    if (timer.value > 0) {
-      timer.value--
-    } else {
-      clearInterval(timerInterval)
-    }
-  }, 1000)
+const redirectAfterAuth = (user, googleFlow = false) => {
+  const redirectPath = route.query.redirect
+  const prefix = googleFlow ? 'Đăng nhập Google thành công! ' : ''
+  if (redirectPath) {
+    router.push(redirectPath)
+  } else if (user.role === 'recruiter' || user.role === 'admin' || user.role === 'owner') {
+    router.push({ path: '/dashboard', state: { message: `${prefix}Chào mừng ${user.full_name} quay trở lại Bảng điều khiển Quản lý!` } })
+  } else {
+    router.push({ path: '/', state: { message: `${prefix}Đăng nhập thành công! Chào mừng trở lại, ${user.full_name}.` } })
+  }
 }
 
 const handleLogin = async (e) => {
@@ -48,31 +42,13 @@ const handleLogin = async (e) => {
     error.value = 'Vui lòng nhập đầy đủ địa chỉ email và mật khẩu!'
     return
   }
-  
+
   error.value = ''
   loading.value = true
 
   try {
     const user = await authStore.login(email.value, password.value)
-    
-    // Check if user requires 2FA or Admin extra OTP verification
-    if (user.role === 'admin' && localStorage.getItem('admin_2fa_required') === 'true') {
-      step.value = 2
-      startOtpTimer()
-      nextTick(() => {
-        if (otpInputs.value[0]) otpInputs.value[0].focus()
-      })
-      return
-    }
-
-    const redirectPath = route.query.redirect
-    if (redirectPath) {
-      router.push(redirectPath)
-    } else if (user.role === 'recruiter' || user.role === 'admin' || user.role === 'owner') {
-      router.push({ path: '/dashboard', state: { message: `Chào mừng ${user.full_name} quay trở lại Bảng điều khiển Quản lý!` } })
-    } else {
-      router.push({ path: '/', state: { message: `Đăng nhập thành công! Chào mừng trở lại, ${user.full_name}.` } })
-    }
+    redirectAfterAuth(user)
   } catch (err) {
     if (err.message === 'invalid email or password') {
       error.value = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!'
@@ -84,94 +60,18 @@ const handleLogin = async (e) => {
   }
 }
 
-const handleGoogleSelect = async (roleType, emailChoice) => {
-  showGoogleModal.value = false
-  loading.value = true
+const handleGoogleLogin = async () => {
   error.value = ''
+  loading.value = true
   try {
-    const user = await authStore.loginWithGoogle(roleType, emailChoice)
-    if (user.role === 'recruiter' || user.role === 'admin') {
-      router.push({ path: '/dashboard', state: { message: `Đăng nhập Google thành công! Chào mừng ${user.full_name}.` } })
-    } else {
-      router.push({ path: '/', state: { message: `Đăng nhập Google thành công! Chào mừng ${user.full_name}.` } })
-    }
+    const idToken = await googleSignIn()
+    const user = await authStore.loginWithGoogle(idToken, 'candidate')
+    redirectAfterAuth(user, true)
   } catch (err) {
     error.value = 'Đăng nhập Google không thành công: ' + (err.message || 'Lỗi xác thực OAuth')
   } finally {
     loading.value = false
   }
-}
-
-// Handle OTP inputs for 2FA verification
-const handleOtpInput = (index, e) => {
-  const value = e.target.value
-  if (!/^\d*$/.test(value)) {
-    otpDigits.value[index] = ''
-    return
-  }
-  if (value.length > 1) {
-    otpDigits.value[index] = value.slice(-1)
-  } else {
-    otpDigits.value[index] = value
-  }
-  if (value !== '' && index < 5) {
-    nextTick(() => {
-      if (otpInputs.value[index + 1]) otpInputs.value[index + 1].focus()
-    })
-  }
-  if (otpDigits.value.every(d => d !== '') && index === 5) {
-    handleVerify2FA()
-  }
-}
-
-const handleOtpKeyDown = (index, e) => {
-  if (e.key === 'Backspace' && !otpDigits.value[index] && index > 0) {
-    nextTick(() => {
-      if (otpInputs.value[index - 1]) {
-        otpInputs.value[index - 1].focus()
-        otpDigits.value[index - 1] = ''
-      }
-    })
-  }
-}
-
-const handleOtpPaste = (e) => {
-  e.preventDefault()
-  const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-  if (pastedData) {
-    for (let i = 0; i < 6; i++) {
-      otpDigits.value[i] = pastedData[i] || ''
-    }
-    nextTick(() => {
-      const focusIndex = Math.min(pastedData.length, 5)
-      if (otpInputs.value[focusIndex]) otpInputs.value[focusIndex].focus()
-      if (pastedData.length === 6) {
-        handleVerify2FA()
-      }
-    })
-  }
-}
-
-const resendOtp = () => {
-  if (timer.value > 0) return
-  startOtpTimer()
-  otpDigits.value = ['', '', '', '', '', '']
-  nextTick(() => {
-    if (otpInputs.value[0]) otpInputs.value[0].focus()
-  })
-}
-
-const handleVerify2FA = () => {
-  const code = otpDigits.value.join('')
-  if (code.length < 6) {
-    error.value = 'Vui lòng nhập đủ 6 số xác minh bảo mật 2FA!'
-    return
-  }
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-    router.push({ path: '/admin/dashboard', state: { message: 'Xác thực bảo mật 2FA thành công! Chào mừng Quản trị viên.' } })
-  }, 600)
 }
 </script>
 
@@ -280,60 +180,6 @@ const handleVerify2FA = () => {
 
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
 
-    <!-- Google OAuth Selection Modal -->
-    <div v-if="showGoogleModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
-      <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 space-y-6">
-        <div class="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-700">
-          <svg class="w-8 h-8" viewBox="0 0 24 24">
-            <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.3 8.9 5 12 5z"/>
-            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
-            <path fill="#FBBC05" d="M5.3 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.5.4-2.3L1.6 7.4C.6 9.4 0 11.6 0 14s.6 4.6 1.6 6.6l3.7-2.8z"/>
-            <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.2L1.6 15.9C3.5 19.7 7.4 23 12 23z"/>
-          </svg>
-          <div>
-            <h3 class="font-bold text-slate-800 dark:text-white text-lg">Đăng nhập bằng tài khoản Google</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Chọn tài khoản Google để truy cập nhanh WeMake AI</p>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <button @click="handleGoogleSelect('candidate', 'candidate@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
-                N
-              </div>
-              <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">Nguyễn Văn A (Ứng viên)</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">candidate@wemake.vn</div>
-              </div>
-            </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Candidate</span>
-          </button>
-
-          <button @click="handleGoogleSelect('recruiter', 'recruiter@wemake.vn')" 
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-[var(--accent)] hover:bg-[var(--accent-bg)] transition-all text-left group">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-sm">
-                H
-              </div>
-              <div>
-                <div class="font-bold text-slate-800 dark:text-white text-sm group-hover:text-[var(--primary)] dark:group-hover:text-[var(--primary-light)]">HR Manager (Nhà tuyển dụng)</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">recruiter@wemake.vn</div>
-              </div>
-            </div>
-            <span class="text-xs font-semibold px-2.5 py-1 bg-[var(--primary-light)] text-[var(--primary)] rounded-full">Recruiter</span>
-          </button>
-        </div>
-
-        <div class="pt-2 flex justify-end">
-          <button @click="showGoogleModal = false" class="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors">
-            Hủy bỏ
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Main Login Box -->
     <div class="w-full max-w-md bg-white/85 dark:bg-slate-900/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/20 dark:border-slate-800/80 p-6 sm:p-8 relative z-10 transition-all duration-500">
       
@@ -343,10 +189,10 @@ const handleVerify2FA = () => {
           <AppLogo size="lg" showSubtitle subtitle="Enterprise AI Platform" />
         </div>
         <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight pt-1">
-          {{ step === 1 ? 'Chào mừng trở lại' : 'Xác thực bảo mật 2FA' }}
+          Chào mừng trở lại
         </h1>
         <p class="text-slate-500 dark:text-slate-400 text-sm">
-          {{ step === 1 ? 'Đăng nhập vào nền tảng tuyển dụng thông minh AI' : `Nhập mã xác minh 6 số đã gửi tới ${email}` }}
+          Đăng nhập vào nền tảng tuyển dụng thông minh AI
         </p>
       </div>
 
@@ -356,8 +202,8 @@ const handleVerify2FA = () => {
         <span class="font-medium flex-1">{{ error }}</span>
       </div>
 
-      <!-- ================= STEP 1: EMAIL & GOOGLE LOGIN ================= -->
-      <div v-if="step === 1" class="space-y-4 animate-fade-in">
+      <!-- ================= EMAIL & GOOGLE LOGIN ================= -->
+      <div class="space-y-4 animate-fade-in">
         <form @submit="handleLogin" class="space-y-3">
           <!-- Email Input -->
           <div>
@@ -402,16 +248,18 @@ const handleVerify2FA = () => {
           </button>
         </form>
 
-        <div class="relative flex py-1 items-center">
+        <div v-if="googleAvailable" class="relative flex py-1 items-center">
           <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
           <span class="flex-shrink mx-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">hoặc đăng nhập nhanh qua google</span>
           <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
         </div>
 
-        <!-- Google OAuth Button (Moved Down below Form) -->
-        <button @click="showGoogleModal = true"
+        <!-- Google OAuth Button (real Google Identity Services) -->
+        <button v-if="googleAvailable"
+                @click="handleGoogleLogin"
                 type="button"
-                class="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-3 group">
+                :disabled="loading"
+                class="w-full py-3.5 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 font-semibold text-sm shadow-sm transition-all flex items-center justify-center gap-3 group disabled:opacity-50">
           <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.3 8.9 5 12 5z"/>
             <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.6h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.9z"/>
@@ -429,66 +277,6 @@ const handleVerify2FA = () => {
               Đăng ký tài khoản mới
             </span>
           </p>
-        </div>
-      </div>
-
-      <!-- ================= STEP 2: SLEEK 2FA OTP SCREEN ================= -->
-      <div v-else-if="step === 2" class="space-y-6 animate-fade-in">
-        
-        <div class="bg-amber-50 dark:bg-amber-950/40 p-4 rounded-2xl border border-amber-200/60 dark:border-amber-800/40 flex items-start gap-3">
-          <KeyRound size="24" class="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <div class="text-xs text-amber-950 dark:text-amber-200 leading-relaxed">
-            Tài khoản này được bật bảo mật hai lớp (2FA). Vui lòng nhập mã OTP 6 chữ số đã gửi tới <strong>{{ email }}</strong> hoặc ứng dụng Authenticator.
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <label class="block text-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-            Mã xác minh bảo mật 2FA
-          </label>
-          <div class="flex items-center justify-center gap-2 sm:gap-3" @paste="handleOtpPaste">
-            <input v-for="(digit, index) in otpDigits"
-                   :key="index"
-                   :ref="el => otpInputs[index] = el"
-                   v-model="otpDigits[index]"
-                   type="text"
-                   maxlength="1"
-                   @input="handleOtpInput(index, $event)"
-                   @keydown="handleOtpKeyDown(index, $event)"
-                   class="w-12 h-14 sm:w-14 sm:h-16 text-center text-xl sm:text-2xl font-black bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-[var(--primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent)]/20 transition-all shadow-inner" />
-          </div>
-        </div>
-
-        <div class="text-center text-xs text-slate-500 dark:text-slate-400 space-y-2">
-          <div v-if="timer > 0" class="flex items-center justify-center gap-1.5 font-medium">
-            <span>Mã 2FA hết hạn sau:</span>
-            <span class="font-bold text-[var(--primary)]">00:{{ timer < 10 ? '0' + timer : timer }}s</span>
-          </div>
-          <div v-else>
-            <span>Chưa nhận được mã?</span>
-            <button type="button" @click="resendOtp" class="ml-1 text-[var(--primary)] font-bold hover:underline inline-flex items-center gap-1">
-              <RefreshCw size="13" /> Gửi lại mã 2FA ngay
-            </button>
-          </div>
-        </div>
-
-        <div class="space-y-3 pt-2">
-          <button @click="handleVerify2FA"
-                  :disabled="loading || otpDigits.some(d => d === '')"
-                  class="w-full py-3.5 px-6 rounded-2xl bg-[var(--success)] hover:opacity-90 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 transform hover:-translate-y-0.5">
-            <span v-if="loading" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <template v-else>
-              <CheckCircle2 size="18" />
-              <span>Xác nhận & Đăng nhập</span>
-            </template>
-          </button>
-
-          <button @click="step = 1; error = ''"
-                  type="button"
-                  class="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5">
-            <ArrowLeft size="14" />
-            <span>Quay lại đăng nhập với tài khoản khác</span>
-          </button>
         </div>
       </div>
 

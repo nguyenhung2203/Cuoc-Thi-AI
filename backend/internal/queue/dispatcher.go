@@ -82,3 +82,11 @@ func (d *Dispatcher) EnqueueBatchTranscript(companyID, interviewID string) error
 		InterviewID: interviewID,
 	}, defaultOpts(5*time.Minute)...)
 }
+
+// EnqueueRecomputeMatches schedules an async recompute of all of a user's
+// application fit scores (after a CV change).
+func (d *Dispatcher) EnqueueRecomputeMatches(userID string) error {
+	return d.enqueue(TypeRecomputeMatches, RecomputeMatchesPayload{
+		UserID: userID,
+	}, defaultOpts(10*time.Minute)...)
+}

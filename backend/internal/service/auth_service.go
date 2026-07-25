@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"time"
 
@@ -19,10 +20,17 @@ import (
 	"backend/internal/repository"
 )
 
+type Mailer interface {
+	Send(to, subject, body string) error
+}
+
 type AuthService struct {
 	userRepo         *repository.UserRepository
 	refreshTokenRepo repository.RefreshTokenRepository
 	jwtSecret        string
+	otpSvc           *OTPService
+	mailer           Mailer
+	googleClientID   string
 }
 
 func NewAuthService(userRepo *repository.UserRepository, refreshTokenRepo repository.RefreshTokenRepository, jwtSecret string) *AuthService {
@@ -31,6 +39,19 @@ func NewAuthService(userRepo *repository.UserRepository, refreshTokenRepo reposi
 		refreshTokenRepo: refreshTokenRepo,
 		jwtSecret:        jwtSecret,
 	}
+}
+
+// WithOTP wires the OTP service and mailer used for registration and password-reset flows.
+func (s *AuthService) WithOTP(otpSvc *OTPService, mailer Mailer) *AuthService {
+	s.otpSvc = otpSvc
+	s.mailer = mailer
+	return s
+}
+
+// WithGoogle wires the Google OAuth client ID used to verify id_tokens.
+func (s *AuthService) WithGoogle(clientID string) *AuthService {
+	s.googleClientID = clientID
+	return s
 }
 
 func hashToken(token string) string {
@@ -79,6 +100,17 @@ func (s *AuthService) createAndSaveRefreshToken(
 
 func (s *AuthService) Register(ctx context.Context, req request.RegisterRequest, ipAddress, userAgent string) (*response.AuthResponse, string, error) {
 	ipAddress = stripPort(ipAddress)
+
+	// Require a verified email OTP before creating the account.
+	if s.otpSvc != nil && s.otpSvc.Enabled() {
+		ok, verifyErr := s.otpSvc.Verify(ctx, otpPurposeRegister, req.Email, req.OTP)
+		if verifyErr != nil {
+			return nil, "", errors.NewInternal("failed to verify otp")
+		}
+		if !ok {
+			return nil, "", errors.NewValidation("otp", []string{"mã xác nhận không hợp lệ hoặc đã hết hạn"})
+		}
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -180,8 +212,24 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest, ipAdd
 func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRequest, ipAddress, userAgent string) (*response.AuthResponse, string, error) {
 	ipAddress = stripPort(ipAddress)
 
-	// Look up user by email in PostgreSQL/Supabase
-	user, err := s.userRepo.FindByEmail(ctx, req.Email)
+	// Verify the Google id_token server-side. Never trust client-supplied email.
+	info, err := verifyGoogleIDToken(ctx, req.IDToken, s.googleClientID)
+	if err != nil {
+		return nil, "", errors.NewUnauthorized("invalid Google credential")
+	}
+	// Use the verified identity from the token, not the request payload.
+	email := info.Email
+	fullName := info.Name
+	if fullName == "" {
+		fullName = req.FullName
+	}
+	avatar := info.Picture
+	if avatar == "" {
+		avatar = req.Avatar
+	}
+
+	// Look up user by verified email in PostgreSQL
+	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
 		// User not found -> Auto create a real user record in database
 		role := models.UserRole(req.Role)
@@ -194,20 +242,20 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRe
 		}
 		user = &models.User{
 			ID:           uuid.NewString(),
-			Email:        req.Email,
+			Email:        email,
 			PasswordHash: "google_oauth_user",
-			FullName:     req.FullName,
+			FullName:     fullName,
 			Role:         role,
 			Status:       status,
 		}
-		if req.Avatar != "" {
-			user.AvatarURL = sql.NullString{String: req.Avatar, Valid: true}
+		if avatar != "" {
+			user.AvatarURL = sql.NullString{String: avatar, Valid: true}
 		}
 		if errCreate := s.userRepo.Create(ctx, user); errCreate != nil {
 			return nil, "", errors.NewInternal("failed to create user from Google OAuth: " + errCreate.Error())
 		}
-	} else if user.FullName == "" && req.FullName != "" {
-		_ = s.userRepo.UpdateProfile(ctx, user.ID, req.FullName, req.Avatar)
+	} else if user.FullName == "" && fullName != "" {
+		_ = s.userRepo.UpdateProfile(ctx, user.ID, fullName, avatar)
 	}
 
 	accessToken, _, err := jwt.GenerateTokenPair(
@@ -402,5 +450,110 @@ func (s *AuthService) DeleteAccount(ctx context.Context, userID string) error {
 	}
 	// Best-effort: revoke all sessions so the account can no longer be used.
 	_, _ = s.refreshTokenRepo.RevokeAllByUserID(ctx, userID)
+	return nil
+}
+
+const (
+	otpPurposeRegister = "register"
+	otpPurposeReset    = "reset"
+)
+
+// SendRegistrationOTP issues an OTP for a not-yet-registered email and emails it.
+func (s *AuthService) SendRegistrationOTP(ctx context.Context, email string) error {
+	if s.otpSvc == nil || !s.otpSvc.Enabled() {
+		return errors.NewInternal("otp service is not configured")
+	}
+	if email == "" {
+		return errors.NewValidation("email", []string{"email is required"})
+	}
+	// Don't issue an OTP for an email that already has an account.
+	if _, err := s.userRepo.FindByEmail(ctx, email); err == nil {
+		return errors.NewConflict("email already exists")
+	}
+
+	code, err := s.otpSvc.Generate(ctx, otpPurposeRegister, email)
+	if err != nil {
+		return errors.NewInternal("failed to generate otp")
+	}
+	subject := "Mã xác nhận đăng ký tài khoản"
+	body := fmt.Sprintf("Mã xác nhận đăng ký của bạn là: %s\nMã có hiệu lực trong 10 phút.\nNếu bạn không yêu cầu, hãy bỏ qua email này.", code)
+	if err := s.mailer.Send(email, subject, body); err != nil {
+		return errors.NewInternal("failed to send otp email")
+	}
+	return nil
+}
+
+// ForgotPassword issues a password-reset OTP if the account exists.
+// It always returns nil so callers don't leak whether an email is registered.
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	if s.otpSvc == nil || !s.otpSvc.Enabled() {
+		return errors.NewInternal("otp service is not configured")
+	}
+	if email == "" {
+		return errors.NewValidation("email", []string{"email is required"})
+	}
+	// Silently no-op if the user doesn't exist (avoid account enumeration).
+	if _, err := s.userRepo.FindByEmail(ctx, email); err != nil {
+		return nil
+	}
+
+	code, err := s.otpSvc.Generate(ctx, otpPurposeReset, email)
+	if err != nil {
+		return errors.NewInternal("failed to generate otp")
+	}
+	subject := "Mã đặt lại mật khẩu"
+	body := fmt.Sprintf("Mã đặt lại mật khẩu của bạn là: %s\nMã có hiệu lực trong 10 phút.\nNếu bạn không yêu cầu, hãy bỏ qua email này.", code)
+	if err := s.mailer.Send(email, subject, body); err != nil {
+		return errors.NewInternal("failed to send otp email")
+	}
+	return nil
+}
+
+// VerifyResetOTP checks a password-reset code without consuming other purposes.
+// Kept separate so the FE can validate the OTP step before showing the new-password form.
+// Note: this does NOT consume the code — ResetPassword does the final consume.
+func (s *AuthService) VerifyResetOTP(ctx context.Context, email, code string) error {
+	if s.otpSvc == nil || !s.otpSvc.Enabled() {
+		return errors.NewInternal("otp service is not configured")
+	}
+	ok, err := s.otpSvc.Peek(ctx, otpPurposeReset, email, code)
+	if err != nil {
+		return errors.NewInternal("failed to verify otp")
+	}
+	if !ok {
+		return errors.NewValidation("otp", []string{"mã xác nhận không hợp lệ hoặc đã hết hạn"})
+	}
+	return nil
+}
+
+// ResetPassword verifies the reset OTP, sets a new password, and revokes all sessions.
+func (s *AuthService) ResetPassword(ctx context.Context, email, code, newPassword string) error {
+	if s.otpSvc == nil || !s.otpSvc.Enabled() {
+		return errors.NewInternal("otp service is not configured")
+	}
+	if len(newPassword) < 6 {
+		return errors.NewValidation("new_password", []string{"mật khẩu mới phải có ít nhất 6 ký tự"})
+	}
+	ok, err := s.otpSvc.Verify(ctx, otpPurposeReset, email, code)
+	if err != nil {
+		return errors.NewInternal("failed to verify otp")
+	}
+	if !ok {
+		return errors.NewValidation("otp", []string{"mã xác nhận không hợp lệ hoặc đã hết hạn"})
+	}
+
+	user, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return errors.NewNotFound("user not found")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.NewInternal("failed to hash password")
+	}
+	if err := s.userRepo.UpdatePassword(ctx, user.ID, string(hash)); err != nil {
+		return errors.NewInternal("failed to update password")
+	}
+	// Revoke all existing sessions so a compromised account can't stay logged in.
+	_, _ = s.refreshTokenRepo.RevokeAllByUserID(ctx, user.ID)
 	return nil
 }

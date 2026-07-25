@@ -120,6 +120,18 @@ func (r *InterviewRepository) UpdateRoomStatus(ctx context.Context, id, status s
 	return err
 }
 
+// GetCompanyIDByInterviewID returns the company that owns an interview.
+// The realtime gateway needs it to call company-scoped AI services (IDOR guard)
+// since the LiveKit room token carries only interview_id, not company_id.
+func (r *InterviewRepository) GetCompanyIDByInterviewID(ctx context.Context, interviewID string) (string, error) {
+	var companyID string
+	err := r.db.GetContext(ctx, &companyID, `SELECT company_id FROM interviews WHERE id = $1`, interviewID)
+	if err != nil {
+		return "", err
+	}
+	return companyID, nil
+}
+
 func (r *InterviewRepository) GetByInviteTokenHash(ctx context.Context, hash string) (*models.Interview, error) {
 	q := `SELECT * FROM interviews WHERE invite_token_hash = $1 AND status != 'cancelled' AND status != 'completed'`
 	var i models.Interview
@@ -164,7 +176,7 @@ func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.
 	q := `
 		SELECT 
 			i.id as interview_id,
-			coalesce(i.room_id::text, '') as room_id,
+			coalesce(ir.room_code, 'room-' || i.id::text) as room_id,
 			i.candidate_id as candidate_id,
 			c.user_id as user_id,
 			c.full_name as candidate_name,
@@ -176,6 +188,7 @@ func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.
 		JOIN candidates c ON i.candidate_id = c.id
 		LEFT JOIN companies comp ON i.company_id = comp.id
 		LEFT JOIN jobs j ON i.job_id = j.id
+		LEFT JOIN interview_rooms ir ON ir.interview_id = i.id
 		WHERE i.invite_token_hash = $1 AND i.status != 'cancelled' AND i.status != 'completed'
 	`
 	var info CandidateJoinRepoInfo

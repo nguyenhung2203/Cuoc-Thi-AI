@@ -71,7 +71,12 @@ onMounted(async () => {
       job: jobMap[c.job_id] || {}
     }))
     
-    aiInsights.value.highMatchCandidates = candidates.length > 0 ? Math.floor(candidates.length / 3) : 0
+    // Count candidates whose AI-computed fit_score clears the high-match threshold.
+    // fit_score is only present once AI matching has run; absent/0 counts as not high-match.
+    aiInsights.value.highMatchCandidates = candidates.filter(c => {
+      const fs = typeof c.fit_score === 'object' && c.fit_score !== null ? c.fit_score.Float64 : c.fit_score
+      return Number(fs) >= 75
+    }).length
     aiInsights.value.reviewsNeeded = interviews.filter(i => i.status === 'completed').length
     stats.value.pendingReports = aiInsights.value.reviewsNeeded
     

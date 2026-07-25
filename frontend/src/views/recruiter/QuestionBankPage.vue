@@ -130,14 +130,11 @@ const confirmDelete = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     await questionBankService.deleteQuestion(companyId, deletingId.value)
-    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
     showDeleteModal.value = false
+    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
     await loadQuestions()
   } catch (err) {
-    // Fallback local delete nếu API chưa sẵn sàng
-    questions.value = questions.value.filter(q => q.id !== deletingId.value)
-    showDeleteModal.value = false
-    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+    toast.value = { type: 'error', message: 'Xóa thất bại. Vui lòng thử lại.' }
   }
 }
 
@@ -150,7 +147,7 @@ const handleGenerateAI = async () => {
     toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
     await loadQuestions()
   } catch (err) {
-    toast.value = { type: 'info', message: 'Tính năng AI Generate đang chờ Backend.' }
+    toast.value = { type: 'error', message: 'Tạo câu hỏi bằng AI thất bại. Vui lòng thử lại.' }
   } finally {
     aiGenerating.value = false
   }

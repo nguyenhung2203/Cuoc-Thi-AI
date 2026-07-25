@@ -10,6 +10,8 @@ const (
 	TypeAnalyzeCV = "cv:analyze"
 	// TypeBatchTranscript processes a batch of transcript segments.
 	TypeBatchTranscript = "transcript:batch"
+	// TypeRecomputeMatches recomputes all fit scores for a user after a CV change.
+	TypeRecomputeMatches = "match:recompute"
 )
 
 // GenerateReportPayload is the JSON payload for a report generation job.
@@ -31,4 +33,9 @@ type AnalyzeCVPayload struct {
 type BatchTranscriptPayload struct {
 	CompanyID   string `json:"company_id"`
 	InterviewID string `json:"interview_id"`
+}
+
+// RecomputeMatchesPayload is the JSON payload for recomputing a user's fit scores.
+type RecomputeMatchesPayload struct {
+	UserID string `json:"user_id"`
 }

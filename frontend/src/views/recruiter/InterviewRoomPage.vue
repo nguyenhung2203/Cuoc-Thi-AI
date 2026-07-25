@@ -8,6 +8,7 @@ import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, Sparkles, CheckCircle, AlertTriangle, FileText, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, Send, LogOut, Play, Pause } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
+import { useSpeechToText } from '../../composables/useSpeechToText'
 import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
 
@@ -31,6 +32,27 @@ const {
   localVideoEl, remoteVideoEl,
   connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
 } = useLiveKit()
+
+// Live transcription of THIS recruiter's mic (free Web Speech API). Pushes
+// transcript:partial/final up the realtime WS; the gateway attributes the
+// speaker, broadcasts, persists, and triggers AI suggestion/scoring.
+const { supported: sttSupported, listening: sttListening, start: startSTT, stop: stopSTT } = useSpeechToText()
+
+const syncSTT = () => {
+  const shouldRun = roomStore.status === 'active' && isMicOn.value && sttSupported.value
+  if (shouldRun && !sttListening.value) {
+    startSTT({
+      roomId: roomStore.roomId,
+      interviewId: roomStore.interviewId,
+      speakerType: 'recruiter',
+      speakerName: authStore.user?.full_name || 'Nhà tuyển dụng',
+    })
+  } else if (!shouldRun && sttListening.value) {
+    stopSTT()
+  }
+}
+
+watch(() => [roomStore.status, isMicOn.value], syncSTT)
 
 const activeTab = ref(sessionStorage.getItem('recruiter_active_tab') || 'assistant')
 watch(activeTab, (val) => { sessionStorage.setItem('recruiter_active_tab', val); })
@@ -108,7 +130,7 @@ onMounted(async () => {
           setTimeout(() => tryJoinAsRecruiter(), 500)
 
           // Connect LiveKit (hoặc native getUserMedia nếu không có server)
-          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:17880'
           await connectToRoom(livekitUrl, token)
         }
       }
@@ -134,6 +156,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  stopSTT()
   liveKitDisconnect()
   roomStore.disconnectRoom()
   chatStore.cleanupListeners()

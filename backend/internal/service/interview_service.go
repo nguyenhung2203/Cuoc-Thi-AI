@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"log"
 	"os"
 	"time"
 
@@ -183,10 +184,15 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 		identity = *info.UserID
 	}
 
+	roomID := "room-" + info.InterviewID
+	if room, rerr := s.repo.GetRoomByInterviewID(ctx, info.InterviewID); rerr == nil && room != nil && room.RoomCode != "" {
+		roomID = room.RoomCode
+	}
+
 	tokenString, err := livekit.GenerateToken(
 		livekitKey,
 		livekitSecret,
-		info.RoomID,
+		roomID,
 		identity,
 		info.CandidateName,
 		"candidate",
@@ -200,7 +206,7 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 
 	return &CandidateJoinInfo{
 		InterviewID:              info.InterviewID,
-		RoomID:                   info.RoomID,
+		RoomID:                   roomID,
 		CandidateName:            info.CandidateName,
 		CompanyName:              info.CompanyName,
 		JobTitle:                 info.JobTitle,
@@ -347,18 +353,22 @@ func (s *InterviewService) CancelInterview(ctx context.Context, interviewID, com
 	return nil
 }
 
-func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, interviewID, companyID, userID string) (string, error) {
+func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, interviewID, companyID, userID string) (string, string, error) {
 	// Verify access + load interview for role/display resolution.
 	interview, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
 	if err != nil {
-		return "", errors.NewNotFound("interview not found")
+		return "", "", errors.NewNotFound("interview not found")
 	}
 
 	// Resolve the LiveKit room name from the room record; fall back to the
 	// deterministic "room-<interviewID>" convention used elsewhere.
 	roomName := "room-" + interviewID
-	if room, rerr := s.repo.GetRoomByInterviewID(ctx, interviewID); rerr == nil && room != nil && room.RoomCode != "" {
+	room, rerr := s.repo.GetRoomByInterviewID(ctx, interviewID)
+	if rerr == nil && room != nil && room.RoomCode != "" {
 		roomName = room.RoomCode
+		log.Printf("Resolved roomName for interview %s to %s", interviewID, roomName)
+	} else {
+		log.Printf("Failed to resolve roomName for interview %s, rerr: %v, room: %v", interviewID, rerr, room)
 	}
 
 	// The recruiter who owns the interview gets the recruiter role; everyone
@@ -381,9 +391,9 @@ func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, intervie
 
 	token, err := livekit.GenerateToken(livekitKey, livekitSecret, roomName, userID, displayName, role, interviewID)
 	if err != nil {
-		return "", errors.NewInternal("failed to generate room access token")
+		return "", "", errors.NewInternal("failed to generate room access token")
 	}
-	return token, nil
+	return token, roomName, nil
 }
 
 func (s *InterviewService) StartInterview(ctx context.Context, interviewID, companyID string) error {

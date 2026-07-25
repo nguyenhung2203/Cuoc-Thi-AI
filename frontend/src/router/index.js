@@ -32,7 +32,6 @@ const routes = [
       { path: 'interviews/:id/report', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'recruiter-room/:interviewId', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
       { path: 'recruiter-room', component: () => import('../views/recruiter/InterviewRoomPage.vue') },
-      { path: 'reports', component: () => import('../views/recruiter/InterviewReportPage.vue') },
       { path: 'question-bank', component: () => import('../views/recruiter/QuestionBankPage.vue') },
       { path: 'rubrics', component: () => import('../views/recruiter/RubricPage.vue') },
       { path: 'templates', component: () => import('../views/recruiter/TemplatePage.vue') },
@@ -77,6 +76,7 @@ const routes = [
       { path: 'dashboard', component: () => import('../views/admin/AdminDashboard.vue') },
       { path: 'users', component: () => import('../views/admin/AdminUsersPage.vue') },
       { path: 'companies', component: () => import('../views/admin/AdminCompaniesPage.vue') },
+      { path: 'reports', component: () => import('../views/admin/AdminReportsPage.vue') },
       { path: 'logs', component: () => import('../views/admin/AdminLogsPage.vue') },
       { path: 'settings', component: () => import('../views/admin/AdminSettingsPage.vue') }
     ]

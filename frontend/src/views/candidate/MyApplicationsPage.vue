@@ -178,7 +178,7 @@ const handleCancelApp = async (app) => {
             <div class="flex items-start justify-between lg:justify-start gap-4">
               <h3 
                 class="text-lg font-bold text-[var(--text-main)] hover:text-[var(--primary)] transition-colors cursor-pointer"
-                @click="router.push(`/careers/company/jobs/${app.job_id}`)"
+                @click="router.push(`/careers/${app.company_id}/jobs/${app.job_id}`)"
               >
                 {{ app.job_title }}
               </h3>
@@ -218,7 +218,7 @@ const handleCancelApp = async (app) => {
             </Badge>
 
             <div class="flex items-center gap-2">
-              <Button variant="ghost" size="sm" @click="router.push(`/careers/company/jobs/${app.job_id}`)" class="text-xs">
+              <Button variant="ghost" size="sm" @click="router.push(`/careers/${app.company_id}/jobs/${app.job_id}`)" class="text-xs">
                 Xem tin <ChevronRight :size="14" />
               </Button>
               <Button variant="ghost" size="sm" @click="handleCancelApp(app)" class="text-xs text-[var(--danger)] hover:bg-red-50 border border-transparent hover:border-red-200" title="Rút hồ sơ">

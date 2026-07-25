@@ -20,15 +20,21 @@ type CVAnalyzer interface {
 	ParseCV(ctx context.Context, companyID, candidateID string) error
 }
 
+// MatchRecomputer is satisfied by *service.CandidatePortalService.RecomputeUserMatches.
+type MatchRecomputer interface {
+	RecomputeUserMatches(ctx context.Context, userID string) error
+}
+
 // Worker consumes async jobs from Redis and dispatches them to services.
 type Worker struct {
 	server     *asynq.Server
 	reportSvc  ReportRunner
 	cvAnalyzer CVAnalyzer
+	matchSvc   MatchRecomputer
 }
 
 // NewWorker builds an asynq server. concurrency bounds parallel job execution.
-func NewWorker(redisAddr, password string, db, concurrency int, reportSvc ReportRunner, cvAnalyzer CVAnalyzer) *Worker {
+func NewWorker(redisAddr, password string, db, concurrency int, reportSvc ReportRunner, cvAnalyzer CVAnalyzer, matchSvc MatchRecomputer) *Worker {
 	server := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: redisAddr, Password: password, DB: db},
 		asynq.Config{
@@ -36,7 +42,7 @@ func NewWorker(redisAddr, password string, db, concurrency int, reportSvc Report
 			Logger:      &asynqLogger{},
 		},
 	)
-	return &Worker{server: server, reportSvc: reportSvc, cvAnalyzer: cvAnalyzer}
+	return &Worker{server: server, reportSvc: reportSvc, cvAnalyzer: cvAnalyzer, matchSvc: matchSvc}
 }
 
 // Run registers handlers and blocks serving jobs until the process stops.
@@ -45,6 +51,7 @@ func (w *Worker) Run() error {
 	mux.HandleFunc(TypeGenerateReport, w.handleGenerateReport)
 	mux.HandleFunc(TypeAnalyzeCV, w.handleAnalyzeCV)
 	mux.HandleFunc(TypeBatchTranscript, w.handleBatchTranscript)
+	mux.HandleFunc(TypeRecomputeMatches, w.handleRecomputeMatches)
 	return w.server.Run(mux)
 }
 
@@ -78,6 +85,20 @@ func (w *Worker) handleAnalyzeCV(ctx context.Context, t *asynq.Task) error {
 	}
 	if err := w.cvAnalyzer.ParseCV(ctx, p.CompanyID, p.CandidateID); err != nil {
 		return fmt.Errorf("cv analysis failed for %s: %w", p.CandidateID, err)
+	}
+	return nil
+}
+
+func (w *Worker) handleRecomputeMatches(ctx context.Context, t *asynq.Task) error {
+	var p RecomputeMatchesPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("bad recompute-matches payload: %v: %w", err, asynq.SkipRetry)
+	}
+	if w.matchSvc == nil {
+		return fmt.Errorf("match recomputer not configured: %w", asynq.SkipRetry)
+	}
+	if err := w.matchSvc.RecomputeUserMatches(ctx, p.UserID); err != nil {
+		return fmt.Errorf("match recompute failed for user %s: %w", p.UserID, err)
 	}
 	return nil
 }

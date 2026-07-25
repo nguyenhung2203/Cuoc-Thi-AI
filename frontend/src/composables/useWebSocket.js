@@ -40,7 +40,7 @@ export function useWebSocket() {
     // it still works behind a reverse proxy without extra config.
     let base = import.meta.env.VITE_WS_URL
     if (!base) {
-      const host = window.location.hostname === 'localhost' ? 'localhost:8081' : window.location.host
+      const host = `${window.location.hostname}:18081`
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       base = `${protocol}//${host}`
     }

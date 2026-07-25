@@ -7,6 +7,7 @@ import (
 
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/pkg/pagination"
 	pkgresponse "backend/internal/pkg/response"
 	"backend/internal/service"
 )
@@ -25,10 +26,9 @@ func (h *AuditHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	resourceType := r.URL.Query().Get("resource_type")
 	actorUserID := r.URL.Query().Get("actor_user_id")
-	page := 1
-	pageSize := 20
+	p := pagination.FromRequest(r)
 
-	logs, err := h.auditSvc.ListByCompany(r.Context(), companyID, resourceType, actorUserID, page, pageSize)
+	logs, err := h.auditSvc.ListByCompany(r.Context(), companyID, resourceType, actorUserID, p.Page, p.PageSize)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -44,10 +44,9 @@ func (h *AuditHandler) LogActionDirect(w http.ResponseWriter, r *http.Request) {
 func (h *AuditHandler) ListAllGlobalLogs(w http.ResponseWriter, r *http.Request) {
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	page := 1
-	pageSize := 50
+	p := pagination.FromRequest(r)
 
-	logs, err := h.auditSvc.ListAll(r.Context(), page, pageSize)
+	logs, err := h.auditSvc.ListAll(r.Context(), p.Page, p.PageSize)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return

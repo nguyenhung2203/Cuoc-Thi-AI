@@ -56,12 +56,9 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 		CreatedAt:           now,
 	}
 
-	// 4. Save to simulated database history
+	// 4. Keep an in-memory copy for live reconnect history, then persist to
+	// Postgres via the batch saver (source='chat').
 	r.roomManager.SaveChatMessage(room.ID, msgPayload)
-
-	// Simulate database INSERT query logging into interview_transcripts
-	log.Printf("[db] INSERT INTO interview_transcripts (id, interview_id, speaker_type, speaker_name, content, source, visibility, created_at) VALUES ('%s', '%s', '%s', '%s', '%s', 'chat', '%s', '%s')",
-		msgPayload.MessageID, room.InterviewID, msgPayload.SenderType, msgPayload.SenderName, msgPayload.Message, msgPayload.Visibility, msgPayload.CreatedAt.Format(time.RFC3339))
 
 	if r.transcriptSaver != nil {
 		record := TranscriptRecord{

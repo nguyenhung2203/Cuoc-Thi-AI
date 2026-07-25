@@ -32,7 +32,7 @@ OUTPUT JSON:
   "priority": "low|medium|high",
   "confidence": 0.0,
   "insufficient_data": false
-}', '{"transcript_window":"string","job_context":"string","focus":"string"}', 'gemini-1.5-flash', '{"temperature": 0.4, "max_tokens": 1024}', true),
+}', '{"transcript_window":"string","job_context":"string","focus":"string"}', 'gemini-2.5-flash', '{"temperature": 0.4, "max_tokens": 1024}', true),
 
 ('score_answer', 1, 'Bạn là AI scoring assistant cho buổi phỏng vấn tuyển dụng.
 
@@ -66,7 +66,7 @@ OUTPUT JSON:
   "ai_comment": "string",
   "evidence": "string",
   "confidence": 0.0
-}', '{"criterion_name":"string","criterion_desc":"string","scoring_guide":"string","transcript":"string"}', 'gemini-1.5-pro', '{"temperature": 0.2, "max_tokens": 1024}', true),
+}', '{"criterion_name":"string","criterion_desc":"string","scoring_guide":"string","transcript":"string"}', 'gemini-2.5-flash', '{"temperature": 0.2, "max_tokens": 1024}', true),
 
 ('generate_report', 1, 'Bạn là AI assistant tạo báo cáo sau phỏng vấn.
 
@@ -109,7 +109,7 @@ OUTPUT JSON:
   "suggested_next_steps": ["string"],
   "insufficient_data_points": ["string"],
   "confidence": 0.0
-}', '{"job_requirements":"string","transcript":"string","scores":"string"}', 'gemini-1.5-pro', '{"temperature": 0.3, "max_tokens": 2048}', true),
+}', '{"job_requirements":"string","transcript":"string","scores":"string"}', 'gemini-2.5-flash', '{"temperature": 0.3, "max_tokens": 2048}', true),
 
 ('mock_question', 1, 'Bạn là AI interviewer giúp ứng viên luyện phỏng vấn thử.
 
@@ -143,7 +143,7 @@ OUTPUT JSON:
   "question_type": "introduction|technical|behavioral|experience|situational|closing",
   "target_skill": "string",
   "difficulty": "intern|junior|middle|senior"
-}', '{"target_role":"string","target_level":"string","candidate_profile":"string","history":"string"}', 'gemini-1.5-flash', '{"temperature": 0.6, "max_tokens": 1024}', true),
+}', '{"target_role":"string","target_level":"string","candidate_profile":"string","history":"string"}', 'gemini-2.5-flash', '{"temperature": 0.6, "max_tokens": 1024}', true),
 
 ('mock_feedback', 1, 'Bạn là AI coach giúp ứng viên cải thiện kỹ năng phỏng vấn.
 
@@ -177,6 +177,6 @@ OUTPUT JSON:
   "sample_better_answer": "string",
   "coach_comment": "string",
   "confidence": 0.0
-}', '{"question":"string","answer":"string","target_role":"string"}', 'gemini-1.5-flash', '{"temperature": 0.5, "max_tokens": 1024}', true)
+}', '{"question":"string","answer":"string","target_role":"string"}', 'gemini-2.5-flash', '{"temperature": 0.5, "max_tokens": 1024}', true)
 
 ON CONFLICT DO NOTHING;

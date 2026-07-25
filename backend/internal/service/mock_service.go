@@ -143,7 +143,154 @@ func (s *MockService) End(ctx context.Context, id, userID string) error {
 	if !ok {
 		return apierrors.NewValidation("status", []string{"session was already ended"})
 	}
-	return s.mockRepo.UpdateEndedAt(ctx, id, time.Now())
+	if err := s.mockRepo.UpdateEndedAt(ctx, id, time.Now()); err != nil {
+		return err
+	}
+
+	// Score the whole session with AI (synchronous so the report is ready when
+	// the candidate opens the result page). Best-effort: scoring failure does
+	// not fail the End call.
+	scoreCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if serr := s.scoreSession(scoreCtx, m); serr != nil {
+		logger.Error("mock: session scoring failed", "id", id, "error", serr)
+	}
+	return nil
+}
+
+// mockFeedbackResult mirrors the mock_feedback prompt template output.
+type mockFeedbackResult struct {
+	Score        float64  `json:"score"`
+	MaxScore     float64  `json:"max_score"`
+	Strengths    []string `json:"strengths"`
+	Improvements []string `json:"improvements"`
+	CoachComment string   `json:"coach_comment"`
+}
+
+// scoreJSONShape is what MockResultPage.vue reads off each AI message.
+type scoreJSONShape struct {
+	Score         float64  `json:"score"`
+	GoodPoints    []string `json:"good_points"`
+	ImprovePoints []string `json:"improve_points"`
+}
+
+// scoreSession scores each (AI question -> candidate answer) pair, writes a
+// normalized /10 score_json onto the AI message that follows each answer, and
+// persists final_score + feedback_json on the session.
+func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview) error {
+	messages, err := s.mockRepo.ListMessages(ctx, m.ID)
+	if err != nil {
+		return err
+	}
+
+	var total float64
+	var scored int
+	var comments []string
+
+	for i, msg := range messages {
+		if msg.SenderType != "candidate" {
+			continue
+		}
+		// The question is the most recent AI message before this answer.
+		question := ""
+		for j := i - 1; j >= 0; j-- {
+			if messages[j].SenderType == "ai" {
+				question = messages[j].Content
+				break
+			}
+		}
+		if question == "" {
+			continue
+		}
+
+		fb, ferr := s.scoreAnswer(ctx, question, msg.Content, m.TargetRole)
+		if ferr != nil {
+			logger.Error("mock: failed to score answer", "id", m.ID, "error", ferr)
+			continue
+		}
+
+		// Normalize to /10.
+		max := fb.MaxScore
+		if max <= 0 {
+			max = 5
+		}
+		norm := fb.Score / max * 10
+		if norm > 10 {
+			norm = 10
+		}
+		if norm < 0 {
+			norm = 0
+		}
+
+		sj := scoreJSONShape{
+			Score:         norm,
+			GoodPoints:    fb.Strengths,
+			ImprovePoints: fb.Improvements,
+		}
+		sjBytes, merr := json.Marshal(sj)
+		if merr != nil {
+			continue
+		}
+
+		// Target AI message = the AI message that follows this answer (matches
+		// the frontend's nextAi lookup). If none (e.g. last voice turn), create
+		// one carrying the coach comment.
+		targetAIID := ""
+		for j := i + 1; j < len(messages); j++ {
+			if messages[j].SenderType == "ai" {
+				targetAIID = messages[j].ID
+				break
+			}
+		}
+		if targetAIID == "" {
+			newMsg := &models.MockInterviewMessage{
+				ID:              uuid.New().String(),
+				MockInterviewID: m.ID,
+				SenderType:      "ai",
+				Content:         fb.CoachComment,
+				ScoreJSON:       models.JSONB(sjBytes),
+			}
+			if cerr := s.mockRepo.CreateMessage(ctx, newMsg); cerr != nil {
+				logger.Error("mock: failed to create feedback message", "id", m.ID, "error", cerr)
+			}
+		} else if uerr := s.mockRepo.UpdateMessageScore(ctx, targetAIID, models.JSONB(sjBytes)); uerr != nil {
+			logger.Error("mock: failed to save message score", "id", m.ID, "error", uerr)
+		}
+
+		total += norm
+		scored++
+		if fb.CoachComment != "" {
+			comments = append(comments, fb.CoachComment)
+		}
+	}
+
+	if scored == 0 {
+		return nil
+	}
+
+	finalScore := sql.NullFloat64{Float64: total / float64(scored), Valid: true}
+	feedback := strings.Join(comments, "\n\n")
+	feedbackBytes, _ := json.Marshal(feedback)
+	return s.mockRepo.SaveFeedback(ctx, m.ID, models.JSONB(feedbackBytes), finalScore)
+}
+
+// scoreAnswer scores a single Q&A pair via the mock_feedback prompt template.
+func (s *MockService) scoreAnswer(ctx context.Context, question, answer, targetRole string) (*mockFeedbackResult, error) {
+	variables := map[string]string{
+		"question":    question,
+		"answer":      answer,
+		"target_role": targetRole,
+	}
+	data, err := s.orchestrator.CallAI(ctx, "mock_feedback", "", variables)
+	if err != nil {
+		return nil, err
+	}
+	var fb mockFeedbackResult
+	cleanJSON := utils.CleanJSON(string(data))
+	if err := json.Unmarshal([]byte(cleanJSON), &fb); err != nil {
+		return nil, fmt.Errorf("failed to parse mock feedback: %w", err)
+	}
+	return &fb, nil
 }
 
 // K-S6-02: Send message + AI response
@@ -245,11 +392,6 @@ func (s *MockService) SaveLiveTranscript(ctx context.Context, id, userID string,
 	return nil
 }
 
-// K-S6-03: Score answer
-func (s *MockService) ScoreAnswer(ctx context.Context, mockID, messageID, userID string) error {
-	return apierrors.NewValidation("not_implemented", []string{"scoring not yet implemented for mock interviews"})
-}
-
 func (s *MockService) GetMessages(ctx context.Context, id, userID string) ([]models.MockInterviewMessage, error) {
 	_, err := s.getByIDAndCheckOwnership(ctx, id, userID)
 	if err != nil {
@@ -265,8 +407,9 @@ func (s *MockService) GetReport(ctx context.Context, id, userID string) (*models
 
 func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRole, targetLevel, cvFileID string, prevMessages []models.MockInterviewMessage) (string, error) {
 	variables := map[string]string{
-		"TARGET_ROLE":  targetRole,
-		"TARGET_LEVEL": targetLevel,
+		"target_role":       targetRole,
+		"target_level":      targetLevel,
+		"candidate_profile": "",
 	}
 
 	// Build conversation history
@@ -275,14 +418,14 @@ func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRo
 		history = append(history, fmt.Sprintf("%s: %s", msg.SenderType, msg.Content))
 	}
 	if len(history) > 0 {
-		variables["CONVERSATION"] = strings.Join(history, "\n")
+		variables["history"] = strings.Join(history, "\n")
 	} else {
-		variables["CONVERSATION"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
+		variables["history"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
 	}
 
 	// Use empty string as companyID — mock is user-scoped, not company-scoped.
 	// CallAI falls back to system-wide prompt templates when companyID is empty.
-	data, err := s.orchestrator.CallAI(ctx, "MOCK_QUESTION", "", variables)
+	data, err := s.orchestrator.CallAI(ctx, "mock_question", "", variables)
 	if err != nil {
 		return "", err
 	}

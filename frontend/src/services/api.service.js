@@ -57,7 +57,7 @@ const request = async (endpoint, options = {}) => {
 
       // Bắt lỗi 403 Forbidden hoặc lỗi cấm quyền -> Đẩy về trang /403 cảnh báo
       const errorCode = (data.error?.code || '').toUpperCase();
-      if (response.status === 403 || errorCode === 'FORBIDDEN' || errorCode === 'UNAUTHORIZED_ROLE') {
+      if ((response.status === 403 || errorCode === 'FORBIDDEN' || errorCode === 'UNAUTHORIZED_ROLE') && !endpoint.includes('/interviews/join')) {
         window.location.href = '/403?reason=unauthorized&attempted=' + encodeURIComponent(window.location.pathname);
         return;
       }

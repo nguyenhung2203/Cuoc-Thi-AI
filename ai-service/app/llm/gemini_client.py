@@ -61,6 +61,12 @@ class GeminiClient(BaseLLMClient):
                     "temperature": temperature,
                     "max_output_tokens": max_tokens,
                     "response_mime_type": "application/json",
+                    # gemini-2.5-* are thinking models: reasoning tokens count
+                    # against max_output_tokens and were intermittently
+                    # truncating the JSON body (empty text -> insufficient_data).
+                    # These are structured-extraction calls that don't need
+                    # chain-of-thought, so disable thinking for determinism.
+                    "thinking_config": {"thinking_budget": 0},
                 },
             )
         except Exception as e:  # SDK raises a variety of exception types

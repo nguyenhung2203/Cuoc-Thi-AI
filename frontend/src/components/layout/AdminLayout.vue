@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
-import { LayoutDashboard, Users, Building, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Activity, ShieldCheck, Bell, Search, Sparkles } from 'lucide-vue-next'
+import { LayoutDashboard, Users, Building, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Activity, ShieldCheck, Bell, Search, Sparkles, BarChart3 } from 'lucide-vue-next'
 import { usePlatformStore } from '../../stores/platform.store'
 
 const router = useRouter()
@@ -21,6 +21,7 @@ const navItems = [
   { name: 'Tổng quan', path: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Quản lý Người dùng', path: '/admin/users', icon: Users },
   { name: 'Quản lý Công ty', path: '/admin/companies', icon: Building },
+  { name: 'Báo cáo & Thống kê', path: '/admin/reports', icon: BarChart3 },
   { name: 'Nhật ký Hệ thống', path: '/admin/logs', icon: Activity },
   { name: 'Cài đặt Hệ thống', path: '/admin/settings', icon: Settings },
 ]

@@ -78,42 +78,16 @@ const formatDate = (isoStr) => {
   return new Date(isoStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-// Fallback monthly token usage if server log has no items
-const displayMonthlyUsage = computed(() => {
-  if (reports.value?.monthly_token_usage && reports.value.monthly_token_usage.length > 0) {
-    return reports.value.monthly_token_usage
-  }
-  return [
-    { month: '01/2026', usage: 120000 },
-    { month: '02/2026', usage: 250000 },
-    { month: '03/2026', usage: 480000 },
-    { month: '04/2026', usage: 320000 },
-    { month: '05/2026', usage: 780000 },
-    { month: '06/2026', usage: reports.value?.total_token_usage || 1254809 },
-  ]
-})
+const displayMonthlyUsage = computed(() => reports.value?.monthly_token_usage || [])
 
-// Fallback growth usage if user counts are small
-const displayUserGrowth = computed(() => {
-  if (reports.value?.user_growth_trend && reports.value.user_growth_trend.length > 0) {
-    return reports.value.user_growth_trend
-  }
-  return [
-    { period: '01/2026', users: 15 },
-    { period: '02/2026', users: 40 },
-    { period: '03/2026', users: 75 },
-    { period: '04/2026', users: 110 },
-    { period: '05/2026', users: 145 },
-    { period: '06/2026', users: reports.value?.total_users || 176 },
-  ]
-})
+const displayUserGrowth = computed(() => reports.value?.user_growth_trend || [])
 
 const maxMonthlyUsage = computed(() => {
-  return Math.max(...displayMonthlyUsage.value.map(i => i.usage)) || 1
+  return Math.max(1, ...displayMonthlyUsage.value.map(i => i.usage))
 })
 
 const maxGrowthUsers = computed(() => {
-  return Math.max(...displayUserGrowth.value.map(i => i.users)) || 1
+  return Math.max(1, ...displayUserGrowth.value.map(i => i.users))
 })
 
 const formatNumber = (num) => {
@@ -276,17 +250,21 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="h-64 flex items-end justify-between gap-3 pt-6 px-4">
+        <div v-if="displayMonthlyUsage.length === 0" class="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
+          <Zap size="32" class="opacity-40" />
+          <p class="text-sm">Chưa có dữ liệu tiêu thụ token.</p>
+        </div>
+        <div v-else class="h-64 flex items-end justify-between gap-3 pt-6 px-4">
           <div v-for="item in displayMonthlyUsage" :key="item.month" class="flex-1 flex flex-col items-center group relative">
             <div class="absolute -top-10 scale-0 group-hover:scale-100 bg-slate-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-md transition-all z-10 pointer-events-none whitespace-nowrap">
               {{ formatNumber(item.usage) }} Tokens
             </div>
-            
-            <div 
+
+            <div
               class="w-full rounded-t-lg bg-gradient-to-t from-blue-600 to-blue-400 group-hover:from-blue-500 group-hover:to-blue-300 transition-all duration-500 ease-out shadow-sm"
               :style="{ height: `${(item.usage / maxMonthlyUsage) * 180}px` }"
             ></div>
-            
+
             <span class="text-[10px] font-bold text-slate-500 mt-2">{{ item.month }}</span>
           </div>
         </div>
@@ -304,17 +282,21 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="h-64 flex items-end justify-between gap-3 pt-6 px-4">
+        <div v-if="displayUserGrowth.length === 0" class="h-64 flex flex-col items-center justify-center text-slate-400 gap-2">
+          <TrendingUp size="32" class="opacity-40" />
+          <p class="text-sm">Chưa có dữ liệu tăng trưởng người dùng.</p>
+        </div>
+        <div v-else class="h-64 flex items-end justify-between gap-3 pt-6 px-4">
           <div v-for="item in displayUserGrowth" :key="item.period" class="flex-1 flex flex-col items-center group relative">
             <div class="absolute -top-10 scale-0 group-hover:scale-100 bg-slate-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-md transition-all z-10 pointer-events-none whitespace-nowrap">
               {{ item.users }} người dùng
             </div>
-            
-            <div 
+
+            <div
               class="w-full rounded-t-lg bg-gradient-to-t from-purple-600 to-purple-400 group-hover:from-purple-500 group-hover:to-purple-300 transition-all duration-500 ease-out shadow-sm"
               :style="{ height: `${(item.users / maxGrowthUsers) * 180}px` }"
             ></div>
-            
+
             <span class="text-[10px] font-bold text-slate-500 mt-2">{{ item.period }}</span>
           </div>
         </div>

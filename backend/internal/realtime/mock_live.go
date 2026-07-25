@@ -24,7 +24,10 @@ import (
 // The Gemini API key never leaves the server. The browser only talks to us.
 
 // mockLiveModel is a Live-capable Gemini model (native audio dialog).
-const mockLiveModel = "gemini-2.0-flash-live-001"
+// Overridable via GEMINI_LIVE_MODEL. This native-audio model serves the
+// Live API (bidiGenerateContent) which the older 2.0-flash-live alias no
+// longer does on current API versions.
+const mockLiveModel = "gemini-2.5-flash-native-audio-latest"
 
 // mockLiveVoice is the prebuilt voice used for the AI interviewer.
 const mockLiveVoice = "Puck"

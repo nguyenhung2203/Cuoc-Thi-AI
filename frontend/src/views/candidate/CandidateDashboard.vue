@@ -67,33 +67,16 @@ onMounted(async () => {
       candidatePortalService.getInterviews(),
       apiService.getWithMeta('/public/all-jobs?page=1&page_size=3')
     ])
-    
-    // Auto-inject mock data for presentation if the DB is empty
-    if (statsData.upcoming_interviews === 0 && statsData.completed_mock_tests === 0 && statsData.profile_completeness === 0) {
-      stats.value = { upcoming_interviews: 2, completed_mock_tests: 5, average_mock_score: 82.5, profile_completeness: 85 }
-    } else {
-      stats.value = statsData
-    }
 
-    let upInterviews = interviewsData.filter(i => i.status === 'scheduled' || i.status === 'active').slice(0, 3)
-    if (upInterviews.length === 0) {
-      upInterviews = [
-        { id: 'mock-iv-1', title: 'Phỏng vấn vòng 1 - Frontend', company_name: 'TechCorp VN', scheduled_at: new Date(Date.now() + 86400000).toISOString(), mode: 'real', join_link: '/interview/mock-1' },
-        { id: 'mock-iv-2', title: 'Luyện tập AI: ReactJS', company_name: 'AI Coach', scheduled_at: new Date(Date.now() + 172800000).toISOString(), mode: 'mock', join_link: '/mock-setup' }
-      ]
-    }
-    upcomingInterviews.value = upInterviews
-    
-    let recJobs = (jobsRes.data || []).map(j => ({
+    stats.value = statsData
+
+    upcomingInterviews.value = interviewsData
+      .filter(i => i.status === 'scheduled' || i.status === 'active')
+      .slice(0, 3)
+
+    recommendedJobs.value = (jobsRes.data || []).map(j => ({
       ...j, company_name: unwrap(j.company_name), location: unwrap(j.location), employment_type: unwrap(j.employment_type), department: unwrap(j.department), level: unwrap(j.level)
     }))
-    if (recJobs.length === 0) {
-      recJobs = [
-        { id: 'mock-job-1', company_id: 'mock-c-1', title: 'Senior Frontend VueJS', company_name: 'VNG', location: 'Hà Nội', salary_min: { Valid: true, Int64: 2000 }, salary_max: { Valid: true, Int64: 3000 }, currency: { Valid: true, String: 'USD' } },
-        { id: 'mock-job-2', company_id: 'mock-c-2', title: 'Golang Backend Engineer', company_name: 'Shopee', location: 'TP. HCM', salary_min: { Valid: true, Int64: 30000000 }, salary_max: { Valid: true, Int64: 45000000 }, currency: { Valid: true, String: 'VND' } }
-      ]
-    }
-    recommendedJobs.value = recJobs
   } catch (err) {
     console.error('Lỗi tải dữ liệu dashboard:', err)
   } finally {
@@ -316,22 +299,9 @@ const formatDate = (dateString) => {
                 <span class="kpi-icon"><Clock :size="18" /></span>
                 Hoạt động gần đây
               </h3>
-              <div class="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:h-full before:w-0.5 before:bg-slate-200">
-                <div class="relative flex items-center gap-3 group is-active">
-                  <div class="flex items-center justify-center w-4 h-4 rounded-full border border-white shadow shrink-0 z-10" style="background-color: var(--info);"></div>
-                  <div class="flex-1 p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div class="font-semibold text-slate-800 text-xs">Nộp CV thành công</div>
-                    <div class="text-[11px] text-slate-500 mt-0.5">Vị trí Backend tại Innovate AI</div>
-                  </div>
-                </div>
-                
-                <div class="relative flex items-center gap-3 group is-active">
-                  <div class="flex items-center justify-center w-4 h-4 rounded-full border border-white shadow shrink-0 z-10" style="background-color: var(--success);"></div>
-                  <div class="flex-1 p-2.5 rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div class="font-semibold text-slate-800 text-xs">Luyện tập AI</div>
-                    <div class="text-[11px] text-slate-500 mt-0.5">Đạt 85/100 điểm - Xuất sắc!</div>
-                  </div>
-                </div>
+              <div class="empty-box" style="padding: 24px;">
+                <div class="empty-icon"><Clock :size="26" /></div>
+                <p class="text-secondary-strong">Chưa có hoạt động nào gần đây.</p>
               </div>
             </div>
           </Card>

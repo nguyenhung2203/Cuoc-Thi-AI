@@ -6,6 +6,7 @@ import Input from '../../components/common/AppInput.vue'
 import Button from '../../components/common/AppButton.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mail, KeyRound, Lock, ArrowLeft, Sparkles, ShieldCheck, FileCode, TrendingUp } from 'lucide-vue-next'
+import { authService } from '../../services/auth.service'
 
 const router = useRouter()
 const step = ref(1)
@@ -42,41 +43,50 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-const handleSendEmail = (e) => {
+const handleSendEmail = async (e) => {
   e.preventDefault()
   if (!email.value) return
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    await authService.forgotPassword(email.value)
     step.value = 2
     timeLeft.value = 60
     canResend.value = false
-    toast.value = { type: 'success', message: 'Mã xác nhận đã được gửi đến email của bạn!' }
-  }, 1000)
+    toast.value = { type: 'success', message: 'Nếu email tồn tại, mã xác nhận đã được gửi đến hộp thư của bạn.' }
+  } catch (err) {
+    toast.value = { type: 'error', message: err.message || 'Không thể gửi mã xác nhận. Vui lòng thử lại.' }
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleResendOTP = () => {
+const handleResendOTP = async () => {
   if (!canResend.value) return
-  toast.value = { type: 'success', message: 'Đã gửi lại mã xác nhận mới!' }
-  timeLeft.value = 60
-  canResend.value = false
+  try {
+    await authService.forgotPassword(email.value)
+    toast.value = { type: 'success', message: 'Đã gửi lại mã xác nhận mới!' }
+    timeLeft.value = 60
+    canResend.value = false
+  } catch (err) {
+    toast.value = { type: 'error', message: err.message || 'Không thể gửi lại mã.' }
+  }
 }
 
-const handleVerifyOTP = (e) => {
+const handleVerifyOTP = async (e) => {
   e.preventDefault()
   if (!otp.value) return
-  if (otp.value !== '123456') {
-    toast.value = { type: 'error', message: 'Mã xác nhận không hợp lệ. Vui lòng thử lại!' }
-    return
-  }
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    await authService.verifyResetOtp({ email: email.value, otp: otp.value })
     step.value = 3
-  }, 800)
+  } catch (err) {
+    toast.value = { type: 'error', message: err.message || 'Mã xác nhận không hợp lệ hoặc đã hết hạn.' }
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleResetPassword = (e) => {
+const handleResetPassword = async (e) => {
   e.preventDefault()
   if (!password.value || !confirmPassword.value) return
   if (password.value !== confirmPassword.value) {
@@ -88,10 +98,14 @@ const handleResetPassword = (e) => {
     return
   }
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    await authService.resetPassword({ email: email.value, otp: otp.value, new_password: password.value })
     router.push({ path: '/login', state: { message: 'Đổi mật khẩu thành công! Vui lòng đăng nhập lại.' } })
-  }, 1000)
+  } catch (err) {
+    toast.value = { type: 'error', message: err.message || 'Không thể đổi mật khẩu. Vui lòng thử lại.' }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 

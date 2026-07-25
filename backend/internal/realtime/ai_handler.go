@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -125,18 +126,17 @@ func (r *MessageRouter) handleAIRequestSuggestion(conn *ClientConnection, env *e
 		room.BroadcastWithVisibility(events.EventAIThinking, conn.ID, rawThink)
 	}
 
-	// 5. Spawn async worker to simulate Python AI Orchestrator analysis & reply
-	go r.processAISuggestionWorker(room.ID, room.InterviewID, env.RequestID, payload.Focus)
+	// 5. Spawn async worker: real orchestrator-backed service when wired, else canned reply.
+	go r.processAISuggestionWorker(room.ID, room.InterviewID, env.RequestID, payload.Focus, payload.LastTranscriptID)
 }
 
-func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, focus string) {
-	time.Sleep(50 * time.Millisecond) // simulate AI network latency
-
+func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, focus, lastTranscriptID string) {
 	targetRoom := r.roomManager.Get(roomID)
 	if targetRoom == nil {
 		return
 	}
 
+	// Test/QA hooks: deterministic failure injection via magic focus values.
 	if focus == "simulate_down" {
 		log.Printf("[ai] service unavailable (critical) for room=%s", roomID)
 		r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityCritical, "AI tạm thời không phản hồi. Buổi phỏng vấn vẫn tiếp tục.", false, 0)
@@ -154,11 +154,11 @@ func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, fo
 			r.sendAIError(targetRoom, reqID, events.AIErrorTimeout, events.SeverityDegraded, "AI phản hồi chậm (timeout). Đang thử lại...", true, 1)
 			if focus == "simulate_timeout" {
 				time.AfterFunc(50*time.Millisecond, func() {
-					r.processAISuggestionWorker(roomID, interviewID, reqID, "normal")
+					r.processAISuggestionWorker(roomID, interviewID, reqID, "normal", lastTranscriptID)
 				})
 			} else if focus == "simulate_timeout_permanent" {
 				time.AfterFunc(50*time.Millisecond, func() {
-					r.processAISuggestionWorker(roomID, interviewID, reqID, "simulate_timeout_permanent")
+					r.processAISuggestionWorker(roomID, interviewID, reqID, "simulate_timeout_permanent", lastTranscriptID)
 				})
 			}
 			return
@@ -169,6 +169,46 @@ func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, fo
 		return
 	}
 
+	// Real path: resolve the owning company then call the orchestrator-backed
+	// SuggestionService, which reads transcripts from Postgres and calls the AI
+	// service. Falls back to a canned reply when services aren't wired (dev).
+	if r.suggestionSvc != nil && r.interviewRepo != nil {
+		companyID, err := r.interviewRepo.GetCompanyIDByInterviewID(context.Background(), interviewID)
+		if err != nil {
+			log.Printf("[ai] cannot resolve company for interview=%s: %v", interviewID, err)
+			r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityDegraded, "Không xác định được phiên phỏng vấn để phân tích.", true, 0)
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		result, err := r.suggestionSvc.SuggestFollowUp(ctx, companyID, interviewID, lastTranscriptID, focus)
+		if err != nil {
+			log.Printf("[ai] suggestion service failed interview=%s: %v", interviewID, err)
+			r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityDegraded, "AI chưa thể đưa ra gợi ý lúc này.", true, 0)
+			return
+		}
+		suggPayload := events.AISuggestionPayload{
+			SuggestionID:   uuid.New().String(),
+			SuggestionType: events.SuggestionFollowUpQuestion,
+			Content:        result.SuggestedQuestion,
+			Reason:         result.Reason,
+			TargetSkill:    result.TargetSkill,
+			Priority:       result.Priority,
+			Confidence:     result.Confidence,
+		}
+		suggEnv, envErr := events.NewEnvelope(events.EventAISuggestion, reqID, roomID, interviewID, suggPayload)
+		if envErr == nil {
+			rawSugg, _ := suggEnv.ToJSON()
+			targetRoom.BroadcastWithVisibility(events.EventAISuggestion, "", rawSugg)
+		}
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("ai_suggestion", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "suggestion_id": suggPayload.SuggestionID})
+		}
+		return
+	}
+
+	// Dev fallback: no real services wired.
+	time.Sleep(50 * time.Millisecond)
 	suggestionID := uuid.New().String()
 	suggPayload := events.AISuggestionPayload{
 		SuggestionID:   suggestionID,
@@ -179,16 +219,11 @@ func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, fo
 		Priority:       "high",
 		Confidence:     0.84,
 	}
-
-	log.Printf("[db] INSERT INTO ai_suggestions (id, interview_id, suggestion_type, content, reason, target_skill, priority, confidence, created_at) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', %f, '%s')",
-		suggestionID, interviewID, suggPayload.SuggestionType, suggPayload.Content, suggPayload.Reason, suggPayload.TargetSkill, suggPayload.Priority, suggPayload.Confidence, time.Now().UTC().Format(time.RFC3339))
-
 	suggEnv, err := events.NewEnvelope(events.EventAISuggestion, reqID, roomID, interviewID, suggPayload)
 	if err == nil {
 		rawSugg, _ := suggEnv.ToJSON()
 		targetRoom.BroadcastWithVisibility(events.EventAISuggestion, "", rawSugg)
 	}
-
 	if r.auditLogger != nil {
 		r.auditLogger.LogEvent("ai_suggestion", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "suggestion_id": suggestionID})
 	}
@@ -235,18 +270,17 @@ func (r *MessageRouter) handleAIRequestScoreUpdate(conn *ClientConnection, env *
 		room.BroadcastWithVisibility(events.EventAIThinking, conn.ID, rawThink)
 	}
 
-	// 5. Spawn async worker to simulate AI scoring
-	go r.processAIScoreWorker(room.ID, room.InterviewID, env.RequestID, payload.Scope)
+	// 5. Spawn async worker: real orchestrator-backed scoring when wired, else canned.
+	go r.processAIScoreWorker(room.ID, room.InterviewID, env.RequestID, payload.Scope, payload.CriterionIDs)
 }
 
-func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope string) {
-	time.Sleep(50 * time.Millisecond)
-
+func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope string, criterionIDs []string) {
 	targetRoom := r.roomManager.Get(roomID)
 	if targetRoom == nil {
 		return
 	}
 
+	// Test/QA hooks: deterministic failure injection via magic scope values.
 	if scope == "simulate_down" {
 		log.Printf("[ai] score service unavailable (critical) for room=%s", roomID)
 		r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityCritical, "AI tạm thời không phản hồi. Buổi phỏng vấn vẫn tiếp tục.", false, 0)
@@ -264,11 +298,11 @@ func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope s
 			r.sendAIError(targetRoom, reqID, events.AIErrorTimeout, events.SeverityDegraded, "AI phản hồi chậm (timeout). Đang thử lại...", true, 1)
 			if scope == "simulate_timeout" {
 				time.AfterFunc(50*time.Millisecond, func() {
-					r.processAIScoreWorker(roomID, interviewID, reqID, "normal")
+					r.processAIScoreWorker(roomID, interviewID, reqID, "normal", criterionIDs)
 				})
 			} else if scope == "simulate_timeout_permanent" {
 				time.AfterFunc(50*time.Millisecond, func() {
-					r.processAIScoreWorker(roomID, interviewID, reqID, "simulate_timeout_permanent")
+					r.processAIScoreWorker(roomID, interviewID, reqID, "simulate_timeout_permanent", criterionIDs)
 				})
 			}
 			return
@@ -279,6 +313,84 @@ func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope s
 		return
 	}
 
+	// Real path: resolve the owning company, then call ScoreService which reads
+	// transcripts + rubric criteria from Postgres, calls the AI service, and
+	// persists interview_scores. Requires criterion_ids from the client and at
+	// least one transcript to score.
+	if r.scoreSvc != nil && r.interviewRepo != nil && r.transcriptRepo != nil && len(criterionIDs) > 0 {
+		companyID, err := r.interviewRepo.GetCompanyIDByInterviewID(context.Background(), interviewID)
+		if err != nil {
+			log.Printf("[ai] cannot resolve company for interview=%s: %v", interviewID, err)
+			r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityDegraded, "Không xác định được phiên phỏng vấn để chấm điểm.", true, 0)
+			return
+		}
+
+		// Resolve which transcripts to score. The realtime score payload carries no
+		// transcript IDs, so we score the most recent final-transcript window read
+		// from Postgres (the last N segments) rather than a client-supplied set.
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+
+		allTranscripts, terr := r.transcriptRepo.ListByInterview(ctx, interviewID)
+		if terr != nil {
+			log.Printf("[ai] score: failed to load transcripts interview=%s: %v", interviewID, terr)
+			r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityDegraded, "AI chưa thể chấm điểm lúc này.", true, 0)
+			return
+		}
+		if len(allTranscripts) == 0 {
+			r.sendAIError(targetRoom, reqID, events.AIErrorInvalidInput, events.SeverityDegraded, "Chưa có nội dung hội thoại để chấm điểm.", true, 0)
+			return
+		}
+		// Take the most recent window (up to 10 final segments).
+		window := allTranscripts
+		if len(window) > 10 {
+			window = window[len(window)-10:]
+		}
+		transcriptIDs := make([]string, 0, len(window))
+		for _, t := range window {
+			transcriptIDs = append(transcriptIDs, t.ID)
+		}
+
+		scores, err := r.scoreSvc.ScoreAnswer(ctx, companyID, interviewID, transcriptIDs, criterionIDs)
+		if err != nil {
+			log.Printf("[ai] score service failed interview=%s: %v", interviewID, err)
+			r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityDegraded, "AI chưa thể chấm điểm lúc này.", true, 0)
+			return
+		}
+		rubricScores := make([]events.RubricScore, 0, len(scores))
+		for _, sc := range scores {
+			var scorePtr *float64
+			if sc.Score.Valid {
+				v := sc.Score.Float64
+				scorePtr = &v
+			}
+			status := events.ScoreStatusScored
+			if sc.Status == "insufficient_evidence" {
+				status = events.ScoreStatusInsufficientEvidence
+			}
+			rubricScores = append(rubricScores, events.RubricScore{
+				CriterionName: sc.CriterionName,
+				Score:         scorePtr,
+				MaxScore:      sc.MaxScore,
+				Evidence:      sc.Evidence.String,
+				Confidence:    sc.Confidence.Float64,
+				Status:        status,
+			})
+		}
+		updatePayload := events.AIScoreUpdatePayload{Scores: rubricScores}
+		scoreEnv, envErr := events.NewEnvelope(events.EventAIScoreUpdate, reqID, roomID, interviewID, updatePayload)
+		if envErr == nil {
+			rawScore, _ := scoreEnv.ToJSON()
+			targetRoom.BroadcastWithVisibility(events.EventAIScoreUpdate, "", rawScore)
+		}
+		if r.auditLogger != nil {
+			r.auditLogger.LogEvent("ai_score_update", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "criteria": len(rubricScores)})
+		}
+		return
+	}
+
+	// Dev fallback: no real services wired (or no criterion_ids supplied).
+	time.Sleep(50 * time.Millisecond)
 	var rubricScores []events.RubricScore
 	if scope == "brief_check" {
 		rubricScores = append(rubricScores, events.RubricScore{
@@ -302,15 +414,6 @@ func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope s
 	}
 
 	scoreID := uuid.New().String()
-	for _, rs := range rubricScores {
-		sVal := 0.0
-		if rs.Score != nil {
-			sVal = *rs.Score
-		}
-		log.Printf("[db] INSERT INTO interview_scores (id, interview_id, criterion_name, score, max_score, evidence, confidence, status, created_at) VALUES ('%s', '%s', '%s', %f, %f, '%s', %f, '%s', '%s')",
-			scoreID, interviewID, rs.CriterionName, sVal, rs.MaxScore, rs.Evidence, rs.Confidence, rs.Status, time.Now().UTC().Format(time.RFC3339))
-	}
-
 	updatePayload := events.AIScoreUpdatePayload{
 		Scores: rubricScores,
 	}
