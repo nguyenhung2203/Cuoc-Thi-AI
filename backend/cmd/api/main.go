@@ -141,7 +141,7 @@ func main() {
 	mockHandler := handler.NewMockHandler(mockSvc)
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
-	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
+	aiAdminHandler := handler.NewAIAdminHandler(promptSvc, aiLogSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationRepo)
 	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
@@ -219,6 +219,7 @@ func main() {
 				r.Use(middleware.RoleMiddleware("admin"))
 				r.Get("/ai-prompts", aiAdminHandler.ListTemplates)
 				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
+				r.Get("/ai-logs", aiAdminHandler.ListAILogs)
 				r.Get("/logs", auditHandler.ListAllGlobalLogs)
 				r.Get("/settings", systemSettingsHandler.GetSettings)
 				r.Put("/settings", systemSettingsHandler.UpdateSettings)
@@ -238,7 +239,6 @@ func main() {
 			r.Route("/companies/{company_id}", func(r chi.Router) {
 				r.Use(middleware.CompanyScopeMiddleware(db))
 
-				companyHandler.Routes(r)
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 
@@ -251,8 +251,8 @@ func main() {
 					r.Put("/{rubric_id}", rubricHandler.UpdateRubric)
 					r.Delete("/{rubric_id}", rubricHandler.DeleteRubric)
 				})
-					questionBankHandler.Routes(r)
-					interviewTemplateHandler.Routes(r)
+				questionBankHandler.Routes(r)
+				interviewTemplateHandler.Routes(r)
 
 				r.Route("/interviews", func(r chi.Router) {
 					interviewHandler.ProtectedRoutes(r)

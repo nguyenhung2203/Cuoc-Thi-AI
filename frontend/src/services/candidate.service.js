@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { fileService } from './file.service';
 
 /**
  * Candidate Service
@@ -74,6 +75,6 @@ export const candidateService = {
    * @param {String} companyId 
    */
   getCVUrl: (fileId, companyId) => {
-    return apiService.get(`/files/${fileId}/signed-url?company_id=${companyId}`);
+    return fileService.getDownloadUrl(fileId, companyId);
   }
 };

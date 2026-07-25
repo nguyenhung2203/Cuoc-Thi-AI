@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
+import { fileService } from '../../services/file.service'
 import { Users, Search, CheckCircle2, XCircle, Shield, FileText, Clock, RefreshCw, Filter, UserCheck } from 'lucide-vue-next'
 
 const pendingUsers = ref([])
@@ -43,9 +44,25 @@ const fetchUsers = async () => {
   }
 }
 
-const getFileUrl = (fileId) => {
-  const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
-  return `${apiUrl}/files/${fileId}/download`
+const openingFile = ref(null)
+
+const viewFile = async (fileId) => {
+  if (!fileId) return
+  openingFile.value = fileId
+  try {
+    const res = await fileService.getDownloadUrl(fileId)
+    const url = res?.url
+    if (url) {
+      window.open(url, '_blank', 'noopener')
+    } else {
+      alert('Không lấy được đường dẫn file.')
+    }
+  } catch (error) {
+    console.error('Failed to get file signed url', error)
+    alert('Lỗi mở file: ' + (error.message || error))
+  } finally {
+    openingFile.value = null
+  }
 }
 
 const approveUser = async (userId) => {
@@ -244,14 +261,14 @@ onMounted(() => {
 
               <!-- Verification File -->
               <td v-if="activeTab === 'pending'" class="py-4 px-6">
-                <a 
-                  v-if="user.verification_file_id" 
-                  :href="getFileUrl(user.verification_file_id)" 
-                  target="_blank" 
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--primary-light)] text-[var(--primary)] hover:bg-[var(--primary-light)]/80 rounded-lg text-xs font-semibold transition-colors border border-blue-200/40"
+                <button
+                  v-if="user.verification_file_id"
+                  :disabled="openingFile === user.verification_file_id"
+                  @click="viewFile(user.verification_file_id)"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--primary-light)] text-[var(--primary)] hover:bg-[var(--primary-light)]/80 rounded-lg text-xs font-semibold transition-colors border border-blue-200/40 disabled:opacity-50"
                 >
-                  <FileText size="14" /> Xem giấy phép
-                </a>
+                  <FileText size="14" /> {{ openingFile === user.verification_file_id ? 'Đang mở...' : 'Xem giấy phép' }}
+                </button>
                 <span v-else class="inline-flex items-center gap-1 text-[var(--text-secondary)] italic text-xs">
                   <Clock size="14" /> Chưa tải file
                 </span>

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,14 +33,15 @@ func (h *InterviewHandler) ProtectedRoutes(r chi.Router) {
 	r.With(middleware.RequirePermission("interview:create")).Post("/", h.CreateInterview)
 	r.With(middleware.RequirePermission("interview:read")).Get("/", h.ListInterviews)
 	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}", h.GetInterview)
+	r.With(middleware.RequirePermission("interview:update")).Put("/{interview_id}", h.RescheduleInterview)
 	r.With(middleware.RequirePermission("interview:update")).Put("/{interview_id}/notes", h.UpdateNotes)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/send-reminder", h.SendReminder)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/start", h.StartInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/end", h.EndInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/cancel", h.CancelInterview)
 	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room", h.GetRoom)
-	r.Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
-	r.Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
+	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
+	r.With(middleware.RequirePermission("interview:read")).Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
 }
 
 func (h *InterviewHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +127,39 @@ func (h *InterviewHandler) UpdateNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, map[string]string{"status": "saved"}, nil, requestID)
+}
+
+// RescheduleInterview changes the scheduled time (only while status=scheduled).
+func (h *InterviewHandler) RescheduleInterview(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var body struct {
+		ScheduledAt time.Time `json:"scheduled_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeServiceError(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+	if body.ScheduledAt.IsZero() {
+		writeServiceError(w, apierrors.NewValidation("scheduled_at", []string{"scheduled_at is required"}), requestID)
+		return
+	}
+
+	if err := h.svc.RescheduleInterview(r.Context(), interviewID, companyID, body.ScheduledAt); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	// Audit log reschedule
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("interview:reschedule", "interview", interviewID, companyID, nil, map[string]interface{}{
+			"scheduled_at": body.ScheduledAt,
+		})
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "rescheduled"}, nil, requestID)
 }
 
 func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {

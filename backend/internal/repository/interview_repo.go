@@ -107,6 +107,13 @@ func (r *InterviewRepository) UpdateNotes(ctx context.Context, id, companyID, no
 	return err
 }
 
+// UpdateScheduledAt reschedules an interview (company-scoped).
+func (r *InterviewRepository) UpdateScheduledAt(ctx context.Context, id, companyID string, scheduledAt time.Time) error {
+	q := `UPDATE interviews SET scheduled_at = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3`
+	_, err := r.db.ExecContext(ctx, q, scheduledAt, id, companyID)
+	return err
+}
+
 func (r *InterviewRepository) UpdateRoomStatus(ctx context.Context, id, status string) error {
 	q := `UPDATE interview_rooms SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, q, status, id)

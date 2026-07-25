@@ -268,6 +268,39 @@ func (s *InterviewService) UpdateNotes(ctx context.Context, interviewID, company
 	return s.repo.UpdateNotes(ctx, interviewID, companyID, notes)
 }
 
+// RescheduleInterview changes an interview's scheduled time. Only allowed while
+// the interview is still in the "scheduled" state — once it is waiting/active/
+// completed/cancelled, rescheduling is rejected (cancel + recreate instead).
+func (s *InterviewService) RescheduleInterview(ctx context.Context, interviewID, companyID string, scheduledAt time.Time) error {
+	i, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
+	if err != nil {
+		return errors.NewNotFound("interview not found")
+	}
+	if i.Status != "scheduled" {
+		return errors.NewBadRequest("can only reschedule an interview in 'scheduled' state, current: " + i.Status)
+	}
+	if err := s.repo.UpdateScheduledAt(ctx, interviewID, companyID, scheduledAt); err != nil {
+		return err
+	}
+
+	// Notify candidate about the new time if possible.
+	if s.candidateRepo != nil && s.notifRepo != nil {
+		if cand, candErr := s.candidateRepo.GetByID(ctx, companyID, i.CandidateID); candErr == nil && cand != nil {
+			if cand.UserID.Valid {
+				_ = s.notifRepo.Create(ctx, &models.Notification{
+					UserID:  cand.UserID.String,
+					Title:   "Lịch phỏng vấn được dời",
+					Message: "Lịch phỏng vấn: " + i.Title + " đã được dời sang thời gian mới.",
+					Type:    "interview_rescheduled",
+					Link:    "/my-interviews",
+				})
+			}
+		}
+	}
+
+	return nil
+}
+
 // GetRoom returns room metadata for an interview (after verifying company scope).
 func (s *InterviewService) GetRoom(ctx context.Context, interviewID, companyID string) (*models.InterviewRoom, error) {
 	if _, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID); err != nil {

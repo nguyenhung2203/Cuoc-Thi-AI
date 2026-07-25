@@ -124,12 +124,18 @@ func (s *FileService) GetSignedURL(
 	ctx context.Context,
 	fileID, requestingUserID, companyID string,
 	isRecruiter bool,
+	isAdmin bool,
 ) (url string, expiresAt time.Time, err error) {
 	var file *models.File
 
-	if isRecruiter {
+	switch {
+	case isAdmin:
+		// Admin can access any file (e.g. recruiter verification documents,
+		// which are owner-uploaded and not scoped to a company).
+		file, err = s.fileRepo.GetByID(ctx, fileID)
+	case isRecruiter:
 		file, err = s.fileRepo.GetByIDAndCompany(ctx, fileID, companyID)
-	} else {
+	default:
 		file, err = s.fileRepo.GetByIDAndOwner(ctx, fileID, requestingUserID)
 	}
 
