@@ -117,8 +117,11 @@ func (s *AuthService) Register(ctx context.Context, req request.RegisterRequest,
 		return nil, "", errors.NewInternal("failed to hash password")
 	}
 
+	// Self-registration may only create recruiter or candidate accounts.
+	// admin (or any other value) is never accepted from client input — the
+	// public /register endpoint must not be a path to privilege escalation.
 	role := models.UserRole(req.Role)
-	if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+	if role != models.RoleRecruiter && role != models.RoleCandidate {
 		role = models.RoleCandidate // default
 	}
 
@@ -231,9 +234,11 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRe
 	// Look up user by verified email in PostgreSQL
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		// User not found -> Auto create a real user record in database
+		// User not found -> Auto create a real user record in database.
+		// Only recruiter/candidate may be self-assigned; admin can never be
+		// obtained through this public path (privilege escalation guard).
 		role := models.UserRole(req.Role)
-		if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+		if role != models.RoleRecruiter && role != models.RoleCandidate {
 			role = models.RoleCandidate
 		}
 		status := models.UserStatusActive
