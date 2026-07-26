@@ -19,6 +19,21 @@ import (
 	"backend/internal/pkg/utils"
 )
 
+// aiServiceError normalises an AI failure for handlers: an existing *AppError
+// (circuit-breaker 502, insufficient-data 422) passes through unchanged;
+// anything else (timeouts, transport errors, unreadable responses) becomes a
+// 502 AI_SERVICE_ERROR so callers never surface a raw 500 for an upstream
+// AI outage.
+func aiServiceError(err error, msg string) error {
+	if err == nil {
+		return nil
+	}
+	if appErr, ok := apierrors.IsAppError(err); ok {
+		return appErr
+	}
+	return apierrors.NewAIServiceError(msg + ": " + err.Error())
+}
+
 // StandardAIResponse is the expected structure returned from the Python ai-service.
 type StandardAIResponse struct {
 	Data             json.RawMessage `json:"data"`
@@ -165,8 +180,8 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 				HTTPStatus: http.StatusBadGateway,
 			}
 		}
-		
-		return nil, err
+
+		return nil, aiServiceError(err, "AI service call failed")
 	}
 
 	// 5. Parse Response
@@ -176,7 +191,7 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 		logEntry.Status = "failed"
 		logEntry.Error = sql.NullString{String: parseErr.Error(), Valid: true}
 		s.logSvc.LogAsync(logEntry)
-		return nil, fmt.Errorf("parse error: %w", parseErr)
+		return nil, aiServiceError(parseErr, "AI service returned an unreadable response")
 	}
 
 	logEntry.Status = "success"
@@ -230,7 +245,7 @@ func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID strin
 	var scoreData AIScoreData
 	cleanJSON := utils.CleanJSON(string(fullResp.Data))
 	if err := json.Unmarshal([]byte(cleanJSON), &scoreData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal score data: %w", err)
+		return nil, aiServiceError(err, "AI returned unreadable score data")
 	}
 
 	return &ScoreResult{
@@ -257,7 +272,7 @@ func (s *AIOrchestratorService) GenerateReport(ctx context.Context, companyID st
 	var result ai.ReportGenerationResult
 	cleanJSON := utils.CleanJSON(string(fullResp.Data))
 	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal report generation result: %w", err)
+		return nil, aiServiceError(err, "AI returned an unreadable report")
 	}
 
 	return &result, nil

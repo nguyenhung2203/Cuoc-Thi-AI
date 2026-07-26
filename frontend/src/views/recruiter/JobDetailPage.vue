@@ -106,30 +106,53 @@ const handleSave = async (e) => {
 
 const aiResult = ref(null)
 
+// Nạp lại kết quả phân tích từ job (analyze lưu vào ai_analysis_json, endpoint
+// không trả kết quả trực tiếp). Tách riêng để lỗi refetch không bị báo nhầm
+// thành "phân tích thất bại".
+const refreshAiResult = async (companyId) => {
+  const jobData = await jobService.getJob(companyId, id)
+  const rawJob = jobData.data || jobData
+  if (rawJob.ai_analysis_json) {
+    let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
+    aiResult.value = result
+    rubric.value = (result?.suggested_rubric || []).map(r => ({
+      criterion: r.name,
+      weight: `${r.weight}%`
+    }))
+  }
+}
+
 const handleAiAnalyze = async () => {
   aiAnalyzing.value = true
-  aiResult.value = null
+  const companyId = authStore.user?.companies?.[0]?.id
   try {
-    const companyId = authStore.user?.companies?.[0]?.id
     // API_SPEC §4.6 — POST /companies/:company_id/jobs/:job_id/analyze
     await jobService.analyzeJD(companyId, id, false)
-    
-    // AIAnalysis is saved to the database, we need to fetch the job again
-    const jobData = await jobService.getJob(companyId, id)
-    const rawJob = jobData.data || jobData
-    
-    if (rawJob.ai_analysis_json) {
-      let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
-      aiResult.value = result
-      rubric.value = (result?.suggested_rubric || []).map(r => ({
-        criterion: r.name,
-        weight: `${r.weight}%`
-      }))
+  } catch (err) {
+    // err là error payload từ backend ({code, message, details}) — hiển thị
+    // nguyên nhân thật thay vì thông báo chết cứng che lỗi.
+    const code = (err?.code || '').toUpperCase()
+    if (code === 'CONFLICT') {
+      localToast.value = { type: 'warning', message: 'Công việc này đã được AI phân tích trước đó.' }
+      try { await refreshAiResult(companyId) } catch { /* giữ kết quả đang hiển thị */ }
+    } else if (code === 'AI_SERVICE_ERROR') {
+      localToast.value = { type: 'error', message: 'Dịch vụ AI đang bận hoặc không phản hồi. Vui lòng thử lại sau ít phút.' }
+    } else if (code === 'VALIDATION_ERROR') {
+      localToast.value = { type: 'error', message: (err.details || []).join(' ') || err.message }
+    } else if (code === 'NOT_FOUND') {
+      localToast.value = { type: 'error', message: 'Không tìm thấy công việc.' }
+    } else {
+      localToast.value = { type: 'error', message: err?.message || 'Phân tích JD thất bại.' }
     }
-    
+    aiAnalyzing.value = false
+    return
+  }
+
+  try {
+    await refreshAiResult(companyId)
     localToast.value = { type: 'success', message: 'AI đã phân tích JD thành công!' }
   } catch (err) {
-    localToast.value = { type: 'info', message: 'Tính năng AI phân tích đang chờ Backend của Khôi.' }
+    localToast.value = { type: 'warning', message: 'Phân tích xong nhưng chưa tải lại được kết quả. Hãy tải lại trang.' }
   } finally {
     aiAnalyzing.value = false
   }
