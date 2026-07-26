@@ -44,22 +44,23 @@ func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService
 //	DELETE /jobs/{job_id}/candidates/{candidate_id}/unassign → UnassignFromJob
 func (h *CandidateHandler) Routes(r chi.Router) {
 	r.Route("/candidates", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.Post("/", h.Create)
+		r.With(middleware.RequirePermission("candidate:read")).Get("/", h.List)
+		r.With(middleware.RequirePermission("candidate:create")).Post("/", h.Create)
 		r.Route("/{candidate_id}", func(r chi.Router) {
-			r.Get("/", h.GetByID)
-			r.Post("/cv", h.UploadCV)
-			r.Post("/parse-cv", h.ParseCV)
-			r.Put("/", h.Update)
-			r.Delete("/", h.Delete)
+			r.With(middleware.RequirePermission("candidate:read")).Get("/", h.GetByID)
+			r.With(middleware.RequirePermission("candidate:update")).Post("/cv", h.UploadCV)
+			r.With(middleware.RequirePermission("candidate:update")).Post("/parse-cv", h.ParseCV)
+			r.With(middleware.RequirePermission("candidate:update")).Put("/", h.Update)
+			r.With(middleware.RequirePermission("candidate:delete")).Delete("/", h.Delete)
 		})
 	})
 
 	r.Route("/jobs/{job_id}/candidates", func(r chi.Router) {
-		r.Get("/", h.ListByJob)
-		r.Post("/{candidate_id}/assign", h.AssignToJob)
-		r.Put("/{candidate_id}/pipeline", h.UpdatePipeline)
-		r.Delete("/{candidate_id}/unassign", h.UnassignFromJob)
+		r.With(middleware.RequirePermission("candidate:read")).Get("/", h.ListByJob)
+		r.With(middleware.RequirePermission("candidate:update")).Post("/{candidate_id}/assign", h.AssignToJob)
+		r.With(middleware.RequirePermission("candidate:update")).Put("/{candidate_id}/pipeline", h.UpdatePipeline)
+		// Unassign removes the job link, not the candidate — update, not delete.
+		r.With(middleware.RequirePermission("candidate:update")).Delete("/{candidate_id}/unassign", h.UnassignFromJob)
 	})
 }
 

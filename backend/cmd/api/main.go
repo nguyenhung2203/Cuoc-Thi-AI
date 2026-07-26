@@ -244,10 +244,14 @@ func main() {
 			r.Route("/companies/{company_id}", func(r chi.Router) {
 				r.Use(middleware.CompanyScopeMiddleware(db))
 
+				companyHandler.ScopedRoutes(r)
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 
-				r.Get("/audit-logs", auditHandler.ListAuditLogs)
+				// Audit logs expose actor identities and before/after data —
+				// company owner/admin only (system admin bypasses inside).
+				r.With(middleware.RequireCompanyRole("owner", "admin")).
+					Get("/audit-logs", auditHandler.ListAuditLogs)
 
 				r.Route("/rubrics", func(r chi.Router) {
 					r.Post("/", rubricHandler.CreateRubric)
@@ -266,11 +270,13 @@ func main() {
 						transcriptHandler.Routes(r)
 					})
 					r.Route("/{interview_id}/report", func(r chi.Router) {
-						r.Get("/", reportHandler.GetReport)
-						r.Put("/decision", reportHandler.OverrideDecision)
-						r.Post("/retry", reportHandler.RetryReport)
+						r.With(middleware.RequirePermission("interview:read")).Get("/", reportHandler.GetReport)
+						r.With(middleware.RequirePermission("interview:update")).Put("/decision", reportHandler.OverrideDecision)
+						r.With(middleware.RequirePermission("interview:update")).Post("/retry", reportHandler.RetryReport)
 					})
+					// AI endpoints spend Gemini tokens — viewers must not trigger them.
 					r.Route("/{interview_id}/ai", func(r chi.Router) {
+						r.Use(middleware.RequirePermission("interview:update"))
 						r.Post("/score-answer", aiHandler.ScoreAnswer)
 						r.Post("/generate-report", aiHandler.GenerateReport)
 						r.Post("/suggest-follow-up", aiHandler.SuggestFollowUp)

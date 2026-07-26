@@ -37,15 +37,16 @@ func NewJobHandler(svc *service.JobService) *JobHandler {
 //	DELETE /jobs/{job_id}     → Delete
 func (h *JobHandler) Routes(r chi.Router) {
 	r.Route("/jobs", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.Post("/", h.Create)
+		r.With(middleware.RequirePermission("job:read")).Get("/", h.List)
+		r.With(middleware.RequirePermission("job:create")).Post("/", h.Create)
 		r.Route("/{job_id}", func(r chi.Router) {
-			r.Get("/", h.GetByID)
-			r.Put("/", h.Update)
-			r.Delete("/", h.Delete)
-			r.Post("/analyze", h.Analyze)
+			r.With(middleware.RequirePermission("job:read")).Get("/", h.GetByID)
+			r.With(middleware.RequirePermission("job:update")).Put("/", h.Update)
+			r.With(middleware.RequirePermission("job:delete")).Delete("/", h.Delete)
+			// Analyze/generate write AI results and spend Gemini tokens.
+			r.With(middleware.RequirePermission("job:update")).Post("/analyze", h.Analyze)
 			r.Route("/ai", func(r chi.Router) {
-				r.Post("/generate-questions", h.GenerateQuestions)
+				r.With(middleware.RequirePermission("job:update")).Post("/generate-questions", h.GenerateQuestions)
 			})
 		})
 	})
