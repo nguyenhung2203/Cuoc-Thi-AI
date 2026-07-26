@@ -94,9 +94,68 @@ func (r *InterviewRepository) GetRoomByInterviewID(ctx context.Context, intervie
 	return &room, nil
 }
 
-func (r *InterviewRepository) UpdateStatus(ctx context.Context, id, status string) error {
-	q := `UPDATE interviews SET status = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, q, status, id)
+// UpdateStatus is company-scoped and reports a miss instead of silently
+// no-op'ing: interviews.company_id is nullable, so a non-matching row must
+// surface as NotFound rather than a fake success.
+func (r *InterviewRepository) UpdateStatus(ctx context.Context, id, companyID, status string) error {
+	q := `UPDATE interviews SET status = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3`
+	res, err := r.db.ExecContext(ctx, q, status, id, companyID)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return errors.NewNotFound("interview not found")
+	}
+	return nil
+}
+
+// MarkStarted atomically flips a scheduled/waiting interview to 'active' and
+// stamps started_at once (COALESCE keeps the first timestamp, so the REST
+// endpoint and the realtime gateway can both call this idempotently).
+// Returns false when no row matched — wrong state or already started.
+// Caller MUST have authorised access to interviewID.
+func (r *InterviewRepository) MarkStarted(ctx context.Context, interviewID string, at time.Time) (bool, error) {
+	q := `UPDATE interviews
+	      SET status = 'active', started_at = COALESCE(started_at, $1), updated_at = NOW()
+	      WHERE id = $2 AND status IN ('scheduled', 'waiting')`
+	res, err := r.db.ExecContext(ctx, q, at, interviewID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// MarkEnded atomically completes an interview and stamps ended_at once.
+// Returns false when the interview is already completed or cancelled.
+func (r *InterviewRepository) MarkEnded(ctx context.Context, interviewID string, at time.Time) (bool, error) {
+	q := `UPDATE interviews
+	      SET status = 'completed', ended_at = COALESCE(ended_at, $1), updated_at = NOW()
+	      WHERE id = $2 AND status NOT IN ('completed', 'cancelled')`
+	res, err := r.db.ExecContext(ctx, q, at, interviewID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// MarkRoomOpened stamps interview_rooms by interview_id (the realtime gateway
+// only knows interview_id, not interview_rooms.id).
+func (r *InterviewRepository) MarkRoomOpened(ctx context.Context, interviewID string, at time.Time) error {
+	q := `UPDATE interview_rooms
+	      SET status = 'active', opened_at = COALESCE(opened_at, $1), updated_at = NOW()
+	      WHERE interview_id = $2`
+	_, err := r.db.ExecContext(ctx, q, at, interviewID)
+	return err
+}
+
+// MarkRoomClosed stamps closed_at and closes the room by interview_id.
+func (r *InterviewRepository) MarkRoomClosed(ctx context.Context, interviewID string, at time.Time) error {
+	q := `UPDATE interview_rooms
+	      SET status = 'closed', closed_at = COALESCE(closed_at, $1), updated_at = NOW()
+	      WHERE interview_id = $2`
+	_, err := r.db.ExecContext(ctx, q, at, interviewID)
 	return err
 }
 
