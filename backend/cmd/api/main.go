@@ -117,7 +117,7 @@ func main() {
 	matchCache := service.NewMatchCacheService(redisClient)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, aiOrchestrator, matchCache, notificationRepo, fileSvc)
-	userSvc := service.NewUserService(userRepo)
+	userSvc := service.NewUserService(userRepo, refreshTokenRepo)
 
 	// 4b. Async queue (Redis/asynq). Best-effort: if Redis is unavailable the
 	// platform still runs, with heavy jobs processed inline instead.

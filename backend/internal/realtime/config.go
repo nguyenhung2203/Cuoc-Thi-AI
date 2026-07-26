@@ -1,65 +1,39 @@
 package realtime
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"backend/internal/livekit"
 )
 
-// LiveKitConfig holds the LiveKit credentials and endpoint used to mint room
-// tokens. Loaded from env; in production the dev fallbacks are refused.
-type LiveKitConfig struct {
-	APIKey    string
-	APISecret string
-	URL       string
+// LiveKitConfig aliases the shared LiveKit config so existing gateway code
+// (cmd/realtime, server.go) keeps compiling unchanged.
+type LiveKitConfig = livekit.Config
+
+// LoadLiveKitConfig delegates to the shared livekit.Load — one source of
+// truth for credentials and the production fail-fast guard.
+func LoadLiveKitConfig() (LiveKitConfig, error) {
+	return livekit.Load()
 }
 
-// devLiveKitFallback values are only acceptable outside production. They keep
-// local dev working without real LiveKit credentials.
-const (
-	devLiveKitKey    = "devkey"
-	devLiveKitSecret = "devsecret"
-	devLiveKitURL    = "wss://livekit.example.com"
-)
+// allowDevBroadcast is the pure decision for dev-only chat mirroring across
+// rooms: it requires an explicit opt-in flag AND a non-production APP_ENV.
+// Production always returns false regardless of the flag.
+func allowDevBroadcast(appEnv, flagValue string) bool {
+	env := strings.ToLower(strings.TrimSpace(appEnv))
+	if env == "production" || env == "prod" {
+		return false
+	}
+	return strings.ToLower(strings.TrimSpace(flagValue)) == "true"
+}
 
-// LoadLiveKitConfig reads LiveKit settings from the environment. When APP_ENV is
-// "production"/"prod" it requires real, non-fallback credentials and returns an
-// error otherwise, so the gateway fails fast instead of minting tokens signed
-// with a well-known dev secret.
-func LoadLiveKitConfig() (LiveKitConfig, error) {
-	cfg := LiveKitConfig{
-		APIKey:    os.Getenv("LIVEKIT_API_KEY"),
-		APISecret: os.Getenv("LIVEKIT_API_SECRET"),
-		URL:       os.Getenv("LIVEKIT_URL"),
-	}
-
-	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	isProd := appEnv == "production" || appEnv == "prod"
-
-	if isProd {
-		switch {
-		case cfg.APIKey == "" || cfg.APIKey == devLiveKitKey:
-			return cfg, fmt.Errorf("LIVEKIT_API_KEY must be set to a real value in production")
-		case cfg.APISecret == "" || cfg.APISecret == devLiveKitSecret:
-			return cfg, fmt.Errorf("LIVEKIT_API_SECRET must be set to a real value in production")
-		case cfg.URL == "" || cfg.URL == devLiveKitURL:
-			return cfg, fmt.Errorf("LIVEKIT_URL must be set to a real value in production")
-		}
-		return cfg, nil
-	}
-
-	// Development: fill blanks with dev fallbacks so local runs work.
-	if cfg.APIKey == "" {
-		cfg.APIKey = devLiveKitKey
-	}
-	if cfg.APISecret == "" {
-		cfg.APISecret = devLiveKitSecret
-	}
-	if cfg.URL == "" {
-		cfg.URL = devLiveKitURL
-	}
-	return cfg, nil
+// devBroadcastAllRooms reads APP_ENV + REALTIME_DEV_BROADCAST_ALL from the
+// environment. Default OFF — chat never leaves its own room unless a dev
+// explicitly opts in. Reads env on every call so t.Setenv works in tests.
+func devBroadcastAllRooms() bool {
+	return allowDevBroadcast(os.Getenv("APP_ENV"), os.Getenv("REALTIME_DEV_BROADCAST_ALL"))
 }
 
 const (
