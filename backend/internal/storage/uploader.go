@@ -35,6 +35,11 @@ func NewLocalStore(dir string) (*LocalStore, error) {
 // Dir returns the store's base directory (for startup logging).
 func (s *LocalStore) Dir() string { return s.dir }
 
+// Close releases the directory handle held by the os.Root jail. Needed on
+// Windows, where an open directory handle blocks removal (e.g. test TempDir
+// cleanup); long-lived services never need to call it.
+func (s *LocalStore) Close() error { return s.root.Close() }
+
 // validKey rejects keys that are empty, hidden, or contain path separators /
 // traversal sequences. It deliberately tolerates everything legacy keys may
 // contain (dots, spaces, unicode) so files uploaded before this change stay

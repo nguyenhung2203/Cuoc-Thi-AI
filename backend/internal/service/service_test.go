@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"net/http"
 	"testing"
+
+	"backend/internal/models"
+	apierrors "backend/internal/pkg/errors"
 )
 
 // Stub tests for service layer — verify business logic invariants.
@@ -120,6 +124,124 @@ func TestPromptService_LoadTemplate_NoRepo(t *testing.T) {
 	}()
 	svc := &PromptService{}
 	_, _ = svc.LoadTemplate(context.Background(), "analyze_jd", "", 0)
+}
+
+// --- K-AUTH-11: blocked-account gate ---
+
+func TestEnsureNotBlocked_BlockedRejected(t *testing.T) {
+	e := ensureNotBlocked(&models.User{Status: models.UserStatusBlocked})
+	if e == nil {
+		t.Fatal("blocked user must be rejected")
+	}
+	if e.Code != apierrors.ACCOUNT_BLOCKED || e.HTTPStatus != http.StatusForbidden {
+		t.Fatalf("got %s/%d, want ACCOUNT_BLOCKED/403", e.Code, e.HTTPStatus)
+	}
+}
+
+// Locks the product decision: pending recruiters MUST keep logging in to
+// upload their verification document; inactive is filtered by deleted_at.
+func TestEnsureNotBlocked_OtherStatusesAllowed(t *testing.T) {
+	for _, st := range []models.UserStatus{
+		models.UserStatusPending,
+		models.UserStatusActive,
+		models.UserStatusInactive,
+	} {
+		if e := ensureNotBlocked(&models.User{Status: st}); e != nil {
+			t.Errorf("status %q: got %v, want nil", st, e)
+		}
+	}
+	if e := ensureNotBlocked(nil); e != nil {
+		t.Errorf("nil user: got %v, want nil", e)
+	}
+}
+
+// Validation must run before any repo access — a bad status with a zero-value
+// service returns 400 without panicking on the nil repo.
+func TestUserService_UpdateUserStatus_InvalidStatus(t *testing.T) {
+	svc := &UserService{}
+	err := svc.UpdateUserStatus(context.Background(), "user-1", "deleted")
+	if err == nil {
+		t.Fatal("expected an error for invalid status")
+	}
+	appErr, ok := apierrors.IsAppError(err)
+	if !ok || appErr.HTTPStatus != http.StatusBadRequest {
+		t.Fatalf("got %v, want 400 BAD_REQUEST", err)
+	}
+}
+
+// fakeRefreshTokenRepo records revocations; all other methods are no-ops.
+type fakeRefreshTokenRepo struct {
+	revokedUserIDs []string
+}
+
+func (f *fakeRefreshTokenRepo) Create(ctx context.Context, token *models.RefreshToken) error {
+	return nil
+}
+func (f *fakeRefreshTokenRepo) FindByHash(ctx context.Context, hash string) (*models.RefreshToken, error) {
+	return nil, nil
+}
+func (f *fakeRefreshTokenRepo) MarkAsRevoked(ctx context.Context, id string) error { return nil }
+func (f *fakeRefreshTokenRepo) RevokeFamily(ctx context.Context, familyID string) error {
+	return nil
+}
+func (f *fakeRefreshTokenRepo) RevokeAllByUserID(ctx context.Context, userID string) (int, error) {
+	f.revokedUserIDs = append(f.revokedUserIDs, userID)
+	return 1, nil
+}
+
+func TestUserService_RevokeSessionsIfBlocked(t *testing.T) {
+	fake := &fakeRefreshTokenRepo{}
+	svc := &UserService{refreshTokenRepo: fake}
+
+	svc.revokeSessionsIfBlocked(context.Background(), "user-1", "blocked")
+	if len(fake.revokedUserIDs) != 1 || fake.revokedUserIDs[0] != "user-1" {
+		t.Fatalf("blocked: revoked = %v, want [user-1]", fake.revokedUserIDs)
+	}
+
+	// Non-blocking transitions must not revoke sessions.
+	svc.revokeSessionsIfBlocked(context.Background(), "user-2", "active")
+	svc.revokeSessionsIfBlocked(context.Background(), "user-3", "pending")
+	if len(fake.revokedUserIDs) != 1 {
+		t.Fatalf("active/pending must not revoke, got %v", fake.revokedUserIDs)
+	}
+
+	// Nil repo (zero-value service) must not panic.
+	(&UserService{}).revokeSessionsIfBlocked(context.Background(), "user-4", "blocked")
+}
+
+// --- K-INT-05/08: interview lifecycle predicates ---
+
+func TestCanStartInterview(t *testing.T) {
+	cases := map[string]bool{
+		"scheduled": true,
+		"waiting":   true,
+		"active":    false,
+		"paused":    false,
+		"completed": false,
+		"cancelled": false,
+		"":          false,
+	}
+	for status, want := range cases {
+		if got := canStartInterview(status); got != want {
+			t.Errorf("canStartInterview(%q) = %v, want %v", status, got, want)
+		}
+	}
+}
+
+func TestCanEndInterview(t *testing.T) {
+	cases := map[string]bool{
+		"active":    true,
+		"paused":    true,
+		"waiting":   true,
+		"scheduled": true, // guarded upstream; ending un-started interviews is repo-level rejected
+		"completed": false,
+		"cancelled": false,
+	}
+	for status, want := range cases {
+		if got := canEndInterview(status); got != want {
+			t.Errorf("canEndInterview(%q) = %v, want %v", status, got, want)
+		}
+	}
 }
 
 // Helper type for backoff testing

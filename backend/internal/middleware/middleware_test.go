@@ -116,6 +116,80 @@ func TestRequireCompanyRole_AdminBypass(t *testing.T) {
 	}
 }
 
+// requirePermissionStatus runs RequirePermission(action) against a request
+// whose context carries the given company role (systemRole optional).
+func requirePermissionStatus(t *testing.T, action, companyRole, systemRole string) int {
+	t.Helper()
+	mw := RequirePermission(action)
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	ctx := context.WithValue(r.Context(), CtxRequestID, "req-perm")
+	if companyRole != "" {
+		ctx = context.WithValue(ctx, CtxCompanyRole, companyRole)
+	}
+	if systemRole != "" {
+		ctx = context.WithValue(ctx, CtxUserRole, systemRole)
+	}
+	h.ServeHTTP(w, r.WithContext(ctx))
+	return w.Result().StatusCode
+}
+
+// K-RBAC-03 regression locks: the job/candidate actions wired onto the routes
+// must keep their role mapping.
+func TestRequirePermission_RoleMapping(t *testing.T) {
+	cases := []struct {
+		action, companyRole string
+		want                int
+	}{
+		{"job:create", "member", http.StatusOK},
+		{"job:create", "viewer", http.StatusForbidden},
+		{"job:delete", "viewer", http.StatusForbidden},
+		{"job:read", "viewer", http.StatusOK},
+		{"candidate:read", "viewer", http.StatusOK},
+		{"candidate:delete", "viewer", http.StatusForbidden},
+		{"candidate:update", "member", http.StatusOK},
+		{"interview:update", "owner", http.StatusOK},
+	}
+	for _, c := range cases {
+		if got := requirePermissionStatus(t, c.action, c.companyRole, "recruiter"); got != c.want {
+			t.Errorf("%s as %s: got %d, want %d", c.action, c.companyRole, got, c.want)
+		}
+	}
+}
+
+// Documents the trap in rbac.go: an action with no mapping silently falls
+// back to owner/admin only — a typo'd action locks members out, not open.
+func TestRequirePermission_UnknownAction_DefaultsToOwnerAdmin(t *testing.T) {
+	if got := requirePermissionStatus(t, "totally:unknown", "member", "recruiter"); got != http.StatusForbidden {
+		t.Fatalf("member on unknown action: got %d, want 403", got)
+	}
+	if got := requirePermissionStatus(t, "totally:unknown", "owner", "recruiter"); got != http.StatusOK {
+		t.Fatalf("owner on unknown action: got %d, want 200", got)
+	}
+}
+
+// Documents the second trap: guards attached outside CompanyScopeMiddleware
+// see an empty company role and reject everyone but system admins.
+func TestRequireCompanyRole_MissingCompanyRole_Blocks(t *testing.T) {
+	mw := RequireCompanyRole("owner", "admin")
+	h := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	ctx := context.WithValue(r.Context(), CtxUserRole, "recruiter") // no CtxCompanyRole
+	h.ServeHTTP(w, r.WithContext(ctx))
+
+	if w.Result().StatusCode != http.StatusForbidden {
+		t.Fatalf("missing company role: got %d, want 403", w.Result().StatusCode)
+	}
+}
+
 func TestContextKeys(t *testing.T) {
 	// Verify context keys are consistently typed
 	keys := []contextKey{CtxUserID, CtxUserRole, CtxCompanyID, CtxRequestID, CtxCompanyRole}
