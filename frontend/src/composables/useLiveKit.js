@@ -31,6 +31,30 @@ export function useLiveKit() {
   // Native stream (khi dùng fallback)
   let nativeStream = null;
 
+  // ─── HELPER: Phân loại lỗi thiết bị media ───────────────────────────────
+
+  // mediaErrorMessage map DOMException của getUserMedia/LiveKit sang thông
+  // báo tiếng Việt kèm hướng xử lý cụ thể cho từng nguyên nhân.
+  const mediaErrorMessage = (err) => {
+    switch (err?.name) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+        return 'Bạn đã chặn quyền Camera/Micro. Mở biểu tượng ổ khoá trên thanh địa chỉ → cho phép Camera và Micro → tải lại trang.';
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        return 'Không tìm thấy Camera hoặc Micro trên thiết bị này.';
+      case 'NotReadableError':
+      case 'TrackStartError':
+        return 'Camera/Micro đang bị ứng dụng khác chiếm dụng. Hãy đóng ứng dụng đó rồi thử lại.';
+      case 'SecurityError':
+        return 'Trình duyệt chỉ cho phép Camera/Micro trên HTTPS hoặc localhost.';
+      default:
+        return 'Không thể truy cập Camera/Mic. Hãy kiểm tra quyền trình duyệt.';
+    }
+  };
+
+  const clearError = () => { error.value = null; };
+
   // ─── HELPER: Khởi động native camera/mic ────────────────────────────────
 
   const startNativeMedia = async () => {
@@ -43,6 +67,7 @@ export function useLiveKit() {
         video: isCameraOn.value,
         audio: isMicOn.value,
       });
+      error.value = null;
 
       // Gắn vào video element
       if (localVideoEl.value) {
@@ -52,8 +77,14 @@ export function useLiveKit() {
       }
     } catch (err) {
       console.warn('[useLiveKit] getUserMedia failed:', err.name, err.message);
-      error.value = 'Không thể truy cập Camera/Mic. Hãy kiểm tra quyền trình duyệt.';
+      error.value = mediaErrorMessage(err);
     }
+  };
+
+  // retryMedia xin lại quyền media sau khi user đã mở khoá trong trình duyệt.
+  const retryMedia = async () => {
+    clearError();
+    await startNativeMedia();
   };
 
   // ─── CONNECT ─────────────────────────────────────────────────────────────
@@ -181,7 +212,10 @@ export function useLiveKit() {
             await localVideoEl.value.play().catch(() => {});
           }
         } catch (err) {
+          // Hiện cảnh báo cho user thay vì chỉ console.error (nút bấm không
+          // phản hồi mà không rõ lý do).
           console.error('[useLiveKit] Không thể bật lại camera:', err);
+          error.value = mediaErrorMessage(err);
         }
       }
     }
@@ -285,5 +319,7 @@ export function useLiveKit() {
     toggleCamera,
     toggleScreenShare,
     disconnect,
+    clearError,
+    retryMedia,
   };
 }
