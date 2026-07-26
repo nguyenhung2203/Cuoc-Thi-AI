@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 
@@ -43,8 +44,15 @@ var attachmentTypes = map[string]string{
 }
 
 func (h *DownloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// chi already URL-decoded the wildcard; this is the raw storage key.
+	// When the request path contains percent-escapes, chi routes on
+	// r.URL.RawPath and the wildcard arrives STILL ESCAPED (mux.go routeHTTP).
+	// The signer signed the decoded key, so decode before verifying — legacy
+	// keys with spaces/unicode would otherwise 403. A '%2F' that decodes to
+	// '/' is still caught by the store's key validation below.
 	key := chi.URLParam(r, "*")
+	if dec, err := url.PathUnescape(key); err == nil {
+		key = dec
+	}
 
 	// Signature check first: a forged request learns nothing about existence.
 	if err := h.signer.Verify(key, r.URL.Query()); err != nil {

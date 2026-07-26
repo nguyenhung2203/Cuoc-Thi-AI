@@ -165,6 +165,31 @@ func TestDownload_PathTraversal(t *testing.T) {
 	}
 }
 
+// Legacy storage keys took their extension from client filenames and can
+// contain spaces. The browser sends them percent-escaped, and chi routes on
+// RawPath (the ESCAPED tail) — the handler must decode before verifying or
+// every such legacy file 403s.
+func TestDownload_LegacyKeyWithSpace(t *testing.T) {
+	signer, r, dir := newDownloadFixture(t, 15*time.Minute)
+	if err := os.WriteFile(filepath.Join(dir, "cv old.pdf"), []byte("%PDF-1.4 legacy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Sign the DECODED key (what SignURL does), request the ESCAPED path
+	// (what the browser sends).
+	query, _ := signer.Sign("cv old.pdf")
+	req := httptest.NewRequest(http.MethodGet, "/uploads/cv%20old.pdf?"+query, nil)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("escaped legacy key: status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "legacy") {
+		t.Fatal("body does not contain the legacy file content")
+	}
+}
+
 // Valid signature but the file has since been deleted → 404, distinct from 403.
 func TestDownload_MissingFile_404(t *testing.T) {
 	signer, r, _ := newDownloadFixture(t, 15*time.Minute)
