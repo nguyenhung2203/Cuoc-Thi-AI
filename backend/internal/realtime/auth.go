@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	lk "backend/internal/livekit"
 )
 
 // TokenClaims holds the data extracted from a valid room_access_token.
@@ -58,12 +59,8 @@ func validateRoomToken(raw string) (*TokenClaims, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-
-		secret := os.Getenv("LIVEKIT_API_SECRET")
-		if secret == "" {
-			secret = "devsecret" // Default fallback for development
-		}
-		return []byte(secret), nil
+		// Single source of truth (production refuses dev fallbacks at startup).
+		return []byte(lk.Current().APISecret), nil
 	})
 
 	if err != nil {
@@ -161,11 +158,7 @@ func extractAndValidateRecruiterToken(r *http.Request) (*TokenClaims, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		secret := os.Getenv("LIVEKIT_API_SECRET")
-		if secret == "" {
-			secret = "devsecret"
-		}
-		return []byte(secret), nil
+		return []byte(lk.Current().APISecret), nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("token validation failed: %w", err)

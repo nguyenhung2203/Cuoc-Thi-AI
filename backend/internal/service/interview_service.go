@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -169,15 +168,9 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 		return nil, errors.NewForbidden("token expired")
 	}
 
-	// Generate LiveKit token for candidate
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
-	}
+	// Generate LiveKit token for candidate — credentials come from the shared
+	// config (production refuses dev fallbacks at startup).
+	lkCfg := livekit.Current()
 
 	identity := "candidate-" + info.CandidateID
 	if info.UserID != nil {
@@ -190,8 +183,8 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		lkCfg.APIKey,
+		lkCfg.APISecret,
 		roomID,
 		identity,
 		info.CandidateName,
@@ -380,16 +373,8 @@ func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, intervie
 		displayName = "Recruiter"
 	}
 
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
-	}
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-
-	token, err := livekit.GenerateToken(livekitKey, livekitSecret, roomName, userID, displayName, role, interviewID)
+	lkCfg := livekit.Current()
+	token, err := livekit.GenerateToken(lkCfg.APIKey, lkCfg.APISecret, roomName, userID, displayName, role, interviewID)
 	if err != nil {
 		return "", "", errors.NewInternal("failed to generate room access token")
 	}
