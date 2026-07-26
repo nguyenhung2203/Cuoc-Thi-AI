@@ -37,15 +37,14 @@ func (h *FileHandler) handleUpload(w http.ResponseWriter, r *http.Request, fileT
 
 	companyID := chi.URLParam(r, "company_id") // Might be empty for generic files
 
-	err := r.ParseMultipartForm(10 << 20) // 10 MB limit
-	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("file too large or invalid form"), requestID)
+	if appErr := parseUploadForm(w, r, h.svc.MaxUploadBytes()); appErr != nil {
+		pkgresponse.Error(w, appErr, requestID)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("missing file"), requestID)
+		pkgresponse.Error(w, apierrors.NewValidation("file", []string{"file part is required"}), requestID)
 		return
 	}
 	defer file.Close()

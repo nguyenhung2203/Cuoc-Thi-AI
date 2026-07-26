@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -18,11 +17,13 @@ import (
 	"backend/internal/ai"
 	"backend/internal/config"
 	"backend/internal/handler"
+	"backend/internal/livekit"
 	"backend/internal/middleware"
 	"backend/internal/pkg/email"
 	"backend/internal/queue"
 	"backend/internal/repository"
 	"backend/internal/service"
+	"backend/internal/storage"
 )
 
 func main() {
@@ -31,6 +32,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	// Fail fast in production when LiveKit credentials are missing/dev
+	// fallbacks — same guard the realtime gateway already has.
+	if _, err := livekit.Load(); err != nil {
+		log.Fatalf("livekit config: %v", err)
+	}
+
+	// File storage: signed download URLs + jailed uploads directory.
+	fileStore, err := storage.NewLocalStore(cfg.UploadDir)
+	if err != nil {
+		log.Fatalf("storage: %v", err)
+	}
+	log.Printf("storage: serving uploads from %s", fileStore.Dir())
+	urlSigner := storage.NewSigner(cfg.FileURLSecret, cfg.FileURLTTL)
 
 	// 2. Connect to PostgreSQL
 	dsn := os.Getenv("DATABASE_URL")
@@ -100,7 +114,7 @@ func main() {
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo, cvAnalyzer)
-	fileSvc := service.NewFileService(fileRepo, cfg.PublicBaseURL)
+	fileSvc := service.NewFileService(fileRepo, cfg.PublicBaseURL, fileStore, urlSigner, cfg.MaxUploadBytes)
 	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 	rubricSvc := service.NewRubricService(rubricRepo)
 	scoreSvc := service.NewScoreService(scoreRepo, transcriptRepo, rubricRepo, interviewRepo, aiOrchestrator)
@@ -113,7 +127,7 @@ func main() {
 		WithMailer(candidateRepo, mailer, cfg.FrontendURL)
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
-	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
+	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey, cfg.UploadDir)
 	matchCache := service.NewMatchCacheService(redisClient)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, aiOrchestrator, matchCache, notificationRepo, fileSvc)
@@ -180,9 +194,11 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "uploads"))
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(filesDir)))
+	// Signed downloads replace the old anonymous FileServer: the HMAC in the
+	// query string is the credential (no directory listing, no eternal URLs).
+	downloadHandler := handler.NewDownloadHandler(fileStore, urlSigner)
+	r.Method(http.MethodGet, "/uploads/*", downloadHandler)
+	r.Method(http.MethodHead, "/uploads/*", downloadHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {

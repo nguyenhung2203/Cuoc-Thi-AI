@@ -424,16 +424,15 @@ func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
 	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
 	candidateID := chi.URLParam(r, "candidate_id")
 
-	// Parse multipart form
-	err := r.ParseMultipartForm(10 << 20) // 10 MB
-	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("failed to parse form data"), requestID)
+	// Parse multipart form with the configured size cap (413 on overflow)
+	if appErr := parseUploadForm(w, r, h.fileSvc.MaxUploadBytes()); appErr != nil {
+		pkgresponse.Error(w, appErr, requestID)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("file is required"), requestID)
+		pkgresponse.Error(w, apierrors.NewValidation("file", []string{"file part is required"}), requestID)
 		return
 	}
 	defer file.Close()
@@ -443,7 +442,9 @@ func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	fileRecord, err := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, companyID, "cv")
 	if err != nil {
-		pkgresponse.Error(w, apierrors.NewInternal("failed to process file upload"), requestID)
+		// Pass AppErrors through so 413/422 (size, unsupported type) reach the
+		// client instead of a blanket 500.
+		writeServiceError(w, err, requestID)
 		return
 	}
 

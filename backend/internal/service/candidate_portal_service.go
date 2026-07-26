@@ -140,7 +140,7 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 	cvName := ""
 	fileID, fileName, storageKey, _ := s.repo.GetUserLatestCV(ctx, userID)
 	if fileName != "" && fileID != "" {
-		cvUrl = s.fileSvc.PublicURL(storageKey)
+		cvUrl, _ = s.fileSvc.SignedURL(storageKey)
 		cvName = fileName
 	}
 
