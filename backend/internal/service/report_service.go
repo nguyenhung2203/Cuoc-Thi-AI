@@ -58,10 +58,10 @@ func (s *ReportService) generateReportSync(ctx context.Context, companyID, inter
 	var transcriptSegments []string
 	for _, t := range transcripts {
 		content := t.Content
-		if t.EditedContent.Valid && t.EditedContent.String != "" {
-			content = t.EditedContent.String
+		if t.EditedContent != nil && *t.EditedContent != "" {
+			content = *t.EditedContent
 		}
-		transcriptSegments = append(transcriptSegments, fmt.Sprintf("%s: %s", t.SpeakerRole, content))
+		transcriptSegments = append(transcriptSegments, fmt.Sprintf("%s: %s", t.SpeakerType, content))
 	}
 	transcriptText := strings.Join(transcriptSegments, "\n")
 	if transcriptText == "" {

@@ -55,28 +55,28 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Filter transcripts to build the text
 	var transcriptSegments []string
 	for _, id := range transcriptIDs {
 		for _, t := range allTranscripts {
 			if t.ID == id {
 				content := t.Content
-				if t.EditedContent.Valid && t.EditedContent.String != "" {
-					content = t.EditedContent.String
+				if t.EditedContent != nil && *t.EditedContent != "" {
+					content = *t.EditedContent
 				}
-				transcriptSegments = append(transcriptSegments, fmt.Sprintf("%s: %s", t.SpeakerRole, content))
+				transcriptSegments = append(transcriptSegments, fmt.Sprintf("%s: %s", t.SpeakerType, content))
 				break
 			}
 		}
 	}
-	
+
 	if len(transcriptSegments) == 0 {
 		return nil, apierrors.NewValidation("transcript_ids", []string{"no matching transcripts found in this interview"})
 	}
-	
+
 	transcriptText := strings.Join(transcriptSegments, "\n")
-	
+
 	// Prevent DoS
 	transcriptText = utils.TruncateText(transcriptText, 30000)
 
@@ -100,7 +100,7 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 		} else {
 			scoringGuideStr = "Not provided"
 		}
-		
+
 		var criterionDesc string
 		if criterion.Description.Valid {
 			criterionDesc = criterion.Description.String

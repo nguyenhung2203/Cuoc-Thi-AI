@@ -7,6 +7,22 @@ import (
 
 // Stub tests for service layer — verify business logic invariants.
 
+func TestTranscriptService_PushTranscript_Validation(t *testing.T) {
+	svc := &TranscriptService{}
+	_, err := svc.PushTranscript(context.Background(), "interview-1", "company-1", PushTranscriptRequest{})
+	if err == nil {
+		t.Fatal("expected validation error for empty transcript content")
+	}
+}
+
+func TestTranscriptService_EditTranscript_Validation(t *testing.T) {
+	svc := &TranscriptService{}
+	err := svc.EditTranscript(context.Background(), "transcript-1", "interview-1", "company-1", " ", "user-1")
+	if err == nil {
+		t.Fatal("expected validation error for empty edited content")
+	}
+}
+
 func TestSuggestionService_NoOrchestrator(t *testing.T) {
 	t.Log("suggestion service constructs correctly")
 }
