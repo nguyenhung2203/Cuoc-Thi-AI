@@ -10,6 +10,7 @@ import { Plus, Search, Filter, Bot, Copy, Edit, Trash2, Tag, Clock, MoreHorizont
 import { templateService } from '../../services/template.service'
 import { authStore } from '../../stores/auth.store'
 import { computed } from 'vue'
+import { isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const templates = ref([])
 const searchKeyword = ref('')
@@ -30,6 +31,27 @@ const deletingId = ref(null)
 const toast = ref(null)
 const saving = ref(false)
 const editingTemplate = ref(null)
+const formErrors = ref({})
+
+const validateTemplate = () => {
+  const values = { ...newTemplate.value, name: normalizeText(newTemplate.value.name), description: normalizeText(newTemplate.value.description) }
+  const result = validateForm(values, {
+    name: [
+      (value) => requiredTrim(value, 'Vui lòng nhập tên mẫu.'),
+      (value) => minLength(value, 2, 'Tên mẫu phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Tên mẫu không được vượt quá 255 ký tự.'),
+    ],
+    type: [(value) => isOneOf(value, ['Technical', 'Behavioral', 'Management', 'Custom'], 'Loại mẫu không hợp lệ.')],
+    description: [(value) => maxLength(value, 5000, 'Mô tả không được vượt quá 5.000 ký tự.')],
+    duration_minutes: [(value) => {
+      const duration = Number(value)
+      return Number.isFinite(duration) && duration >= 15 && duration <= 240 ? '' : 'Thời lượng phải nằm trong khoảng 15 đến 240 phút.'
+    }],
+  })
+  formErrors.value = result.errors
+  if (result.isValid) Object.assign(newTemplate.value, values)
+  return result.isValid
+}
 
 const newTemplate = ref({
   name: '',
@@ -83,7 +105,7 @@ const confirmDelete = async () => {
 }
 
 const handleCreate = async () => {
-  if (!newTemplate.value.name) return
+  if (saving.value || !validateTemplate()) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -106,6 +128,7 @@ const handleCreate = async () => {
 }
 
 const handleDuplicate = async (template) => {
+  if (saving.value || !template?.id) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -138,7 +161,7 @@ const openEditModal = (template) => {
 }
 
 const handleUpdate = async () => {
-  if (!newTemplate.value.name || !editingTemplate.value) return
+  if (saving.value || !editingTemplate.value || !validateTemplate()) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id

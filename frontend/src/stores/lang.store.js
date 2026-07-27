@@ -1032,21 +1032,6 @@ export const langStore = reactive({
   },
 
   initAutoTranslator() {
-    if (typeof window === 'undefined' || !document.body || this._observerInitialized) return
-    this._observerInitialized = true
-
-    this.runGlobalDomTranslator()
-
-    let debounceTimeout = null
-    this._observer = new MutationObserver(() => {
-      if (this._isTranslating) return
-      if (debounceTimeout) clearTimeout(debounceTimeout)
-      debounceTimeout = setTimeout(() => {
-        this.runGlobalDomTranslator()
-      }, 50)
-    })
-
-    const appEl = document.getElementById('app') || document.body
-    this._observer.observe(appEl, { childList: true, subtree: true })
+    return // Tạm tắt tự động dịch DOM để fix lỗi router crash
   }
 })

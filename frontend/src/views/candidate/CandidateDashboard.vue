@@ -68,13 +68,18 @@ onMounted(async () => {
       apiService.getWithMeta('/public/all-jobs?page=1&page_size=3')
     ])
 
-    stats.value = statsData
+    stats.value = {
+      upcoming_interviews: Number(statsData?.upcoming_interviews || 0),
+      completed_mock_tests: Number(statsData?.completed_mock_tests || 0),
+      average_mock_score: Number(statsData?.average_mock_score || 0),
+      profile_completeness: Number(statsData?.profile_completeness || 0),
+    }
 
-    upcomingInterviews.value = interviewsData
-      .filter(i => i.status === 'scheduled' || i.status === 'active')
+    upcomingInterviews.value = (Array.isArray(interviewsData) ? interviewsData : [])
+      .filter(i => i?.status === 'scheduled' || i?.status === 'active')
       .slice(0, 3)
 
-    recommendedJobs.value = (jobsRes.data || []).map(j => ({
+    recommendedJobs.value = (Array.isArray(jobsRes?.data) ? jobsRes.data : []).map(j => ({
       ...j, company_name: unwrap(j.company_name), location: unwrap(j.location), employment_type: unwrap(j.employment_type), department: unwrap(j.department), level: unwrap(j.level)
     }))
   } catch (err) {

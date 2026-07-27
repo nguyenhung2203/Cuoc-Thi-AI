@@ -11,6 +11,8 @@ import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-vue-next'
 import { candidateService } from '../../services/candidate.service'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
+import { maxLength, normalizeText, isOneOf } from '../../utils/validators.js'
+import { CANDIDATE_STATUSES } from '../../utils/constants.js'
 
 const router = useRouter()
 const candidates = ref([])
@@ -25,9 +27,24 @@ const pageSize = ref(10)
 const totalPages = ref(1)
 
 const jobs = ref([])
-const filters = ref({ job_id: '', status: '', keyword: '' })
+const isValidId = (value) => typeof value === 'string' || typeof value === 'number'
+const validateFilters = () => {
+  filters.value.keyword = normalizeText(filters.value.keyword).slice(0, 255)
+  if (filters.value.status && !CANDIDATE_STATUSES.includes(String(filters.value.status).toLowerCase())) {
+    filters.value.status = ''
+    localToast.value = { type: 'error', message: 'Bộ lọc trạng thái không hợp lệ.' }
+    return false
+  }
+  if (filters.value.job_id && !jobs.value.some(job => String(job?.id) === String(filters.value.job_id))) {
+    filters.value.job_id = ''
+    localToast.value = { type: 'error', message: 'Bộ lọc công việc không hợp lệ.' }
+    return false
+  }
+  return true
+}
 
 const fetchCandidates = async () => {
+  if (!validateFilters()) return
   loading.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -47,22 +64,25 @@ const fetchCandidates = async () => {
     // Handle both array and paginated response
     if (Array.isArray(response)) {
       candidates.value = response.map(c => ({
-        id: c.id,
-        name: c.full_name,
-        email: c.email,
-        appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
-        status: c.status || 'New'
+        id: c?.id,
+        name: c?.full_name || c?.name || 'Chưa cập nhật',
+        email: c?.email || 'Chưa cập nhật',
+        appliedJob: c?.latest_job?.title || 'Chưa ứng tuyển',
+        status: c?.status || 'New'
       }))
       totalPages.value = 1
-    } else if (response.data && Array.isArray(response.data)) {
+    } else if (response && Array.isArray(response.data)) {
       candidates.value = response.data.map(c => ({
-        id: c.id,
-        name: c.full_name,
-        email: c.email,
-        appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
-        status: c.status || 'New'
+        id: c?.id,
+        name: c?.full_name || c?.name || 'Chưa cập nhật',
+        email: c?.email || 'Chưa cập nhật',
+        appliedJob: c?.latest_job?.title || 'Chưa ứng tuyển',
+        status: c?.status || 'New'
       }))
-      totalPages.value = Math.ceil((response.meta?.total || 0) / pageSize.value)
+      totalPages.value = Math.max(1, Math.ceil((response.meta?.total || 0) / pageSize.value))
+    } else {
+      candidates.value = []
+      totalPages.value = 1
     }
   } catch (error) {
     localToast.value = { type: 'error', message: 'Lỗi tải danh sách ứng viên: ' + (error.message || 'Không xác định') }
@@ -110,6 +130,10 @@ const getStatusType = (status) => {
 }
 
 const confirmDelete = async () => {
+  if (!isValidId(deletingId.value)) {
+    localToast.value = { type: 'error', message: 'Không xác định được ứng viên cần xóa.' }
+    return
+  }
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     await candidateService.updateCandidate(companyId, deletingId.value, { status: 'deleted' }) // Hoặc gọi API delete nếu có

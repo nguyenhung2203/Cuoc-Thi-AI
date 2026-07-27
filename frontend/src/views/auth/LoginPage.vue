@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import Toast from '../../components/common/AppToast.vue'
 import AppLogo from '../../components/common/AppLogo.vue'
 import { authStore } from '../../stores/auth.store'
+import { isEmail, normalizeEmail, requiredTrim, validateForm } from '../../utils/validators.js'
 import { useGoogleAuth } from '../../composables/useGoogleAuth'
 import { Mail, Lock, ArrowRight, ShieldCheck, AlertCircle, Sparkles, KeyRound, FileCode, TrendingUp } from 'lucide-vue-next'
 
@@ -13,6 +14,7 @@ const route = useRoute()
 const email = ref('')
 const password = ref('')
 const error = ref('')
+const fieldErrors = ref({})
 const loading = ref(false)
 const entryToast = ref(history.state?.message ? { type: history.state.type || 'success', message: history.state.message } : null)
 
@@ -32,17 +34,29 @@ const redirectAfterAuth = (user, googleFlow = false) => {
   } else if (user.role === 'recruiter' || user.role === 'admin' || user.role === 'owner') {
     router.push({ path: '/dashboard', state: { message: `${prefix}Chào mừng ${user.full_name} quay trở lại Bảng điều khiển Quản lý!` } })
   } else {
-    router.push({ path: '/', state: { message: `${prefix}Đăng nhập thành công! Chào mừng trở lại, ${user.full_name}.` } })
+    router.push({ path: '/home', state: { message: `${prefix}Đăng nhập thành công! Chào mừng trở lại, ${user.full_name || 'Ứng viên'}.` } })
   }
 }
 
 const handleLogin = async (e) => {
   e.preventDefault()
-  if (!email.value || !password.value) {
-    error.value = 'Vui lòng nhập đầy đủ địa chỉ email và mật khẩu!'
+  if (loading.value) return
+
+  const normalizedEmail = normalizeEmail(email.value)
+  const validation = validateForm(
+    { email: normalizedEmail, password: password.value },
+    {
+      email: [requiredTrim, isEmail],
+      password: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu.')],
+    },
+  )
+  fieldErrors.value = validation.errors
+  if (!validation.isValid) {
+    error.value = ''
     return
   }
 
+  email.value = normalizedEmail
   error.value = ''
   loading.value = true
 
@@ -50,11 +64,9 @@ const handleLogin = async (e) => {
     const user = await authStore.login(email.value, password.value)
     redirectAfterAuth(user)
   } catch (err) {
-    if (err.message === 'invalid email or password') {
-      error.value = 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!'
-    } else {
-      error.value = err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại kết nối hoặc tài khoản.'
-    }
+    error.value = err.code === 'INVALID_CREDENTIALS'
+      ? 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại!'
+      : (err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại kết nối hoặc tài khoản.')
   } finally {
     loading.value = false
   }
@@ -204,7 +216,7 @@ const handleGoogleLogin = async () => {
 
       <!-- ================= EMAIL & GOOGLE LOGIN ================= -->
       <div class="space-y-4 animate-fade-in">
-        <form @submit="handleLogin" class="space-y-3">
+        <form @submit="handleLogin" novalidate class="space-y-3">
           <!-- Email Input -->
           <div>
             <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1.5">Địa chỉ Email</label>
@@ -214,8 +226,10 @@ const handleGoogleLogin = async () => {
                      type="email"
                      required
                      placeholder="nhapemail@congty.com"
+                     :class="fieldErrors.email ? 'border-rose-500 focus:ring-rose-500' : ''"
                      class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
+            <p v-if="fieldErrors.email" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.email }}</p>
           </div>
 
           <!-- Password Input -->
@@ -232,8 +246,10 @@ const handleGoogleLogin = async () => {
                      type="password"
                      required
                      placeholder="••••••••"
+                     :class="fieldErrors.password ? 'border-rose-500 focus:ring-rose-500' : ''"
                      class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
+            <p v-if="fieldErrors.password" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.password }}</p>
           </div>
 
           <!-- Submit Button -->

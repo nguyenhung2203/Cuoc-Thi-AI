@@ -92,24 +92,19 @@ func (r *CandidatePortalRepository) GetParsedCV(ctx context.Context, userID stri
 	return parsed, err
 }
 
+// UpdateUserCV attaches the already-created upload metadata to all candidate
+// applications owned by this user. The file row itself is created by
+// FileService.ProcessUpload, so no duplicate/dummy metadata is inserted here.
 func (r *CandidatePortalRepository) UpdateUserCV(ctx context.Context, userID string, cvFileID string, cvOriginalName string) error {
-	// Insert a dummy file record to get a valid UUID for the foreign key
-	var actualFileID string
-	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO files (owner_user_id, original_name, storage_key, mime_type, size_bytes, file_type)
-		VALUES ($1, $2, $3, 'application/pdf', 0, 'cv')
-		RETURNING id
-	`, userID, cvOriginalName, cvFileID).Scan(&actualFileID)
-	if err != nil {
-		return err
-	}
-
+	// The file metadata is created by FileService.ProcessUpload. Keep the
+	// candidate pointing at that record instead of creating a second dummy row
+	// whose storage_key would incorrectly contain the file ID.
 	q := `
-		UPDATE candidates 
-		SET cv_file_id = $1, updated_at = NOW()
+		UPDATE candidates
+		SET cv_file_id = $1::uuid, updated_at = NOW()
 		WHERE user_id = $2
 	`
-	_, err = r.db.ExecContext(ctx, q, actualFileID, userID)
+	_, err := r.db.ExecContext(ctx, q, cvFileID, userID)
 	return err
 }
 

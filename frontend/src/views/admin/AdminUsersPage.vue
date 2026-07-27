@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
 import { Users, Search, CheckCircle2, XCircle, Shield, FileText, Clock, RefreshCw, Filter, UserCheck } from 'lucide-vue-next'
+import { isOneOf, isValidId, maxLength, normalizeText } from '../../utils/validators.js'
 
 const pendingUsers = ref([])
 const allUsers = ref([])
@@ -49,6 +50,7 @@ const getFileUrl = (fileId) => {
 }
 
 const approveUser = async (userId) => {
+  if (!isValidId(userId) || approving.value) return
   if (!confirm('Bạn có chắc chắn muốn phê duyệt nhà tuyển dụng này? Họ sẽ có thể đăng tin tuyển dụng ngay lập tức.')) return
   
   approving.value = userId
@@ -65,6 +67,9 @@ const approveUser = async (userId) => {
 }
 
 const toggleUserStatus = async (user) => {
+  if (!isValidId(user?.id) || approving.value) return
+  if (isOneOf(user.role, ['candidate', 'recruiter', 'admin'], 'Vai trò người dùng không hợp lệ.')) return
+  if (isOneOf(user.status, ['active', 'blocked', 'inactive'], 'Trạng thái người dùng không hợp lệ.')) return
   const newStatus = user.status === 'active' ? 'blocked' : 'active'
   const actionText = newStatus === 'blocked' ? 'khóa' : 'mở khóa'
   if (!confirm(`Bạn có chắc chắn muốn ${actionText} tài khoản của ${user.full_name || user.email}?`)) return

@@ -7,19 +7,25 @@ import Badge from '../../components/common/AppBadge.vue'
 import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
+import Modal from '../../components/common/AppModal.vue'
 import { Briefcase, MapPin, Building2, Calendar, FileText, CheckCircle2, XCircle, Clock, Search, ChevronRight, Download, Trash2, Filter, AlertCircle } from 'lucide-vue-next'
 import { langStore } from '../../stores/lang.store'
 
 const router = useRouter()
 const applications = ref([])
+const safeApplications = computed(() => Array.isArray(applications.value) ? applications.value : [])
 const loading = ref(true)
 const searchQuery = ref('')
 const currentTab = ref('all') // all, pending, reviewed, interviewing, rejected
 const toast = ref(null)
+const showCancelModal = ref(false)
+const cancellingApplication = ref(null)
+const cancelLoading = ref(false)
 
 onMounted(async () => {
   try {
-    applications.value = await candidatePortalService.getApplications()
+    const data = await candidatePortalService.getApplications()
+    applications.value = Array.isArray(data) ? data : []
   } catch (err) {
     console.error('Lỗi tải danh sách ứng tuyển:', err)
   } finally {
@@ -29,8 +35,8 @@ onMounted(async () => {
 
 // Đếm số lượng theo từng trạng thái
 const tabCounts = computed(() => {
-  const counts = { all: applications.value.length, pending: 0, reviewed: 0, interviewing: 0, rejected: 0 }
-  applications.value.forEach(app => {
+  const counts = { all: safeApplications.value.length, pending: 0, reviewed: 0, interviewing: 0, rejected: 0 }
+  safeApplications.value.forEach(app => {
     if (counts[app.status] !== undefined) {
       counts[app.status]++
     }
@@ -39,11 +45,12 @@ const tabCounts = computed(() => {
 })
 
 const filteredApps = computed(() => {
-  return applications.value.filter(app => {
-    const matchesTab = currentTab.value === 'all' || app.status === currentTab.value
-    const matchesSearch = !searchQuery.value || 
-      app.job_title.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
-      app.company_name.toLowerCase().includes(searchQuery.value.toLowerCase())
+  const query = searchQuery.value.toLocaleLowerCase('vi')
+  return safeApplications.value.filter(app => {
+    const matchesTab = currentTab.value === 'all' || app?.status === currentTab.value
+    const jobTitle = String(app?.job_title || '').toLocaleLowerCase('vi')
+    const companyName = String(app?.company_name || '').toLocaleLowerCase('vi')
+    const matchesSearch = !query || jobTitle.includes(query) || companyName.includes(query)
     return matchesTab && matchesSearch
   })
 })
@@ -68,15 +75,32 @@ const handleDownloadCv = (app) => {
   toast.value = { type: 'info', message: `Đang tải xuống CV: ${app.cv_name}...` }
 }
 
-const handleCancelApp = async (app) => {
-  if (confirm(`Bạn có chắc chắn muốn rút hồ sơ ứng tuyển vị trí "${app.job_title}" tại ${app.company_name}?`)) {
-    try {
-      await candidatePortalService.cancelApplication(app.id)
-      applications.value = applications.value.filter(item => item.id !== app.id)
-      toast.value = { type: 'success', message: 'Đã rút/xóa hồ sơ ứng tuyển thành công.' }
-    } catch (err) {
-      toast.value = { type: 'error', message: err.message || 'Không thể rút hồ sơ ứng tuyển.' }
-    }
+const handleCancelApp = (app) => {
+  cancellingApplication.value = app
+  showCancelModal.value = true
+}
+
+const closeCancelModal = () => {
+  if (cancelLoading.value) return
+  showCancelModal.value = false
+  cancellingApplication.value = null
+}
+
+const confirmCancelApp = async () => {
+  const app = cancellingApplication.value
+  if (!app || cancelLoading.value) return
+
+  cancelLoading.value = true
+  try {
+    await candidatePortalService.cancelApplication(app.id)
+    applications.value = applications.value.filter(item => item.id !== app.id)
+    toast.value = { type: 'success', message: 'Đã rút hồ sơ ứng tuyển thành công.' }
+    showCancelModal.value = false
+    cancellingApplication.value = null
+  } catch (err) {
+    toast.value = { type: 'error', message: err.message || 'Không thể rút hồ sơ ứng tuyển.' }
+  } finally {
+    cancelLoading.value = false
   }
 }
 </script>
@@ -230,6 +254,45 @@ const handleCancelApp = async (app) => {
         </div>
       </Card>
     </div>
+
+    <Modal
+      :isOpen="showCancelModal"
+      title="Rút hồ sơ ứng tuyển"
+      @close="closeCancelModal"
+    >
+      <div class="space-y-5">
+        <div class="flex items-start gap-3 rounded-xl border border-rose-100 bg-rose-50 p-4">
+          <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <AlertCircle :size="19" />
+          </div>
+          <div>
+            <p class="font-semibold text-[var(--text-main)]">Bạn có chắc chắn muốn rút hồ sơ?</p>
+            <p v-if="cancellingApplication" class="mt-1 text-sm leading-relaxed text-[var(--text-secondary)]">
+              Hồ sơ ứng tuyển vị trí <strong>{{ cancellingApplication.job_title }}</strong> tại
+              <strong>{{ cancellingApplication.company_name }}</strong> sẽ bị xóa khỏi danh sách của bạn.
+            </p>
+          </div>
+        </div>
+
+        <p class="text-sm text-[var(--text-secondary)]">
+          Thao tác này không thể hoàn tác. Nếu muốn ứng tuyển lại, bạn sẽ phải nộp một hồ sơ mới.
+        </p>
+
+        <div class="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
+          <Button variant="ghost" :disabled="cancelLoading" @click="closeCancelModal">Giữ lại hồ sơ</Button>
+          <button
+            type="button"
+            :disabled="cancelLoading"
+            class="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            @click="confirmCancelApp"
+          >
+            <span v-if="cancelLoading" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+            <Trash2 v-else :size="16" />
+            {{ cancelLoading ? 'Đang xử lý...' : 'Xác nhận rút hồ sơ' }}
+          </button>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>
 

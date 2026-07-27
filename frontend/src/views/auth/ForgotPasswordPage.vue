@@ -7,6 +7,14 @@ import Button from '../../components/common/AppButton.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Mail, KeyRound, Lock, ArrowLeft, Sparkles, ShieldCheck, FileCode, TrendingUp } from 'lucide-vue-next'
 import { authService } from '../../services/auth.service'
+import {
+  confirmPassword as confirmPasswordRule,
+  isEmail,
+  normalizeEmail,
+  requiredTrim,
+  validateForm,
+  validatePassword,
+} from '../../utils/validators.js'
 
 const router = useRouter()
 const step = ref(1)
@@ -16,6 +24,7 @@ const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const toast = ref(null)
+const fieldErrors = ref({})
 
 // Timer state
 const timeLeft = ref(60)
@@ -45,7 +54,15 @@ onUnmounted(() => {
 
 const handleSendEmail = async (e) => {
   e.preventDefault()
-  if (!email.value) return
+  if (loading.value) return
+  const normalizedEmail = normalizeEmail(email.value)
+  const validation = validateForm({ email: normalizedEmail }, {
+    email: [(value) => requiredTrim(value, 'Vui lòng nhập địa chỉ email.'), isEmail],
+  })
+  fieldErrors.value = validation.errors
+  if (!validation.isValid) return
+
+  email.value = normalizedEmail
   loading.value = true
   try {
     await authService.forgotPassword(email.value)
@@ -74,7 +91,12 @@ const handleResendOTP = async () => {
 
 const handleVerifyOTP = async (e) => {
   e.preventDefault()
-  if (!otp.value) return
+  if (loading.value) return
+  fieldErrors.value = /^\d{6}$/.test(otp.value)
+    ? {}
+    : { otp: 'Mã OTP phải gồm đúng 6 chữ số.' }
+  if (fieldErrors.value.otp) return
+
   loading.value = true
   try {
     await authService.verifyResetOtp({ email: email.value, otp: otp.value })
@@ -88,15 +110,20 @@ const handleVerifyOTP = async (e) => {
 
 const handleResetPassword = async (e) => {
   e.preventDefault()
-  if (!password.value || !confirmPassword.value) return
-  if (password.value !== confirmPassword.value) {
-    toast.value = { type: 'error', message: 'Mật khẩu xác nhận không khớp!' }
-    return
-  }
-  if (password.value.length < 6) {
-    toast.value = { type: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự!' }
-    return
-  }
+  if (loading.value) return
+  const validation = validateForm(
+    { password: password.value, confirmPassword: confirmPassword.value },
+    {
+      password: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu mới.'), validatePassword],
+      confirmPassword: [
+        (value) => requiredTrim(value, 'Vui lòng xác nhận mật khẩu mới.'),
+        (value, values) => confirmPasswordRule(value, values.password),
+      ],
+    },
+  )
+  fieldErrors.value = validation.errors
+  if (!validation.isValid) return
+
   loading.value = true
   try {
     await authService.resetPassword({ email: email.value, otp: otp.value, new_password: password.value })
@@ -234,12 +261,13 @@ const handleResetPassword = async (e) => {
           <p class="text-helper" style="line-height: 1.5">Nhập địa chỉ email được liên kết với tài khoản của bạn để nhận mã xác nhận.</p>
         </div>
 
-        <form @submit="handleSendEmail" style="display: flex; flex-direction: column; gap: 20px">
+        <form @submit="handleSendEmail" novalidate style="display: flex; flex-direction: column; gap: 20px">
           <Input 
             label="Địa chỉ Email" 
             type="email" 
             placeholder="Ví dụ: candidate@test.com"
             v-model="email"
+            :error="fieldErrors.email"
             required
           />
           <Button type="submit" :disabled="!email || loading" style="height: 44px">
@@ -261,7 +289,7 @@ const handleResetPassword = async (e) => {
           </p>
         </div>
 
-        <form @submit="handleVerifyOTP" style="display: flex; flex-direction: column; gap: 24px">
+        <form @submit="handleVerifyOTP" novalidate style="display: flex; flex-direction: column; gap: 24px">
           <div>
             <input 
               class="input-field"
@@ -269,8 +297,10 @@ const handleResetPassword = async (e) => {
               :value="otp"
               @input="e => otp = e.target.value.replace(/[^0-9]/g, '').slice(0, 6)"
               style="text-align: center; font-size: 20px; letter-spacing: 4px; font-weight: 600; width: 100%"
+              :class="{ 'input-error': fieldErrors.otp }"
               required
             />
+            <span v-if="fieldErrors.otp" class="error-text" style="display: block; margin-top: 6px; text-align: center">{{ fieldErrors.otp }}</span>
           </div>
           
           <Button type="submit" :disabled="otp.length < 6 || loading" style="height: 44px">
@@ -305,12 +335,13 @@ const handleResetPassword = async (e) => {
           <p class="text-helper" style="line-height: 1.5">Mật khẩu mới của bạn phải khác với mật khẩu sử dụng trước đó.</p>
         </div>
 
-        <form @submit="handleResetPassword" style="display: flex; flex-direction: column; gap: 20px">
+        <form @submit="handleResetPassword" novalidate style="display: flex; flex-direction: column; gap: 20px">
           <Input 
             label="Mật khẩu mới" 
             type="password" 
-            placeholder="Tối thiểu 6 ký tự"
+            placeholder="Tối thiểu 8 ký tự, có chữ hoa, chữ thường và số"
             v-model="password"
+            :error="fieldErrors.password"
             required
           />
           <Input 
@@ -318,6 +349,7 @@ const handleResetPassword = async (e) => {
             type="password" 
             placeholder="Nhập lại mật khẩu mới"
             v-model="confirmPassword"
+            :error="fieldErrors.confirmPassword"
             required
           />
           

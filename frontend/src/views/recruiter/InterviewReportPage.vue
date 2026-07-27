@@ -9,6 +9,7 @@ import { ArrowLeft, Download, Share2, CheckCircle, AlertTriangle, FileText, Spar
 import { authStore } from '../../stores/auth.store'
 import { reportService } from '../../services/report.service'
 import { transcriptService } from '../../services/transcript.service'
+import { isOneOf, maxLength, minLength, normalizeText, requiredTrim } from '../../utils/validators.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -50,11 +51,31 @@ onMounted(async () => {
   }
 })
 
+const savingDecision = ref(false)
 const handleSaveDecision = async () => {
-  const companyId = authStore.user?.companies?.[0]?.id
-  const interviewId = route.params.id
-  await reportService.saveDecision(companyId, interviewId, { decision: decision.value, comment: note.value })
-  toast.value = { type: 'success', message: 'Đã lưu quyết định tuyển dụng thành công!' }
+  if (savingDecision.value) return
+  const allowed = ['offer', 'reject', 'next_round']
+  const normalizedNote = normalizeText(note.value)
+  let validationError = requiredTrim(decision.value === 'Chưa quyết định' ? '' : decision.value, 'Vui lòng chọn quyết định tuyển dụng.')
+  validationError ||= isOneOf(decision.value, allowed, 'Quyết định tuyển dụng không hợp lệ.')
+  validationError ||= maxLength(normalizedNote, 5000, 'Ghi chú không được vượt quá 5.000 ký tự.')
+  if (decision.value === 'reject') validationError ||= minLength(normalizedNote, 10, 'Khi từ chối, ghi chú phải có ít nhất 10 ký tự.')
+  if (validationError) {
+    toast.value = { type: 'error', message: validationError }
+    return
+  }
+  savingDecision.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const interviewId = route.params.id
+    await reportService.saveDecision(companyId, interviewId, { decision: decision.value, comment: normalizedNote })
+    note.value = normalizedNote
+    toast.value = { type: 'success', message: 'Đã lưu quyết định tuyển dụng thành công!' }
+  } catch (error) {
+    toast.value = { type: 'error', message: error?.message || 'Không thể lưu quyết định tuyển dụng.' }
+  } finally {
+    savingDecision.value = false
+  }
 }
 
 const handleViewTranscripts = async () => {
@@ -231,7 +252,7 @@ const handleRetryReport = async () => {
                   class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-none h-28"
                 ></textarea>
               </div>
-              <Button class="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20 py-2.5" @click="handleSaveDecision">
+              <Button :disabled="savingDecision" class="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20 py-2.5" @click="handleSaveDecision">
                 <Save size="16" class="mr-1.5" /> Lưu quyết định
               </Button>
             </div>

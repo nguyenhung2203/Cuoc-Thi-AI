@@ -9,6 +9,20 @@ import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import { authService } from '../../services/auth.service'
+import {
+  confirmPassword,
+  isLinkedInUrl,
+  isOneOf,
+  isVietnamesePhone,
+  maxLength,
+  minLength,
+  normalizeText,
+  requiredTrim,
+  validateFile,
+  validateForm,
+  validatePassword,
+} from '../../utils/validators.js'
+import { CV_FILE_RULES } from '../../utils/constants.js'
 import { langStore } from '../../stores/lang.store'
 import { 
   User, Key, Bell, Shield, Monitor, Upload, FileText, CheckCircle, 
@@ -71,12 +85,26 @@ const uploadedCvs = ref([])
 const fileInput = ref(null)
 const avatarInput = ref(null)
 const selectedCv = ref(null)
+const profileErrors = ref({})
 
 const handleAvatarChange = (e) => {
-  const file = e.target.files[0]
-  if (file) {
-    profile.value.avatar_url = URL.createObjectURL(file)
+  const file = e.target.files?.[0]
+  if (!file) return
+  const error = validateFile(file, {
+    required: true,
+    maxBytes: 2 * 1024 * 1024,
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    extensions: ['jpg', 'jpeg', 'png', 'webp'],
+    typeMessage: 'Avatar chỉ hỗ trợ JPG, PNG hoặc WebP.',
+    sizeMessage: 'Avatar không được vượt quá 2MB.',
+  })
+  if (error) {
+    profileErrors.value.avatar = error
+    return
   }
+  profileErrors.value.avatar = ''
+  if (profile.value.avatar_url?.startsWith('blob:')) URL.revokeObjectURL(profile.value.avatar_url)
+  profile.value.avatar_url = URL.createObjectURL(file)
 }
 
 const handleFileUpload = async (e) => {
@@ -84,6 +112,17 @@ const handleFileUpload = async (e) => {
   if (files && files.length > 0) {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
+      const fileError = validateFile(file, {
+        required: true,
+        ...CV_FILE_RULES,
+        typeMessage: 'CV chỉ hỗ trợ định dạng PDF, DOC hoặc DOCX.',
+        sizeMessage: 'CV không được vượt quá 5MB.',
+      })
+      if (fileError) {
+        profileErrors.value.cv = fileError
+        continue
+      }
+      profileErrors.value.cv = ''
       const cvId = Date.now() + i
       const tempUrl = URL.createObjectURL(file)
 
@@ -140,6 +179,7 @@ const toast = ref(null)
 const changingPassword = ref(false)
 const showDeleteModal = ref(false)
 const passwordForm = ref({ current: '', next: '', confirm: '' })
+const passwordErrors = ref({})
 
 const settings = ref({
   notify_email_interview: true,
@@ -263,6 +303,32 @@ onMounted(async () => {
 
 const handleSaveProfile = async (e) => {
   if (e && e.preventDefault) e.preventDefault()
+  if (saving.value) return
+
+  const skills = String(profile.value.skills || '').split(',').map(normalizeText).filter(Boolean)
+  const validation = validateForm(profile.value, {
+    name: [
+      (value) => requiredTrim(value, 'Vui lòng nhập họ và tên.'),
+      (value) => minLength(value, 2, 'Họ và tên phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Họ và tên không được vượt quá 255 ký tự.'),
+    ],
+    phone: [isVietnamesePhone],
+    linkedin: [isLinkedInUrl],
+    targetRole: [(value) => maxLength(value, 255, 'Vị trí mục tiêu không được vượt quá 255 ký tự.')],
+    level: [(value) => isOneOf(value, ['Fresher', 'Junior', 'Middle', 'Senior', 'Lead'], 'Cấp độ kinh nghiệm không hợp lệ.')],
+  })
+  const skillError = skills.length > 30
+    ? 'Bạn chỉ có thể thêm tối đa 30 kỹ năng.'
+    : skills.some(skill => skill.length > 50)
+      ? 'Mỗi kỹ năng không được vượt quá 50 ký tự.'
+      : ''
+  profileErrors.value = { ...profileErrors.value, ...validation.errors, skills: skillError }
+  if (!validation.isValid || skillError) return
+
+  profile.value.name = normalizeText(profile.value.name)
+  profile.value.skills = [...new Set(skills.map(skill => skill.toLocaleLowerCase('vi')))]
+    .map(normalized => skills.find(skill => skill.toLocaleLowerCase('vi') === normalized))
+    .join(', ')
   saving.value = true
   try {
     localStorage.setItem('candidate_profile', JSON.stringify(profile.value))
@@ -294,18 +360,23 @@ const handleSaveSettings = async (e) => {
 
 const handleChangePassword = async (e) => {
   if (e && e.preventDefault) e.preventDefault()
-  if (!passwordForm.value.current || !passwordForm.value.next) {
-    toast.value = { type: 'warning', message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.' }
-    return
-  }
-  if (passwordForm.value.next.length < 6) {
-    toast.value = { type: 'warning', message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' }
-    return
-  }
-  if (passwordForm.value.next !== passwordForm.value.confirm) {
-    toast.value = { type: 'warning', message: 'Xác nhận mật khẩu mới không khớp.' }
-    return
-  }
+  if (changingPassword.value) return
+
+  const validation = validateForm(passwordForm.value, {
+    current: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu hiện tại.')],
+    next: [
+      (value) => requiredTrim(value, 'Vui lòng nhập mật khẩu mới.'),
+      validatePassword,
+      (value, values) => value === values.current ? 'Mật khẩu mới phải khác mật khẩu hiện tại.' : '',
+    ],
+    confirm: [
+      (value) => requiredTrim(value, 'Vui lòng xác nhận mật khẩu mới.'),
+      (value, values) => confirmPassword(value, values.next),
+    ],
+  })
+  passwordErrors.value = validation.errors
+  if (!validation.isValid) return
+
   changingPassword.value = true
   try {
     await authService.changePassword({
@@ -313,9 +384,18 @@ const handleChangePassword = async (e) => {
       new_password: passwordForm.value.next
     })
     passwordForm.value = { current: '', next: '', confirm: '' }
+    passwordErrors.value = {}
     toast.value = { type: 'success', message: 'Đổi mật khẩu thành công!' }
   } catch (error) {
-    toast.value = { type: 'error', message: 'Lỗi đổi mật khẩu: ' + (error.message || 'Không xác định') }
+    const rawMessage = error?.message || ''
+    const details = Array.isArray(error?.details) ? error.details.join(' ') : ''
+    const passwordIncorrect = `${rawMessage} ${details}`.toLowerCase().includes('current password is incorrect')
+    toast.value = {
+      type: 'error',
+      message: passwordIncorrect
+        ? 'Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra và nhập lại.'
+        : (rawMessage || 'Không thể đổi mật khẩu. Vui lòng thử lại.')
+    }
   } finally {
     changingPassword.value = false
   }
@@ -432,16 +512,16 @@ const confirmDeleteAccount = async () => {
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="space-y-1">
-                      <Input label="Họ và Tên *" v-model="profile.name" required />
+                      <Input label="Họ và Tên *" v-model="profile.name" :error="profileErrors.name" required />
                     </div>
                     <div class="space-y-1">
                       <Input label="Email đăng nhập" type="email" v-model="profile.email" disabled />
                     </div>
                     <div class="space-y-1">
-                      <Input label="Số điện thoại" v-model="profile.phone" />
+                      <Input label="Số điện thoại" v-model="profile.phone" :error="profileErrors.phone" />
                     </div>
                     <div class="space-y-1">
-                      <Input label="LinkedIn Profile" v-model="profile.linkedin" />
+                      <Input label="LinkedIn Profile" v-model="profile.linkedin" :error="profileErrors.linkedin" />
                     </div>
                     <div class="space-y-1 md:col-span-2">
                       <Input label="GitHub / Portfolio" v-model="profile.github" />
@@ -459,7 +539,7 @@ const confirmDeleteAccount = async () => {
                       Định hướng nghề nghiệp
                     </h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input label="Vị trí mục tiêu" v-model="profile.targetRole" placeholder="Ví dụ: Frontend Engineer" />
+                      <Input label="Vị trí mục tiêu" v-model="profile.targetRole" :error="profileErrors.targetRole" placeholder="Ví dụ: Frontend Engineer" />
                       <div class="flex flex-col gap-2">
                         <label class="pf-label">Trình độ hiện tại</label>
                         <select class="pf-select" v-model="profile.level">
@@ -589,10 +669,10 @@ const confirmDeleteAccount = async () => {
             </div>
             <div class="p-6">
               <form @submit.prevent="handleChangePassword" class="space-y-5 max-w-xl">
-                <Input label="Mật khẩu hiện tại *" type="password" v-model="passwordForm.current" placeholder="Nhập mật khẩu đang sử dụng" required />
+                <Input label="Mật khẩu hiện tại *" type="password" v-model="passwordForm.current" :error="passwordErrors.current" placeholder="Nhập mật khẩu đang sử dụng" required />
                 
                 <div>
-                  <Input label="Mật khẩu mới *" type="password" v-model="passwordForm.next" placeholder="Ít nhất 6 ký tự, kết hợp chữ & số" required />
+                  <Input label="Mật khẩu mới *" type="password" v-model="passwordForm.next" :error="passwordErrors.next" placeholder="Ít nhất 8 ký tự, kết hợp chữ hoa, chữ thường & số" required />
                   <!-- Live Password Strength Meter -->
                   <div v-if="passwordForm.next" class="mt-2.5 p-3 bg-[var(--surface-soft)] rounded-xl border border-[var(--border)]">
                     <div class="flex items-center justify-between text-xs font-semibold mb-1.5">
@@ -610,7 +690,7 @@ const confirmDeleteAccount = async () => {
                   </div>
                 </div>
 
-                <Input label="Xác nhận mật khẩu mới *" type="password" v-model="passwordForm.confirm" placeholder="Nhập lại mật khẩu mới vừa gõ" required />
+                <Input label="Xác nhận mật khẩu mới *" type="password" v-model="passwordForm.confirm" :error="passwordErrors.confirm" placeholder="Nhập lại mật khẩu mới vừa gõ" required />
 
                 <div class="pt-2 flex justify-end">
                   <Button type="submit" variant="primary" :disabled="changingPassword" class="bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white shadow-md">

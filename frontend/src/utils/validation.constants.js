@@ -1,0 +1,9 @@
+export const EMAIL_MAX_LENGTH = 254
+export const PASSWORD_MIN_LENGTH = 8
+export const PASSWORD_MAX_LENGTH = 128
+export const NAME_MIN_LENGTH = 2
+export const NAME_MAX_LENGTH = 255
+export const CV_MAX_BYTES = 5 * 1024 * 1024
+export const AVATAR_MAX_BYTES = 2 * 1024 * 1024
+export const NOTE_MAX_LENGTH = 5000
+export const CHAT_MAX_LENGTH = 2000

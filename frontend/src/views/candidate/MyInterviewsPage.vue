@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import Button from '../../components/common/AppButton.vue'
@@ -13,7 +13,7 @@ const loading = ref(true)
 onMounted(async () => {
   try {
     const data = await candidatePortalService.getInterviews()
-    interviews.value = data
+    interviews.value = Array.isArray(data) ? data : []
   } catch (err) {
     console.error('Lỗi tải danh sách phỏng vấn:', err)
   } finally {
@@ -21,11 +21,20 @@ onMounted(async () => {
   }
 })
 
+const sortedInterviews = computed(() => {
+  return [...interviews.value].sort((a, b) => {
+    const timeA = new Date(a.scheduled_at || 0).getTime()
+    const timeB = new Date(b.scheduled_at || 0).getTime()
+    return timeB - timeA
+  })
+})
+
 const formatDate = (dateString) => {
   if (!dateString) return ''
   const d = new Date(dateString)
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ', ' + d.toLocaleDateString('vi-VN')
 }
+
 </script>
 
 <template>
@@ -48,7 +57,7 @@ const formatDate = (dateString) => {
       <p class="text-helper">{{ langStore.t('interviews', 'loadingText') }}</p>
     </div>
 
-    <div v-else-if="interviews.length === 0" class="mi-empty">
+    <div v-else-if="sortedInterviews.length === 0" class="mi-empty">
       <div class="mi-empty-icon"><CalendarDays :size="34" /></div>
       <h2 class="mi-empty-title">{{ langStore.t('interviews', 'emptyTitle') }}</h2>
       <p class="mi-empty-desc">
@@ -57,7 +66,7 @@ const formatDate = (dateString) => {
     </div>
 
     <div v-else class="space-y-4 stagger">
-      <div v-for="iv in interviews" :key="iv.id" class="mi-item card-elevate hover-rail">
+      <div v-for="iv in sortedInterviews" :key="iv.id" class="mi-item card-elevate hover-rail">
         <div class="flex-1 min-w-0">
           <h3 class="mi-title">{{ iv.job_title || iv.title }}</h3>
           <p class="mi-company">

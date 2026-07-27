@@ -8,21 +8,34 @@ import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Modal from '../../components/common/AppModal.vue'
 import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-vue-next'
+import { maxLength, normalizeText, isOneOf } from '../../utils/validators.js'
+import { JOB_STATUSES } from '../../utils/constants.js'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
 
 const router = useRouter()
 const jobs = ref([])
 const loading = ref(true)
+const filters = ref({ keyword: '', status: '' })
 const routeMessage = ref(history.state?.message || '')
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
 const localToast = ref(null)
 
-const filters = ref({ keyword: '', status: '' })
+const isValidId = (value) => typeof value === 'string' || typeof value === 'number'
+const validateFilters = () => {
+  filters.value.keyword = normalizeText(filters.value.keyword).slice(0, 255)
+  if (filters.value.status && isOneOf(filters.value.status, JOB_STATUSES)) {
+    filters.value.status = ''
+    localToast.value = { type: 'error', message: 'Bộ lọc trạng thái không hợp lệ.' }
+    return false
+  }
+  return true
+}
 
 const fetchJobs = async () => {
+  if (!validateFilters()) return
   loading.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -35,12 +48,13 @@ const fetchJobs = async () => {
     if (filters.value.status) params.status = filters.value.status
 
     const response = await jobService.getJobs(companyId, params)
-    jobs.value = response.map(j => ({
-      id: j.id,
-      title: j.title,
-      status: j.status,
-      created: new Date(j.created_at).toLocaleDateString('vi-VN'),
-      applicants: j.candidate_count || 0
+    const safeJobs = Array.isArray(response) ? response : []
+    jobs.value = safeJobs.map(j => ({
+      id: j?.id,
+      title: j?.title || 'Chưa có tiêu đề',
+      status: j?.status || 'draft',
+      created: j?.created_at ? new Date(j.created_at).toLocaleDateString('vi-VN') : 'Chưa cập nhật',
+      applicants: Number(j?.candidate_count || 0)
     }))
   } catch (error) {
     localToast.value = { type: 'error', message: 'Lỗi tải dữ liệu: ' + (error.message || 'Không xác định') }
@@ -75,6 +89,10 @@ const columns = [
 ]
 
 const confirmDelete = async () => {
+  if (!isValidId(deletingId.value)) {
+    localToast.value = { type: 'error', message: 'Không xác định được công việc cần xóa.' }
+    return
+  }
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     await jobService.deleteJob(companyId, deletingId.value)

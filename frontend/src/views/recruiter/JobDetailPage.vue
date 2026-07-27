@@ -9,24 +9,33 @@ import Toast from '../../components/common/AppToast.vue'
 import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users } from 'lucide-vue-next'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
+import { JOB_STATUSES, JOB_LEVELS, EMPLOYMENT_TYPES } from '../../utils/constants.js'
+import { isOneOf, isValidSalaryRange, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
 const isNew = ref(id === 'new')
 
-const job = ref({ 
-  title: '', 
-  status: 'Open', 
+const job = ref({
+  title: '',
+  location: '',
+  department: '',
+  level: '',
+  employment_type: '',
+  status: 'open',
   description: '',
   requirements: '',
-  benefits: ''
+  benefits: '',
+  salary_min: '',
+  salary_max: ''
 })
 const loading = ref(!isNew.value)
 const saving = ref(false)
 const aiAnalyzing = ref(false)
 const rubric = ref(null)
 const localToast = ref(null)
+const errors = ref({})
 
 const unwrap = (val) => {
   if (!val) return ''
@@ -69,25 +78,53 @@ onMounted(async () => {
 
 const handleSave = async (e) => {
   e.preventDefault()
-  
-  if (!job.value.requirements.trim()) {
-    localToast.value = { type: 'error', message: 'Vui lòng nhập Yêu cầu ứng viên' }
-    return
-  }
-  if (!job.value.benefits.trim()) {
-    localToast.value = { type: 'error', message: 'Vui lòng nhập Quyền lợi' }
-    return
-  }
-  
+  if (saving.value) return
+
+  const normalizedJob = { ...job.value, title: normalizeText(job.value.title), location: normalizeText(job.value.location) }
+  const validation = validateForm(normalizedJob, {
+    title: [
+      (value) => requiredTrim(value, 'Vui lòng nhập tiêu đề công việc.'),
+      (value) => minLength(value, 2, 'Tiêu đề công việc phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Tiêu đề công việc không được vượt quá 255 ký tự.'),
+    ],
+    location: [
+      (value) => requiredTrim(value, 'Vui lòng nhập vị trí làm việc.'),
+      (value) => minLength(value, 2, 'Vị trí làm việc phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Vị trí làm việc không được vượt quá 255 ký tự.'),
+    ],
+    department: [(value) => maxLength(value, 255, 'Phòng ban không được vượt quá 255 ký tự.')],
+    level: [(value) => isOneOf(String(value || '').toLowerCase(), JOB_LEVELS, 'Cấp độ công việc không hợp lệ.')],
+    employment_type: [(value) => isOneOf(String(value || '').toLowerCase(), EMPLOYMENT_TYPES, 'Loại hình làm việc không hợp lệ.')],
+    description: [
+      (value) => requiredTrim(value, 'Vui lòng nhập mô tả công việc.'),
+      (value) => minLength(value, 10, 'Mô tả công việc phải có ít nhất 10 ký tự.'),
+      (value) => maxLength(value, 20000, 'Mô tả công việc không được vượt quá 20.000 ký tự.'),
+    ],
+    requirements: [(value) => maxLength(value, 10000, 'Yêu cầu không được vượt quá 10.000 ký tự.')],
+    benefits: [(value) => maxLength(value, 10000, 'Quyền lợi không được vượt quá 10.000 ký tự.')],
+    status: [(value) => isOneOf(String(value || '').toLowerCase(), JOB_STATUSES, 'Trạng thái công việc không hợp lệ.')],
+  })
+  const salaryError = isValidSalaryRange(job.value.salary_min, job.value.salary_max)
+  errors.value = { ...validation.errors, ...(salaryError ? { salary: salaryError } : {}) }
+  if (!validation.isValid || salaryError) return
+  job.value.title = normalizedJob.title
+  job.value.location = normalizedJob.location
+
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     const payload = {
       title: job.value.title,
+      location: job.value.location,
       description: job.value.description,
       requirements: job.value.requirements,
       benefits: job.value.benefits,
-      status: job.value.status === 'Open' ? 'open' : (job.value.status === 'Closed' ? 'closed' : 'draft')
+      status: String(job.value.status || '').toLowerCase(),
+      ...(job.value.department ? { department: normalizeText(job.value.department) } : {}),
+      ...(job.value.level ? { level: String(job.value.level).toLowerCase() } : {}),
+      ...(job.value.employment_type ? { employment_type: String(job.value.employment_type).toLowerCase() } : {}),
+      ...(job.value.salary_min !== '' ? { salary_min: Number(job.value.salary_min) } : {}),
+      ...(job.value.salary_max !== '' ? { salary_max: Number(job.value.salary_max) } : {}),
     }
     
     if (isNew.value) {
@@ -107,6 +144,24 @@ const handleSave = async (e) => {
 const aiResult = ref(null)
 
 const handleAiAnalyze = async () => {
+  if (aiAnalyzing.value) return
+  const titleError = requiredTrim(job.value.title, 'Vui lòng nhập tiêu đề công việc.') || minLength(job.value.title, 2, 'Tiêu đề công việc phải có ít nhất 2 ký tự.')
+  const locationError = requiredTrim(job.value.location, 'Vui lòng nhập vị trí làm việc.') || minLength(job.value.location, 2, 'Vị trí làm việc phải có ít nhất 2 ký tự.')
+  const descriptionError = requiredTrim(job.value.description, 'Vui lòng nhập mô tả công việc.') || minLength(job.value.description, 10, 'Mô tả công việc phải có ít nhất 10 ký tự.')
+  errors.value = {
+    ...(titleError ? { title: titleError } : {}),
+    ...(locationError ? { location: locationError } : {}),
+    ...(descriptionError ? { description: descriptionError } : {}),
+  }
+  if (Object.keys(errors.value).length) {
+    localToast.value = { type: 'error', message: 'Vui lòng hoàn thiện JD hợp lệ trước khi yêu cầu AI phân tích.' }
+    return
+  }
+  if (isNew.value || !id) {
+    localToast.value = { type: 'error', message: 'Vui lòng lưu công việc trước khi yêu cầu AI phân tích.' }
+    return
+  }
+
   aiAnalyzing.value = true
   aiResult.value = null
   try {
@@ -169,25 +224,39 @@ const handleAiAnalyze = async () => {
             <!-- Job Title -->
             <div class="space-y-2">
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Tiêu đề công việc</label>
-              <input 
-                v-model="job.title" 
-                required 
+              <input
+                v-model="job.title"
+                required
                 minlength="2"
-                class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.title }]"
                 placeholder="Ví dụ: Frontend Developer"
               />
+              <span v-if="errors.title" class="error-text">{{ errors.title }}</span>
             </div>
             
+            <!-- Job Location -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí làm việc</label>
+              <input
+                v-model="job.location"
+                required
+                placeholder="Ví dụ: Hà Nội, TP. Hồ Chí Minh hoặc Remote"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.location }]"
+              />
+              <span v-if="errors.location" class="error-text">{{ errors.location }}</span>
+            </div>
+
             <!-- Status -->
             <div class="space-y-2">
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
               <select 
-                v-model="job.status" 
-                class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
+                v-model="job.status"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]', { 'input-error': errors.status }]"
               >
                 <option value="Open">Đang mở (Open)</option>
                 <option value="Closed">Đã đóng (Closed)</option>
               </select>
+              <span v-if="errors.status" class="error-text">{{ errors.status }}</span>
             </div>
 
             <!-- Job Description -->
@@ -199,8 +268,9 @@ const handleAiAnalyze = async () => {
                 placeholder="Nhập mô tả tổng quan về công việc (tối thiểu 10 ký tự)..."
                 required
                 minlength="10"
-                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.description }]"
               ></textarea>
+              <span v-if="errors.description" class="error-text">{{ errors.description }}</span>
             </div>
 
             <!-- Requirements -->
@@ -211,8 +281,9 @@ const handleAiAnalyze = async () => {
                 v-model="job.requirements"
                 placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
                 required
-                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.requirements }]"
               ></textarea>
+              <span v-if="errors.requirements" class="error-text">{{ errors.requirements }}</span>
             </div>
 
             <!-- Benefits -->
@@ -223,8 +294,9 @@ const handleAiAnalyze = async () => {
                 v-model="job.benefits"
                 placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
                 required
-                class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.benefits }]"
               ></textarea>
+              <span v-if="errors.benefits" class="error-text">{{ errors.benefits }}</span>
             </div>
 
             <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">

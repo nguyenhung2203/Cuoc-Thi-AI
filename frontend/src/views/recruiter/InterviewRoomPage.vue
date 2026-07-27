@@ -61,11 +61,23 @@ const isPanelExpanded = ref(sessionStorage.getItem('recruiter_panel_expanded') !
 watch(isPanelExpanded, (val) => { sessionStorage.setItem('recruiter_panel_expanded', val); })
 
 const chatInput = ref('')
+const chatCooldown = ref(false)
 
 const handleSendMessage = () => {
-  if (!chatInput.value || !chatInput.value.trim()) return
-  chatStore.sendChat(chatInput.value.trim(), 'room', roomStore.roomId, roomStore.interviewId, 'Nhà tuyển dụng (Bạn)')
+  const message = chatInput.value.trim()
+  if (!message || chatCooldown.value) return
+  if (!roomStore.roomId || !roomStore.interviewId || !roomStore.isConnected) {
+    activeToast.value = { type: 'error', message: 'Không thể gửi tin nhắn khi phòng chưa kết nối.' }
+    return
+  }
+  if (message.length > 2000) {
+    activeToast.value = { type: 'error', message: 'Tin nhắn không được vượt quá 2.000 ký tự.' }
+    return
+  }
+  chatStore.sendChat(message, 'room', roomStore.roomId, roomStore.interviewId, 'Nhà tuyển dụng (Bạn)')
   chatInput.value = ''
+  chatCooldown.value = true
+  setTimeout(() => { chatCooldown.value = false }, 500)
 }
 
 const showEndModal = ref(false)
@@ -640,7 +652,7 @@ onUnmounted(() => {
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; background-color: var(--surface); border: 1px solid var(--border); border-radius: 24px; padding: 4px 6px 4px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: border-color 0.2s; flex-shrink: 0;">
-               <input type="text" v-model="chatInput" placeholder="Nhập tin nhắn..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; color: var(--text-main); padding: 6px 0;" @keyup.enter="handleSendMessage">
+               <input type="text" maxlength="2000" v-model="chatInput" placeholder="Nhập tin nhắn..." style="flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; color: var(--text-main); padding: 6px 0;" @keyup.enter="handleSendMessage">
                <button @click="handleSendMessage" style="width: 34px; height: 34px; border-radius: 50%; background-color: var(--primary); color: white; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.15s, opacity 0.2s; flex-shrink: 0; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);" title="Gửi tin nhắn">
                  <Send size="16" />
                </button>

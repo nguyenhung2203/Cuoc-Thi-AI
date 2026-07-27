@@ -72,12 +72,23 @@ func (r *FileRepository) GetByIDAndOwner(ctx context.Context, fileID, ownerUserI
 	return &f, nil
 }
 
-// GetByIDAndCompany returns a file only when company_id matches.
-// Returns nil, nil when not found or company mismatch.
+// GetByIDAndCompany returns a file when it belongs to the company directly
+// or is the CV attached to a candidate belonging to that company. Portal CVs
+// are owner-scoped at upload time and become visible through the candidate
+// relationship when that candidate applies to a company's job.
 func (r *FileRepository) GetByIDAndCompany(ctx context.Context, fileID, companyID string) (*models.File, error) {
 	const q = `
-		SELECT * FROM files
-		WHERE id = $1::uuid AND company_id = $2::uuid`
+		SELECT f.* FROM files f
+		WHERE f.id = $1::uuid
+		  AND (
+			f.company_id = $2::uuid
+			OR EXISTS (
+				SELECT 1 FROM candidates c
+				WHERE c.cv_file_id = f.id
+				  AND c.company_id = $2::uuid
+				  AND c.deleted_at IS NULL
+			)
+		  )`
 
 	var f models.File
 	if err := r.db.GetContext(ctx, &f, q, fileID, companyID); err != nil {

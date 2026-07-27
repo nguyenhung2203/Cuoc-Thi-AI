@@ -70,11 +70,25 @@ const roomId = tokenClaims.room_id || (tokenClaims.video && tokenClaims.video.ro
 const interviewId = tokenClaims.interview_id || ''
 
 const chatInput = ref('')
+const chatError = ref('')
+const chatCooldown = ref(false)
 
 const handleSendMessage = () => {
-  if (!chatInput.value || !chatInput.value.trim()) return
-  chatStore.sendChat(chatInput.value.trim(), 'room', roomId, interviewId, 'Ứng viên (Bạn)')
+  const message = chatInput.value.trim()
+  if (!message || chatCooldown.value) return
+  if (!roomId || !interviewId || !roomStore.isConnected) {
+    chatError.value = 'Không thể gửi tin nhắn khi phòng chưa kết nối.'
+    return
+  }
+  if (message.length > 2000) {
+    chatError.value = 'Tin nhắn không được vượt quá 2.000 ký tự.'
+    return
+  }
+  chatError.value = ''
+  chatStore.sendChat(message, 'room', roomId, interviewId, 'Ứng viên (Bạn)')
   chatInput.value = ''
+  chatCooldown.value = true
+  setTimeout(() => { chatCooldown.value = false }, 500)
 }
 
 onMounted(async () => {
@@ -479,7 +493,8 @@ onUnmounted(() => {
                     v-model="chatInput" 
                     @keyup.enter="handleSendMessage"
                     class="flex-1 bg-transparent border-none text-sm text-slate-800 outline-none placeholder-slate-400 py-1.5" 
-                    placeholder="Nhập tin nhắn..." 
+                    maxlength="2000"
+                    placeholder="Nhập tin nhắn..."
                   />
                   <button 
                     @click="handleSendMessage"
