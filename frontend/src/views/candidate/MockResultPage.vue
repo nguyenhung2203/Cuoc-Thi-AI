@@ -1,111 +1,247 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
-import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle } from 'lucide-vue-next'
+import { ArrowLeft, MessageCircle, CheckCircle, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-vue-next'
+import { mockService } from '../../services/mock.service'
+import { apiService } from '../../services/api.service'
 
 const route = useRoute()
 const router = useRouter()
-const id = route.params.id
+const id = route.query.mock_id || route.params.id
 
-// Mock data cho một kết quả chi tiết
-const sessionData = {
-  role: 'Frontend Developer',
-  level: 'Middle',
-  date: '20/10/2023',
-  overallScore: 8.5,
-  summaryFeedback: 'Bạn đã làm rất tốt trong việc giải thích các khái niệm cốt lõi của React. Tuy nhiên, phần System Design cần cụ thể hơn về cách scale ứng dụng.',
-  questions: [
-    {
-      id: 1,
-      question: 'Bạn hãy giải thích cơ chế Virtual DOM trong React và tại sao nó lại giúp tăng hiệu suất?',
-      candidateAnswer: 'Virtual DOM là một bản copy của Real DOM. Khi state thay đổi, React tạo ra một Virtual DOM mới, so sánh với cái cũ (diffing), và chỉ cập nhật những node bị thay đổi lên Real DOM.',
-      score: 9,
-      feedback: 'Câu trả lời rất chính xác, ngắn gọn và đi thẳng vào trọng tâm. Bạn có thể bổ sung thêm về quá trình Reconciliation để đạt điểm tuyệt đối.',
-      goodPoints: ['Hiểu rõ khái niệm bản copy', 'Nắm được quá trình diffing'],
-      improvePoints: ['Thiếu key term Reconciliation']
-    },
-    {
-      id: 2,
-      question: 'Làm thế nào để tối ưu hóa hiệu suất (performance) của một ứng dụng React lớn?',
-      candidateAnswer: 'Tôi thường dùng useMemo và useCallback để tránh re-render. Ngoài ra cũng dùng React.lazy để code splitting.',
-      score: 7.5,
-      feedback: 'Các ý chính đều đúng, tuy nhiên bạn cần giải thích rõ HƯỚNG áp dụng thực tế thay vì chỉ liệt kê hooks. Khi nào KHÔNG NÊN dùng useMemo cũng là một ý quan trọng.',
-      goodPoints: ['Đề cập đúng các công cụ tối ưu (useMemo, React.lazy)'],
-      improvePoints: ['Cần ví dụ thực tế', 'Thiếu cân nhắc trade-off khi lạm dụng useMemo']
+const loading = ref(true)
+const sessionData = ref(null)
+const loadError = ref(false)
+
+onMounted(async () => {
+  if (!id) {
+    loading.value = false
+    return
+  }
+  try {
+    const data = await apiService.get(`/mock-interviews/${id}`)
+    const messages = await mockService.getMessages(id)
+
+    let formattedQuestions = []
+    let lastQ = null
+    if (Array.isArray(messages)) {
+      for (let m of messages) {
+        if (m.sender_type === 'ai') {
+          lastQ = m.content
+        } else if (m.sender_type === 'candidate') {
+          const nextAi = messages.find(m2 => m2.sender_type === 'ai' && m2.created_at > m.created_at)
+          let score = 0, feedback = ''
+          let goodPoints = [], improvePoints = []
+          if (nextAi && nextAi.score_json) {
+             const sj = typeof nextAi.score_json === 'string' ? JSON.parse(nextAi.score_json) : nextAi.score_json
+             score = sj.score
+             feedback = nextAi.content
+             if (Array.isArray(sj.good_points)) goodPoints = sj.good_points
+             if (Array.isArray(sj.improve_points)) improvePoints = sj.improve_points
+          }
+          if (lastQ) {
+            formattedQuestions.push({
+              id: formattedQuestions.length + 1,
+              question: lastQ,
+              candidateAnswer: m.content,
+              score: score,
+              feedback: feedback,
+              goodPoints: goodPoints,
+              improvePoints: improvePoints
+            })
+          }
+        }
+      }
     }
-  ]
-}
+
+    let finalScore = data.final_score
+    if (finalScore == null && formattedQuestions.length > 0) {
+       finalScore = formattedQuestions.reduce((sum, q) => sum + q.score, 0) / formattedQuestions.length
+    }
+
+    sessionData.value = {
+      role: data.target_role || 'Phỏng vấn thử',
+      level: data.target_level || '',
+      date: data.created_at ? new Date(data.created_at).toLocaleDateString('vi-VN') : '',
+      overallScore: finalScore != null ? Number(finalScore).toFixed(1) : null,
+      summaryFeedback: data.feedback_json || '',
+      questions: formattedQuestions
+    }
+  } catch (err) {
+    console.error('Lỗi tải kết quả phỏng vấn thử:', err)
+    loadError.value = true
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
-  <div>
-    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 32px">
-      <Button variant="ghost" @click="router.push('/mock-results')" style="padding: 8px">
-        <ArrowLeft size="20" />
-      </Button>
+  <div class="space-y-8 pb-12 max-w-6xl mx-auto">
+    <div class="flex items-center gap-4 mb-2 animate-rise">
+      <button @click="router.push('/mock-results')" class="back-btn"><ArrowLeft :size="20" /></button>
       <div>
-        <h1 class="text-h1">Chi tiết kết quả luyện tập</h1>
-        <p class="text-helper" style="margin-top: 4px">{{ sessionData.role }} - Cấp độ {{ sessionData.level }} - Ngày {{ sessionData.date }}</p>
+        <h1 class="page-title">Báo cáo kết quả</h1>
+        <p v-if="sessionData" class="result-tags">
+          <span class="tag">{{ sessionData.role }}</span>
+          <span class="tag">Cấp độ: {{ sessionData.level }}</span>
+          <span class="tag">{{ sessionData.date }}</span>
+        </p>
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px; margin-bottom: 24px">
-      <Card>
-        <div style="text-align: center; margin-bottom: 24px">
-          <div style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: 50%; background-color: rgba(22, 163, 74, 0.1); color: var(--success); font-size: 28px; font-weight: bold; margin-bottom: 16px">
-            {{ sessionData.overallScore }}
-          </div>
-          <h2 class="text-body" style="font-weight: 600">Điểm tổng kết</h2>
-        </div>
-        
-        <div style="padding-top: 16px; border-top: 1px solid var(--border)">
-          <h3 class="text-helper" style="font-weight: 600; margin-bottom: 8px">Nhận xét chung:</h3>
-          <p class="text-body" style="color: var(--text-secondary)">{{ sessionData.summaryFeedback }}</p>
-        </div>
-      </Card>
+    <div v-if="loading" class="flex flex-col items-center justify-center py-20">
+      <div class="mr-spinner mb-4"></div>
+      <p class="text-helper">Đang tải kết quả đánh giá...</p>
+    </div>
 
-      <Card title="Đánh giá chi tiết từng câu hỏi">
-        <div style="display: flex; flex-direction: column; gap: 24px">
-          <div v-for="(q, index) in sessionData.questions" :key="q.id" :style="{ paddingBottom: '24px', borderBottom: index < sessionData.questions.length - 1 ? '1px solid var(--border)' : 'none' }">
-            <div style="display: flex; gap: 12px; margin-bottom: 12px">
-              <MessageCircle size="20" color="var(--primary)" style="flex-shrink: 0; margin-top: 2px" />
-              <div>
-                <h4 class="text-body" style="font-weight: 600">Câu hỏi {{ index + 1 }}: {{ q.question }}</h4>
-              </div>
-            </div>
+    <div v-else-if="loadError || !sessionData" class="mr-error">
+      <AlertCircle :size="42" />
+      <p>Không thể tải kết quả bài luyện tập.</p>
+    </div>
 
-            <div style="margin-left: 32px; margin-bottom: 16px; padding: 12px; background-color: var(--surface-soft); border-radius: 8px">
-              <p class="text-helper" style="font-weight: 600; margin-bottom: 4px; color: var(--text-main)">Câu trả lời của bạn:</p>
-              <p class="text-body" style="color: var(--text-secondary)">"{{ q.candidateAnswer }}"</p>
-            </div>
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-            <div style="margin-left: 32px">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
-                <p class="text-helper" style="font-weight: 600; color: var(--primary)">AI Feedback</p>
-                <Badge :type="q.score >= 8 ? 'success' : 'warning'">Điểm: {{ q.score }}/10</Badge>
-              </div>
-              <p class="text-body" style="margin-bottom: 12px">{{ q.feedback }}</p>
-              
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
-                <div style="padding: 12px; border: 1px solid #bbf7d0; background-color: #f0fdf4; border-radius: 8px">
-                  <p class="text-helper" style="color: #166534; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 8px"><CheckCircle size="14" /> Điểm tốt</p>
-                  <ul class="text-body" style="padding-left: 16px; color: #166534; margin: 0">
-                    <li v-for="(p, i) in q.goodPoints" :key="i">{{ p }}</li>
-                  </ul>
-                </div>
-                <div style="padding: 12px; border: 1px solid #fef08a; background-color: #fefce8; border-radius: 8px">
-                  <p class="text-helper" style="color: #854d0e; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 8px"><AlertCircle size="14" /> Cần cải thiện</p>
-                  <ul class="text-body" style="padding-left: 16px; color: #854d0e; margin: 0">
-                    <li v-for="(p, i) in q.improvePoints" :key="i">{{ p }}</li>
-                  </ul>
-                </div>
-              </div>
+      <!-- Overall Score Sidebar -->
+      <div class="lg:col-span-1 space-y-6 sticky top-6 animate-rise">
+        <Card class="card-elevate score-card">
+          <h2 class="score-title">Điểm tổng kết</h2>
+
+          <div class="score-ring">
+            <svg class="score-svg" viewBox="0 0 100 100">
+              <circle class="ring-bg" stroke-width="8" cx="50" cy="50" r="40" fill="transparent"></circle>
+              <circle class="ring-fg" stroke-width="8" stroke-linecap="round" cx="50" cy="50" r="40" fill="transparent" :stroke-dasharray="251.2" :stroke-dashoffset="251.2 - (251.2 * (parseFloat(sessionData.overallScore || 0) * 10)) / 100"></circle>
+            </svg>
+            <div class="score-center">
+              <span class="score-val">{{ sessionData.overallScore != null ? sessionData.overallScore : '—' }}</span>
+              <span class="score-max">/10</span>
             </div>
           </div>
-        </div>
-      </Card>
+
+          <div class="score-note">
+            <h3 class="score-note-title"><Sparkles :size="18" /> Nhận xét chung</h3>
+            <p class="score-note-text">{{ sessionData.summaryFeedback || 'Chưa có nhận xét tổng hợp cho bài luyện tập này.' }}</p>
+          </div>
+        </Card>
+      </div>
+
+      <!-- Detailed Questions List -->
+      <div class="lg:col-span-2 space-y-6">
+        <Card class="card-elevate qa-card animate-rise">
+          <h2 class="qa-head">
+            <MessageCircle :size="22" />
+            Đánh giá chi tiết từng câu hỏi
+          </h2>
+
+          <div class="space-y-10">
+            <div v-if="sessionData.questions.length === 0" class="mr-empty-q">
+              <MessageCircle :size="34" />
+              <p>Bài luyện tập này chưa có câu hỏi và câu trả lời nào được ghi nhận.</p>
+            </div>
+            <div v-for="(q, index) in sessionData.questions" :key="q.id">
+              <div class="flex items-start gap-4 mb-4">
+                <div class="q-badge">Q{{ index + 1 }}</div>
+                <div class="flex-1">
+                  <h4 class="q-text">{{ q.question }}</h4>
+                  <div class="q-answer">
+                    <div class="q-answer-label">Câu trả lời của bạn</div>
+                    <p class="q-answer-text">"{{ q.candidateAnswer }}"</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="qa-body">
+                <div class="flex justify-between items-center mb-4">
+                  <h5 class="fb-title"><CheckCircle2 :size="18" /> AI Feedback</h5>
+                  <div class="flex items-center gap-3">
+                    <div class="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all duration-1000" :class="q.score >= 8 ? 'bg-emerald-500' : q.score >= 6 ? 'bg-amber-500' : 'bg-rose-500'" :style="`width: ${q.score * 10}%`"></div>
+                    </div>
+                    <span class="font-bold text-sm" :class="q.score >= 8 ? 'text-emerald-600' : q.score >= 6 ? 'text-amber-600' : 'text-rose-600'">
+                      {{ q.score }}/10
+                    </span>
+                  </div>
+                </div>
+
+                <p class="fb-text">{{ q.feedback }}</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="pt-box is-good">
+                    <p class="pt-head"><CheckCircle :size="18" /> Điểm tốt</p>
+                    <ul>
+                      <li v-for="(p, i) in q.goodPoints" :key="i"><span class="pt-dot is-good"></span>{{ p }}</li>
+                    </ul>
+                  </div>
+                  <div class="pt-box is-improve">
+                    <p class="pt-head"><AlertCircle :size="18" /> Cần cải thiện</p>
+                    <ul>
+                      <li v-for="(p, i) in q.improvePoints" :key="i"><span class="pt-dot is-improve"></span>{{ p }}</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <hr v-if="index < sessionData.questions.length - 1" class="qa-divider" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
     </div>
   </div>
 </template>
+
+<style scoped>
+.back-btn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; box-shadow: var(--shadow-sm); transition: all 0.2s ease; flex-shrink: 0; }
+.back-btn:hover { color: var(--primary); border-color: var(--primary-light); }
+.result-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.tag { background: var(--surface-soft); color: var(--text-secondary); padding: 3px 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
+
+.mr-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--primary-light); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.mr-error { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px; text-align: center; background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.2); border-radius: var(--radius-lg); color: var(--danger); font-weight: 600; }
+.mr-empty-q { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 40px 16px; text-align: center; color: var(--text-secondary); }
+.mr-empty-q :deep(svg) { color: var(--text-muted); }
+
+.score-card { padding: 28px; text-align: center; }
+.score-title { font-size: 16px; font-weight: 700; color: var(--text-main); margin-bottom: 22px; }
+.score-ring { position: relative; width: 160px; height: 160px; margin: 0 auto 8px; }
+.score-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-bg { stroke: var(--surface-soft); }
+.ring-fg { stroke: var(--success); transition: stroke-dashoffset 1s cubic-bezier(0.2,0.8,0.2,1); }
+.score-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.score-val { font-size: 40px; font-weight: 800; color: var(--success); line-height: 1; }
+.score-max { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+.score-note { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--border); text-align: left; }
+.score-note-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-main); margin-bottom: 10px; }
+.score-note-title :deep(svg) { color: var(--accent); }
+.score-note-text { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+.qa-card { padding: 28px; }
+.qa-head { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: var(--text-main); padding-bottom: 18px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.qa-head :deep(svg) { color: var(--primary); }
+.q-badge { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius); background: var(--primary-light); color: var(--primary); font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+.q-text { font-size: 16px; font-weight: 700; color: var(--text-main); line-height: 1.4; margin-bottom: 12px; }
+.q-answer { position: relative; background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+.q-answer-label { position: absolute; top: -10px; left: 14px; background: var(--surface); padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.q-answer-text { color: var(--text-secondary); font-style: italic; }
+.qa-body { margin-left: 56px; }
+.fb-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-main); }
+.fb-title :deep(svg) { color: var(--accent); }
+.fb-text { color: var(--text-secondary); line-height: 1.6; margin: 16px 0 20px; }
+.pt-box { padding: 18px; border-radius: var(--radius); }
+.pt-box.is-good { background: rgba(22,163,74,0.08); border: 1px solid rgba(22,163,74,0.2); }
+.pt-box.is-improve { background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.2); }
+.pt-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 12px; }
+.pt-box.is-good .pt-head { color: var(--success); }
+.pt-box.is-improve .pt-head { color: var(--warning); }
+.pt-box ul { display: flex; flex-direction: column; gap: 8px; }
+.pt-box li { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; color: var(--text-secondary); }
+.pt-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+.pt-dot.is-good { background: var(--success); }
+.pt-dot.is-improve { background: var(--warning); }
+.qa-divider { margin: 28px 0; border: none; border-top: 1px solid var(--border); }
+</style>

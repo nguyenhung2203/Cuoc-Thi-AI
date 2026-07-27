@@ -1,9 +1,79 @@
 package repository
 
+import (
+	"context"
+
+	"github.com/jmoiron/sqlx"
+
+	"backend/internal/models"
+)
+
 type AuditRepository struct {
-	// Data access fields
+	db *sqlx.DB
 }
 
-func NewAuditRepository() *AuditRepository {
-	return &AuditRepository{}
+func NewAuditRepository(db *sqlx.DB) *AuditRepository {
+	return &AuditRepository{db: db}
+}
+
+func (r *AuditRepository) Insert(ctx context.Context, al *models.AuditLog) error {
+	if r.db == nil {
+		return nil
+	}
+	q := `
+		INSERT INTO audit_logs (
+			id, company_id, actor_user_id, actor_role,
+			action, resource_type, resource_id,
+			before_json, after_json, ip_address, user_agent,
+			created_at
+		) VALUES (
+			:id, :company_id, :actor_user_id, :actor_role,
+			:action, :resource_type, :resource_id,
+			:before_json, :after_json, :ip_address, :user_agent,
+			NOW()
+		) RETURNING id, created_at
+	`
+	stmt, err := r.db.PrepareNamedContext(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	return stmt.QueryRowContext(ctx, al).Scan(&al.ID, &al.CreatedAt)
+}
+
+func (r *AuditRepository) ListByCompany(ctx context.Context, companyID string, resourceType, actorUserID string, limit, offset int) ([]models.AuditLog, error) {
+	args := []interface{}{companyID}
+	query := `SELECT * FROM audit_logs WHERE company_id = $1`
+	paramIdx := 2
+
+	if resourceType != "" {
+		query += ` AND resource_type = $` + string(rune('0'+paramIdx))
+		args = append(args, resourceType)
+		paramIdx++
+	}
+	if actorUserID != "" {
+		query += ` AND actor_user_id = $` + string(rune('0'+paramIdx))
+		args = append(args, actorUserID)
+		paramIdx++
+	}
+
+	query += ` ORDER BY created_at DESC LIMIT $` + string(rune('0'+paramIdx)) + ` OFFSET $` + string(rune('0'+paramIdx+1))
+	args = append(args, limit, offset)
+
+	var items []models.AuditLog
+	err := r.db.SelectContext(ctx, &items, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (r *AuditRepository) ListAll(ctx context.Context, limit, offset int) ([]models.AuditLog, error) {
+	query := `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+	var items []models.AuditLog
+	err := r.db.SelectContext(ctx, &items, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
 }

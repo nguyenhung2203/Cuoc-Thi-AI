@@ -5,8 +5,12 @@ import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { mockApi } from '../../utils/mockData'
-import { ArrowLeft, Video, Copy, Calendar, Clock, User, Briefcase, Mail } from 'lucide-vue-next'
+import { ArrowLeft, Video, Copy, Calendar, Clock, User, Briefcase, Mail, FileText } from 'lucide-vue-next'
+import { interviewService } from '../../services/interview.service'
+import { jobService } from '../../services/job.service'
+import { candidateService } from '../../services/candidate.service'
+import { authStore } from '../../stores/auth.store'
+import { maxLength, normalizeText, requiredTrim, isValidId, isUrl, isValidDate } from '../../utils/validators.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,11 +20,43 @@ const interview = ref(null)
 const loading = ref(true)
 const copied = ref(false)
 const toast = ref(null)
+const noteContent = ref('')
 
 onMounted(async () => {
-  const data = await mockApi.interviews.getById(id)
-  interview.value = data || null
-  loading.value = false
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (companyId) {
+      const [data, jobs, candidates] = await Promise.all([
+        interviewService.getInterview(companyId, id),
+        jobService.getJobs(companyId),
+        candidateService.getCandidates(companyId)
+      ])
+      
+      const jobMap = jobs.reduce((acc, j) => { acc[j.id] = j; return acc; }, {})
+      const candidateMap = candidates.reduce((acc, c) => { acc[c.id] = c; return acc; }, {})
+      
+      const candidate = data.candidate || candidateMap[data.candidate_id] || {}
+      const job = data.job || jobMap[data.job_id?.String || data.job_id] || {}
+      const dt = typeof data.scheduled_at === 'object' && data.scheduled_at !== null ? data.scheduled_at.Time : data.scheduled_at
+
+      interview.value = {
+        ...data,
+        candidateName: candidate.full_name || candidate.name || 'Không rõ ứng viên',
+        candidateEmail: candidate.email || '',
+        jobTitle: job.title || 'Không rõ vị trí',
+        datetime: dt,
+        status: data.status === 'scheduled' ? 'Scheduled' : data.status,
+        link: data.invite_url || ''
+      }
+
+      // Ghi chú nội bộ lấy trực tiếp từ backend (cột recruiter_notes)
+      noteContent.value = data.recruiter_notes || ''
+    }
+  } catch (error) {
+    toast.value = { type: 'error', message: 'Không thể tải thông tin phỏng vấn' }
+  } finally {
+    loading.value = false
+  }
 })
 
 const copyLink = () => {
@@ -31,11 +67,49 @@ const copyLink = () => {
   }
 }
 
-const handleSaveNotes = () => {
-  toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
+const savingNote = ref(false)
+const sendingReminder = ref(false)
+
+const handleSaveNotes = async () => {
+  if (savingNote.value) return
+  const normalizedNote = normalizeText(noteContent.value)
+  const noteError = requiredTrim(normalizedNote, 'Vui lòng nhập ghi chú.') || maxLength(normalizedNote, 5000, 'Ghi chú không được vượt quá 5.000 ký tự.')
+  if (noteError) {
+    toast.value = { type: 'error', message: noteError }
+    return
+  }
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  savingNote.value = true
+  try {
+    await interviewService.updateNotes(companyId, id, normalizedNote)
+    noteContent.value = normalizedNote
+    toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lỗi lưu ghi chú: ' + (err.message || 'Không xác định') }
+  } finally {
+    savingNote.value = false
+  }
 }
 
-const dateObj = computed(() => interview.value ? new Date(interview.value.datetime) : null)
+const handleSendReminder = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  sendingReminder.value = true
+  try {
+    const res = await interviewService.sendReminder(companyId, id)
+    toast.value = { type: 'success', message: `Đã gửi email nhắc nhở tới ${res?.to || 'ứng viên'}.` }
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lỗi gửi nhắc nhở: ' + (err.message || 'Không xác định') }
+  } finally {
+    sendingReminder.value = false
+  }
+}
+
+const dateObj = computed(() => {
+  if (!interview.value || !isValidDate(interview.value.datetime)) return null
+  return new Date(interview.value.datetime)
+})
 </script>
 
 <template>
@@ -86,14 +160,17 @@ const dateObj = computed(() => interview.value ? new Date(interview.value.dateti
             <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border)">
               <p class="text-helper" style="margin-bottom: 12px; font-weight: 500; color: var(--text-main)">Hành động</p>
               <div style="display: flex; gap: 12px">
-                <Button @click="router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!' } })">
+                <Button v-if="interview.status !== 'Completed'" @click="router.push({ path: '/recruiter-room', state: { message: 'Vào phòng phỏng vấn thành công!', interviewId: interview.id } })">
                   <Video size="16" /> Vào phòng phỏng vấn
+                </Button>
+                <Button v-if="interview.status === 'Completed'" @click="router.push(`/interviews/${interview.id}/report`)" variant="primary" style="background-color: var(--accent); border-color: var(--accent); color: white">
+                  <FileText size="16" /> Xem Báo cáo AI
                 </Button>
                 <Button variant="secondary" @click="copyLink">
                   <Copy size="16" /> Copy Link Invite
                 </Button>
-                <Button variant="ghost">
-                  <Mail size="16" /> Gửi email nhắc nhở
+                <Button variant="ghost" :disabled="sendingReminder" @click="handleSendReminder">
+                  <Mail size="16" /> {{ sendingReminder ? 'Đang gửi...' : 'Gửi email nhắc nhở' }}
                 </Button>
               </div>
             </div>
@@ -111,13 +188,14 @@ const dateObj = computed(() => interview.value ? new Date(interview.value.dateti
 
         <div>
           <Card title="Ghi chú nội bộ">
-            <textarea 
-              class="input-field" 
+            <textarea
+              v-model="noteContent"
+              class="input-field"
               rows="6"
               placeholder="Nhập ghi chú hoặc nhắc nhở trước buổi phỏng vấn (Chỉ recruiter xem được)..."
               style="width: 100%; margin-bottom: 16px"
             ></textarea>
-            <Button variant="secondary" style="width: 100%" @click="handleSaveNotes">Lưu ghi chú</Button>
+            <Button variant="secondary" style="width: 100%" :disabled="savingNote" @click="handleSaveNotes">{{ savingNote ? 'Đang lưu...' : 'Lưu ghi chú' }}</Button>
           </Card>
         </div>
       </div>

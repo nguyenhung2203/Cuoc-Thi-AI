@@ -47,17 +47,21 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 	}
 
 	// Set room configuration from consent flags
+	now := time.Now().UTC()
 	room.mu.Lock()
 	room.TranscriptEnabledForCandidate = payload.ConsentRecording
+	room.StartedAt = &now
 	room.mu.Unlock()
-
-	now := time.Now().UTC()
 
 	// 6. Simulate DB & Redis updates
 	log.Printf("[db] UPDATE interview_rooms SET status = 'active' WHERE id = '%s'", room.ID)
 	log.Printf("[db] UPDATE interviews SET status = 'active', started_at = '%s' WHERE id = '%s'",
 		now.Format(time.RFC3339), room.InterviewID)
 	log.Printf("[redis] SET room_status:%s value=active", room.ID)
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("interview_start", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "consent_ai": payload.ConsentAI})
+	}
 
 	// 7. Simulate AI Orchestrator activation if consent_ai is true
 	if payload.ConsentAI {
@@ -119,12 +123,19 @@ func (r *MessageRouter) handleInterviewEnd(conn *ClientConnection, env *events.E
 	}
 
 	now := time.Now().UTC()
+	room.mu.Lock()
+	room.EndedAt = &now
+	room.mu.Unlock()
 
 	// 6. Simulate DB & Redis updates
 	log.Printf("[db] UPDATE interview_rooms SET status = 'completed' WHERE id = '%s'", room.ID)
 	log.Printf("[db] UPDATE interviews SET status = 'completed', ended_at = '%s' WHERE id = '%s'",
 		now.Format(time.RFC3339), room.InterviewID)
 	log.Printf("[redis] SET room_status:%s value=completed", room.ID)
+
+	if r.auditLogger != nil {
+		r.auditLogger.LogEvent("interview_end", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "generate_report": payload.GenerateReport})
+	}
 
 	reportStatus := "failed"
 	// 7. Simulate triggering report generation if requested

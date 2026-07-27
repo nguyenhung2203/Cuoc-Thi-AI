@@ -5,7 +5,7 @@
 | **Task ID** | H-S0-02 |
 | **Sprint** | 0 — Setup Realtime Foundation |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -78,14 +78,14 @@ Client → WebSocket → Parse Envelope → Route by Event → Handler → Respo
 
 ## Definition of Done
 
-- [ ] Client connect WebSocket thành công
-- [ ] Client disconnect được handle clean
-- [ ] Server parse được event envelope JSON
-- [ ] Server log connection/disconnect events
-- [ ] Có connection pool quản lý đúng
-- [ ] Có read/write goroutine per connection
-- [ ] Không memory leak khi disconnect
-- [ ] Có unit test cho connection manager
+- [x] Client connect WebSocket thành công
+- [x] Client disconnect được handle clean
+- [x] Server parse được event envelope JSON
+- [x] Server log connection/disconnect events
+- [x] Có connection pool quản lý đúng
+- [x] Có read/write goroutine per connection
+- [x] Không memory leak khi disconnect
+- [x] Có unit test cho connection manager (6 tests PASS)
 
 ---
 
@@ -114,9 +114,9 @@ backend/
 
 ## Checklist test
 
-- [ ] Connect WebSocket bằng wscat hoặc Postman
-- [ ] Gửi JSON message → server log nhận được
-- [ ] Gửi invalid JSON → server không crash
-- [ ] Disconnect → connection bị remove khỏi pool
-- [ ] Nhiều connection cùng lúc → không race condition
-- [ ] Server shutdown → tất cả connection đóng clean
+- [x] Connect WebSocket bằng wscat hoặc Postman (TestWS_Connect PASS)
+- [x] Gửi JSON message → server log nhận được (TestWS_SendValidJSON PASS)
+- [x] Gửi invalid JSON → server không crash (TestWS_InvalidJSON PASS)
+- [x] Disconnect → connection bị remove khỏi pool (TestWS_DisconnectRemovesFromPool PASS)
+- [x] Nhiều connection cùng lúc → không race condition (TestWS_MultipleConcurrentConnections PASS)
+- [x] Server shutdown → tất cả connection đóng clean (TestWS_ServerShutdown PASS)

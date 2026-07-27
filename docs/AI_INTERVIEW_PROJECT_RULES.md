@@ -179,6 +179,7 @@ GET    /api/v1/companies/:company_id/interviews/:interview_id/report
 ### 6.1. Bảng lõi nên có
 
 - users
+- refresh_tokens
 - companies
 - company_members
 - jobs
@@ -334,7 +335,7 @@ Event phải dùng envelope chuẩn theo `REALTIME_EVENTS.md`:
 
 - Bắt buộc HTTPS ở production.
 - JWT/Session phải có thời hạn.
-- Refresh token phải an toàn.
+- Refresh token phải lưu trong HttpOnly Cookie (không trả về JSON body cho FE). Sử dụng Token Family Rotation để phát hiện replay attack.
 - File CV/audio dùng Signed URL với TTL giới hạn (xem chi tiết bên dưới).
 - Không expose storage key trực tiếp nếu không cần.
 - Audit log cho hành động quan trọng.

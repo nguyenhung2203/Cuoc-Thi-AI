@@ -144,10 +144,24 @@ Response:
       "role": "recruiter",
       "status": "active"
     },
-    "access_token": "string",
-    "refresh_token": "string"
+    "access_token": "string"
   }
 }
+
+*Lưu ý: `refresh_token` sẽ được trả về ngầm qua header `Set-Cookie`:*
+
+```http
+Set-Cookie: refresh_token=<TOKEN>; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth; Max-Age=604800
+```
+
+*Giải thích các thuộc tính:*
+- `HttpOnly` — Javascript không thể đọc Cookie, chống XSS.
+- `Secure` — Chỉ gửi qua HTTPS.
+- `SameSite=Lax` — Cho phép Cookie khi user click link từ email/Slack vào trang web (Strict sẽ block trường hợp này).
+- `Path=/api/v1/auth` — Chỉ gửi Cookie khi gọi Auth endpoints, giảm attack surface.
+- `Max-Age=604800` — 7 ngày, đồng bộ với `expires_at` trong DB.
+
+*Nếu FE và BE khác domain (ví dụ FE ở `app.example.com`, BE ở `api.example.com`), cần thêm `Domain=.example.com`.*
 ```
 
 Permission: public.
@@ -210,13 +224,11 @@ Permission: authenticated.
 POST /auth/refresh
 ```
 
-Request:
+Request: Không cần body. Backend sẽ tự đọc `refresh_token` từ HttpOnly Cookie.
 
-```json
-{
-  "refresh_token": "string"
-}
-```
+Response: Trả về `access_token` mới trong JSON body và tự động cập nhật `refresh_token` mới qua `Set-Cookie` (Token Rotation).
+
+Lưu ý: Nếu phát hiện gửi lại Refresh Token cũ (đã sử dụng), hệ thống sẽ từ chối và **thu hồi toàn bộ phiên đăng nhập (Token Family Revocation)**.
 
 ---
 
@@ -227,6 +239,32 @@ POST /auth/logout
 ```
 
 Permission: authenticated.
+
+*Lưu ý: Endpoint này sẽ vô hiệu hóa (revoke) Token Family hiện tại trong Database và trả về header `Set-Cookie` với Max-Age=-1 để xóa Cookie ở Frontend.*
+
+---
+
+## 2.6. Logout All Sessions
+
+```http
+POST /auth/logout-all
+```
+
+Permission: authenticated.
+
+*Lưu ý: Endpoint này sẽ vô hiệu hóa (revoke) **tất cả** Token Family của user trong Database (tất cả thiết bị) và xóa Cookie ở thiết bị hiện tại. Dùng khi user nghi ngờ tài khoản bị xâm phạm.*
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "All sessions revoked. Please login again.",
+    "revoked_sessions": 3
+  }
+}
+```
 
 ---
 

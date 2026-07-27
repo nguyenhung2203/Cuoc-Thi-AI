@@ -2,37 +2,53 @@ package realtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
+	"backend/internal/repository"
 )
 
 // Server is the WebSocket realtime gateway.
 // It wires together the HTTP upgrader, connection manager, room manager, and message router.
 type Server struct {
-	connManager *ConnectionManager
-	roomManager *RoomManager
-	router      *MessageRouter
-	httpServer  *http.Server
+	connManager        *ConnectionManager
+	roomManager        *RoomManager
+	router             *MessageRouter
+	httpServer         *http.Server
+	transcriptPipeline *TranscriptPipeline
+	transcriptSaver    *TranscriptBatchSaver
+	interviewRepo      *repository.InterviewRepository
+	livekitCfg         LiveKitConfig
 }
 
 // NewServer creates a Server with all dependencies wired up.
-func NewServer(addr string) *Server {
+// db may be nil in dev/tests; deps carries the real services used in production.
+func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConfig) *Server {
 	cm := NewConnectionManager()
 	rm := NewRoomManager()
-	router := NewMessageRouter(cm, rm)
+	router := NewMessageRouter(cm, rm, db, deps)
+
+	tp := NewTranscriptPipeline(rm, 1000)
+	router.SetTranscriptPipeline(tp)
 
 	mux := http.NewServeMux()
 	s := &Server{
-		connManager: cm,
-		roomManager: rm,
-		router:      router,
+		connManager:        cm,
+		roomManager:        rm,
+		router:             router,
+		transcriptPipeline: tp,
+		transcriptSaver:    router.GetTranscriptSaver(),
+		interviewRepo:      deps.InterviewRepo,
+		livekitCfg:         livekitCfg,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
@@ -44,6 +60,9 @@ func NewServer(addr string) *Server {
 
 	// WebSocket upgrade endpoint
 	mux.HandleFunc("/ws/interview-room", s.handleUpgrade)
+
+	// WebSocket voice mock-interview proxy (browser <-> Gemini Live)
+	mux.HandleFunc("/ws/mock-live", s.handleMockLive)
 
 	// REST endpoint for chat history
 	mux.HandleFunc("/api/v1/rooms/", s.handleGetChatHistory)
@@ -67,6 +86,16 @@ func (s *Server) GetHandler() http.Handler {
 	return s.httpServer.Handler
 }
 
+// GetRoomManager returns the RoomManager for testing purposes.
+func (s *Server) GetRoomManager() *RoomManager {
+	return s.roomManager
+}
+
+// ForceCheckRoom forces the presence watcher inspection for testing purposes.
+func (s *Server) ForceCheckRoom(roomID string) {
+	s.router.presenceManager.checkRoom(roomID)
+}
+
 // Start begins listening for connections. Blocks until the context is cancelled.
 func (s *Server) Start(ctx context.Context) error {
 	errCh := make(chan error, 1)
@@ -85,9 +114,13 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
 	log.Println("[realtime] shutting down...")
+	if s.transcriptSaver != nil {
+		s.transcriptSaver.Close()
+	}
 	s.connManager.CloseAll()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -109,8 +142,101 @@ func (s *Server) handleInternal(w http.ResponseWriter, r *http.Request) {
 		s.handleTranscriptPush(w, r, pathParts[3])
 		return
 	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "suggestion" {
+		s.handleAISuggestionPush(w, r, pathParts[3])
+		return
+	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "score_update" {
+		s.handleAIScoreUpdatePush(w, r, pathParts[3])
+		return
+	}
+	if len(pathParts) >= 6 && pathParts[4] == "ai" && pathParts[5] == "error" {
+		s.handleAIErrorPush(w, r, pathParts[3])
+		return
+	}
 
 	http.NotFound(w, r)
+}
+
+// handleAIErrorPush processes the AI error webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAIErrorPush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AIErrorPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAIError, payload.RequestID, room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAIError, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+// handleAISuggestionPush processes the AI suggestion webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAISuggestionPush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AISuggestionPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAISuggestion, "", room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAISuggestion, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+// handleAIScoreUpdatePush processes the AI scoring update webhook from Khôi's AI Orchestrator.
+func (s *Server) handleAIScoreUpdatePush(w http.ResponseWriter, r *http.Request, roomID string) {
+	room := s.roomManager.Get(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var payload events.AIScoreUpdatePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	env, err := events.NewEnvelope(events.EventAIScoreUpdate, "", room.ID, room.InterviewID, payload)
+	if err != nil {
+		http.Error(w, "Failed to build envelope", http.StatusInternalServerError)
+		return
+	}
+
+	raw, _ := env.ToJSON()
+	room.BroadcastWithVisibility(events.EventAIScoreUpdate, "", raw)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
 }
 
 // handleTranscriptPush processes the transcript webhook from the AI Orchestrator.
@@ -128,18 +254,36 @@ func (s *Server) handleTranscriptPush(w http.ResponseWriter, r *http.Request, ro
 		return
 	}
 
-	// Prepare envelope to broadcast
-	env, err := events.NewEnvelope(events.EventTranscriptUpdate, "", roomID, room.InterviewID, payload)
-	if err != nil {
-		log.Printf("[server] failed to create transcript envelope: %v", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+	resolvedPID, resolvedType, resolvedName := room.ResolveSpeaker(payload.ParticipantID, payload.TrackID, "", payload.SpeakerType, payload.SpeakerName)
+	payload.ParticipantID = resolvedPID
+	payload.SpeakerType = resolvedType
+	payload.SpeakerName = resolvedName
+
+	// Decouple HTTP request from WebSocket broadcast via async buffer queue
+	if !s.transcriptPipeline.Push(roomID, payload) {
+		log.Printf("[server] transcript buffer full for room=%s", roomID)
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
-	rawJSON, _ := env.ToJSON()
 
-	// Broadcast with visibility rule applied
-	log.Printf("[server] broadcasting transcript update to room=%s, speaker=%s", roomID, payload.SpeakerName)
-	room.BroadcastWithVisibility(events.EventTranscriptUpdate, "", rawJSON)
+	if payload.IsFinal && s.transcriptSaver != nil {
+		record := TranscriptRecord{
+			ID:            payload.TranscriptID,
+			InterviewID:   room.InterviewID,
+			ParticipantID: resolvedPID,
+			SpeakerType:   string(resolvedType),
+			SpeakerName:   resolvedName,
+			Content:       payload.Content,
+			Language:      "vi",
+			StartTimeMs:   payload.StartTimeMs,
+			EndTimeMs:     payload.EndTimeMs,
+			Confidence:    payload.Confidence,
+			Source:        "audio",
+			IsFinal:       true,
+			CreatedAt:     payload.CreatedAt,
+		}
+		s.transcriptSaver.Push(record)
+	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
@@ -201,6 +345,17 @@ func (s *Server) handleGetChatHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// writeJSONError writes a standard {success:false,error,message} JSON error response.
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"error":   code,
+		"message": message,
+	})
+}
+
 // handleGetRecruiterRoomToken handles generating a LiveKit token for the recruiter.
 func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -257,21 +412,20 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// For recruiters, let's use a deterministic room ID based on interviewID.
-	// In mock environment, roomID is "room-" + interviewID.
+	// 3. Verify the interview belongs to this company and resolve its real room_id.
+	// Falls back to the legacy "room-"+interviewID scheme when no DB is wired (dev)
+	// or the interview has no room row yet, so dev flows keep working.
 	roomID := "room-" + interviewID
-
-	// Log simulated DB SELECT query for verification
-	log.Printf("[db] SELECT * FROM interviews WHERE id = '%s' AND company_id = '%s'", interviewID, companyID)
-
-	// 3. Generate LiveKit token
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
+	if s.interviewRepo != nil {
+		interview, lookupErr := s.interviewRepo.GetByIDAndCompany(r.Context(), interviewID, companyID)
+		if lookupErr != nil {
+			log.Printf("[api] recruiter room lookup failed interview=%s company=%s: %v", interviewID, companyID, lookupErr)
+			writeJSONError(w, http.StatusNotFound, "INTERVIEW_NOT_FOUND", "Không tìm thấy buổi phỏng vấn")
+			return
+		}
+		if interview.RoomID.Valid && interview.RoomID.String != "" {
+			roomID = interview.RoomID.String
+		}
 	}
 
 	displayName := claims.DisplayName
@@ -280,8 +434,8 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		s.livekitCfg.APIKey,
+		s.livekitCfg.APISecret,
 		roomID,
 		claims.UserID,
 		displayName,
@@ -290,21 +444,11 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 	)
 	if err != nil {
 		log.Printf("[api] token generation failed: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERNAL_ERROR",
-			"message": "Failed to generate token",
-		})
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token")
 		return
 	}
 
-	livekitURL := os.Getenv("LIVEKIT_URL")
-	if livekitURL == "" {
-		livekitURL = "wss://livekit.example.com"
-	}
-
+	livekitURL := s.livekitCfg.URL
 	expiresAt := time.Now().Add(4 * time.Hour).UTC().Format(time.RFC3339)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -354,77 +498,58 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Simulate looking up token in DB
-	log.Printf("[db] SELECT * FROM interviews WHERE invite_token_hash = SHA256('%s')", inviteToken)
+	// 2. Resolve the invite token against Postgres. The stored value is a
+	// SHA-256 hash of the raw token; a 64-char token is already a hash.
+	var hash string
+	if len(inviteToken) == 64 {
+		hash = inviteToken
+	} else {
+		sum := sha256.Sum256([]byte(inviteToken))
+		hash = hex.EncodeToString(sum[:])
+	}
 
-	// 2. Mock checking
-	if inviteToken == "invalid-token" || inviteToken == "notfound-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INVITE_NOT_FOUND",
-			"message": "Token không tồn tại",
-		})
+	// Dev fallback: without a DB wired, keep the legacy mock so local flows work.
+	if s.interviewRepo == nil {
+		s.handleCandidateJoinDevFallback(w, inviteToken)
 		return
 	}
 
-	if inviteToken == "expired-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INVITE_EXPIRED",
-			"message": "Token hết hạn",
-		})
+	info, lookupErr := s.interviewRepo.GetCandidateJoinInfoByInviteTokenHash(r.Context(), hash)
+	if lookupErr != nil || info == nil {
+		log.Printf("[api] candidate invite lookup failed: %v", lookupErr)
+		writeJSONError(w, http.StatusNotFound, "INVITE_NOT_FOUND", "Token không tồn tại hoặc đã hết hạn")
+		return
+	}
+	if info.InviteExpiresAt.Before(time.Now()) {
+		writeJSONError(w, http.StatusForbidden, "INVITE_EXPIRED", "Token hết hạn")
 		return
 	}
 
-	if inviteToken == "cancelled-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERVIEW_CANCELLED",
-			"message": "Buổi phỏng vấn đã hủy",
-		})
-		return
+	interviewID := info.InterviewID
+	roomID := info.RoomID
+	if roomID == "" {
+		roomID = "room-" + interviewID
 	}
+	candidateName := info.CandidateName
 
-	// Default case - valid token
-	interviewID := "interview-123"
-	roomID := "room-" + interviewID
-	candidateName := "Trần Văn B"
-	jobTitle := "Frontend Developer"
-
-	// 3. Generate candidate LiveKit room token
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
+	// 3. Identity: prefer the linked user id, else a candidate-scoped id.
+	identity := "candidate-" + info.CandidateID
+	if info.UserID != nil && *info.UserID != "" {
+		identity = *info.UserID
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		s.livekitCfg.APIKey,
+		s.livekitCfg.APISecret,
 		roomID,
-		"candidate-123", // candidate user ID
+		identity,
 		candidateName,
 		"candidate",
 		interviewID,
 	)
 	if err != nil {
 		log.Printf("[api] candidate token generation failed: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERNAL_ERROR",
-			"message": "Failed to generate candidate token",
-		})
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate candidate token")
 		return
 	}
 
@@ -438,7 +563,68 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 			"interview_id":                 interviewID,
 			"room_id":                      roomID,
 			"candidate_name":               candidateName,
-			"job_title":                    jobTitle,
+			"job_title":                    info.JobTitle,
+			"scheduled_at":                 info.ScheduledAt.Format(time.RFC3339),
+			"requires_consent_ai":          true,
+			"requires_consent_recording":   false,
+			"room_access_token":            tokenString,
+			"room_access_token_expires_at": tokenExpiresAt.Format(time.RFC3339),
+		},
+	})
+}
+
+// handleCandidateJoinDevFallback preserves the legacy mock invite behaviour for
+// local development when no Postgres is wired. It recognises the well-known test
+// tokens and otherwise derives a deterministic room from the token itself.
+func (s *Server) handleCandidateJoinDevFallback(w http.ResponseWriter, inviteToken string) {
+	switch inviteToken {
+	case "invalid-token", "notfound-token":
+		writeJSONError(w, http.StatusNotFound, "INVITE_NOT_FOUND", "Token không tồn tại")
+		return
+	case "expired-token":
+		writeJSONError(w, http.StatusForbidden, "INVITE_EXPIRED", "Token hết hạn")
+		return
+	case "cancelled-token":
+		writeJSONError(w, http.StatusForbidden, "INTERVIEW_CANCELLED", "Buổi phỏng vấn đã hủy")
+		return
+	}
+
+	interviewID := inviteToken
+	if strings.HasPrefix(inviteToken, "inv-") {
+		interviewID = strings.TrimPrefix(inviteToken, "inv-")
+	}
+	if interviewID == "" || interviewID == "interview-123" {
+		interviewID = "405516b8-8e08-4881-bab3-d9fc1bddc576"
+	}
+	roomID := "room-" + interviewID
+	candidateName := "Trần Văn B"
+
+	tokenString, err := livekit.GenerateToken(
+		s.livekitCfg.APIKey,
+		s.livekitCfg.APISecret,
+		roomID,
+		"candidate-123",
+		candidateName,
+		"candidate",
+		interviewID,
+	)
+	if err != nil {
+		log.Printf("[api] candidate token generation failed: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate candidate token")
+		return
+	}
+
+	now := time.Now().UTC()
+	tokenExpiresAt := now.Add(4 * time.Hour)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"data": map[string]interface{}{
+			"interview_id":                 interviewID,
+			"room_id":                      roomID,
+			"candidate_name":               candidateName,
+			"job_title":                    "Frontend Developer",
 			"scheduled_at":                 now.Format(time.RFC3339),
 			"requires_consent_ai":          true,
 			"requires_consent_recording":   false,

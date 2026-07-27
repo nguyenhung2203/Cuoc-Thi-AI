@@ -5,7 +5,7 @@
 | **Task ID** | H-S0-01 |
 | **Sprint** | 0 — Setup Realtime Foundation |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -93,12 +93,12 @@ Thiết kế và định nghĩa toàn bộ event contract cho WebSocket realtime
 
 ## Definition of Done
 
-- [ ] Có danh sách đầy đủ event với payload schema
-- [ ] Có role visibility cho từng event
-- [ ] Có file type definitions (Go structs hoặc TypeScript interfaces)
-- [ ] Có constants cho event names
-- [ ] Event naming theo convention `domain:action`
-- [ ] Payload thống nhất với `REALTIME_EVENTS.md`
+- [x] Có danh sách đầy đủ event với payload schema
+- [x] Có role visibility cho từng event
+- [x] Có file type definitions (Go structs)
+- [x] Có constants cho event names
+- [x] Event naming theo convention `domain:action`
+- [x] Payload thống nhất với `REALTIME_EVENTS.md`
 - [ ] Đã review với Khôi (AI events) và Lai (frontend events)
 
 ---

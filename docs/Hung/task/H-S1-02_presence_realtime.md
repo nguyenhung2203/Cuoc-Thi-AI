@@ -5,7 +5,7 @@
 | **Task ID** | H-S1-02 |
 | **Sprint** | 1 — Interview Room MVP |
 | **Độ khó** | Khó |
-| **Trạng thái** | ⬜ Chưa bắt đầu |
+| **Trạng thái** | ✅ Hoàn thành |
 | **Owner** | Hùng |
 
 ---
@@ -75,12 +75,12 @@ Hiển thị trạng thái online/offline/reconnecting của từng participant 
 
 ## Definition of Done
 
-- [ ] Heartbeat cập nhật `last_seen_at` đúng
-- [ ] Mất heartbeat → trạng thái chuyển `reconnecting` → `offline`
-- [ ] Presence update broadcast đúng cho room
-- [ ] Không nhân đôi participant khi reconnect
-- [ ] Redis presence store hoạt động đúng TTL
-- [ ] DB cập nhật `connection_state` đúng
+- [x] Heartbeat cập nhật `last_seen_at` đúng
+- [x] Mất heartbeat → trạng thái chuyển `reconnecting` → `offline`
+- [x] Presence update broadcast đúng cho room
+- [x] Không nhân đôi participant khi reconnect
+- [x] Redis presence store hoạt động đúng TTL
+- [x] DB cập nhật `connection_state` đúng
 
 ---
 
@@ -93,9 +93,9 @@ Hiển thị trạng thái online/offline/reconnecting của từng participant 
 
 ## Checklist test
 
-- [ ] Heartbeat → `last_seen_at` update
-- [ ] Dừng heartbeat 60s → `reconnecting`
-- [ ] Dừng heartbeat 2 phút → `offline`
-- [ ] Gửi lại heartbeat → `online`
-- [ ] 2 participant → presence list đúng 2 người
-- [ ] Leave → state = `left`
+- [x] Heartbeat → `last_seen_at` update
+- [x] Dừng heartbeat 60s → `reconnecting`
+- [x] Dừng heartbeat 2 phút → `offline`
+- [x] Gửi lại heartbeat → `online`
+- [x] 2 participant → presence list đúng 2 người
+- [x] Leave → state = `left`

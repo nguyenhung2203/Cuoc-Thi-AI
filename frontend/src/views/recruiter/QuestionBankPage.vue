@@ -1,25 +1,29 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Table from '../../components/common/AppTable.vue'
 import Modal from '../../components/common/AppModal.vue'
 import Toast from '../../components/common/AppToast.vue'
 import Input from '../../components/common/AppInput.vue'
-import { Plus, Search, Filter, Layers, Edit, Trash2 } from 'lucide-vue-next'
+import { Plus, Search, Filter, Layers, Edit, Trash2, Sparkles, RefreshCw } from 'lucide-vue-next'
+import { questionBankService } from '../../services/questionBank.service'
+import { authStore } from '../../stores/auth.store'
+import { hasDuplicateNormalized, isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
-const questions = ref([
-  { id: 1, text: 'Hãy giải thích sự khác biệt giữa var, let và const trong JavaScript.', role: 'Frontend', level: 'Fresher', type: 'Technical' },
-  { id: 2, text: 'Bạn đã bao giờ bất đồng quan điểm với Quản lý dự án chưa? Bạn giải quyết thế nào?', role: 'All', level: 'Middle', type: 'Behavioral' },
-  { id: 3, text: 'Mô tả nguyên lý hoạt động của Virtual DOM trong React.', role: 'Frontend', level: 'Junior', type: 'Technical' },
-  { id: 4, text: 'Làm thế nào để scale một hệ thống chịu tải 1 triệu requests/s?', role: 'Backend', level: 'Senior', type: 'System Design' },
-])
+const questions = ref([])
+const loading = ref(true)
+const aiGenerating = ref(false)
+const searchKeyword = ref('')
+const filterLevel = ref('')
+const filterType = ref('')
 
 const columns = [
   { header: 'Câu hỏi', key: 'text' },
   { header: 'Vị trí (Role)', key: 'role' },
   { header: 'Cấp độ', key: 'level' },
   { header: 'Loại', key: 'type' },
+  { header: 'Nguồn', key: 'source' },
   { header: 'Hành động', key: 'action' }
 ]
 
@@ -27,37 +31,151 @@ const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
+const editingId = ref(null)
+const saving = ref(false)
 const toast = ref(null)
+const formErrors = ref({})
+const generateCount = ref(10)
 const newQuestion = ref({
   text: '',
   role: 'All',
   level: 'Fresher',
-  type: 'Technical'
+  type: 'Technical',
+  expected_signals: ''
 })
 
-const confirmDelete = () => {
-  questions.value = questions.value.filter(q => q.id !== deletingId.value)
-  showDeleteModal.value = false
-  toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+// Map API response → display format
+const mapQuestion = (q) => ({
+  id: q.id,
+  text: q.question_text || q.text || '(Không có nội dung)',
+  role: Array.isArray(q.skill_tags) ? q.skill_tags.join(', ') : (q.role || '—'),
+  level: q.level || '—',
+  type: q.question_type || q.type || '—',
+  source: q.is_ai_generated ? 'AI' : 'Thủ công',
+  _raw: q
+})
+
+const loadQuestions = async () => {
+  loading.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (!companyId) { loading.value = false; return }
+    const params = {}
+    if (searchKeyword.value) params.keyword = searchKeyword.value
+    if (filterLevel.value) params.level = filterLevel.value
+    if (filterType.value) params.type = filterType.value
+    const data = await questionBankService.getQuestions(companyId, params)
+    questions.value = (Array.isArray(data) ? data : []).map(mapQuestion)
+  } catch (err) {
+    console.error('Lỗi tải kho câu hỏi', err)
+    questions.value = [] // Empty state — Backend chưa sẵn sàng
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleCreate = () => {
-  if (!newQuestion.value.text) return
-  questions.value.unshift({
-    id: Date.now(),
-    text: newQuestion.value.text,
-    role: newQuestion.value.role,
-    level: newQuestion.value.level,
-    type: newQuestion.value.type
-  })
+onMounted(loadQuestions)
+
+// Open the shared modal in edit mode, prefilled from a row.
+const openEdit = (row) => {
+  editingId.value = row.id
+  const q = row._raw || row
+  const cap = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   newQuestion.value = {
-    text: '',
-    role: 'All',
-    level: 'Fresher',
-    type: 'Technical'
+    text: q.question_text || row.text || '',
+    role: (Array.isArray(q.skill_tags) && q.skill_tags[0]) || 'All',
+    level: cap(q.level) || 'Fresher',
+    type: cap(q.question_type) || 'Technical',
+    expected_signals: Array.isArray(q.expected_signals) ? q.expected_signals.join(', ') : '',
   }
-  showCreateModal.value = false
-  toast.value = { type: 'success', message: 'Đã thêm câu hỏi mới!' }
+  showCreateModal.value = true
+}
+
+const openCreate = () => {
+  editingId.value = null
+  newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
+  showCreateModal.value = true
+}
+
+const handleCreate = async () => {
+  if (saving.value) return
+  const values = { ...newQuestion.value, text: normalizeText(newQuestion.value.text) }
+  const validation = validateForm(values, {
+    text: [
+      (value) => requiredTrim(value, 'Vui lòng nhập nội dung câu hỏi.'),
+      (value) => minLength(value, 10, 'Câu hỏi phải có ít nhất 10 ký tự.'),
+      (value) => maxLength(value, 2000, 'Câu hỏi không được vượt quá 2.000 ký tự.'),
+    ],
+    level: [(value) => isOneOf(value, ['Fresher', 'Junior', 'Middle', 'Senior'], 'Cấp độ không hợp lệ.')],
+    type: [(value) => isOneOf(value, ['Technical', 'Behavioral', 'System Design', 'Custom'], 'Loại câu hỏi không hợp lệ.')],
+  })
+  if (!editingId.value && hasDuplicateNormalized([...questions.value.map(item => item.text), values.text])) {
+    validation.errors.text = 'Câu hỏi này đã tồn tại trong kho.'
+    validation.isValid = false
+  }
+  formErrors.value = validation.errors
+  if (!validation.isValid) return
+  newQuestion.value.text = values.text
+  saving.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    const payload = {
+      question_text: newQuestion.value.text,
+      question_type: newQuestion.value.type.toLowerCase(),
+      level: newQuestion.value.level.toLowerCase(),
+      skill_tags: newQuestion.value.role !== 'All' ? [newQuestion.value.role] : [],
+      expected_signals: newQuestion.value.expected_signals
+        ? newQuestion.value.expected_signals.split(',').map(s => s.trim())
+        : []
+    }
+    if (editingId.value) {
+      await questionBankService.updateQuestion(companyId, editingId.value, payload)
+      toast.value = { type: 'success', message: 'Đã cập nhật câu hỏi!' }
+    } else {
+      await questionBankService.createQuestion(companyId, payload)
+      toast.value = { type: 'success', message: 'Đã thêm câu hỏi vào kho!' }
+    }
+    showCreateModal.value = false
+    editingId.value = null
+    newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lưu thất bại. Vui lòng thử lại.' }
+  } finally {
+    saving.value = false
+  }
+}
+
+const confirmDelete = async () => {
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await questionBankService.deleteQuestion(companyId, deletingId.value)
+    showDeleteModal.value = false
+    toast.value = { type: 'success', message: 'Đã xóa câu hỏi khỏi kho!' }
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Xóa thất bại. Vui lòng thử lại.' }
+  }
+}
+
+const handleGenerateAI = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+  const count = Number(generateCount.value)
+  if (!Number.isInteger(count) || count < 1 || count > 20) {
+    toast.value = { type: 'error', message: 'Số câu hỏi AI phải nằm trong khoảng từ 1 đến 20.' }
+    return
+  }
+  aiGenerating.value = true
+  try {
+    await questionBankService.generateWithAI(companyId, null, { count, level: filterLevel.value || 'middle' })
+    toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
+    await loadQuestions()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Tạo câu hỏi bằng AI thất bại. Vui lòng thử lại.' }
+  } finally {
+    aiGenerating.value = false
+  }
 }
 </script>
 
@@ -68,7 +186,7 @@ const handleCreate = () => {
         <h1 class="text-h1">Kho câu hỏi</h1>
         <p class="text-helper" style="margin-top: 4px">Quản lý ngân hàng câu hỏi dùng chung cho các buổi phỏng vấn.</p>
       </div>
-      <Button @click="showCreateModal = true"><Plus size="16" /> Thêm câu hỏi</Button>
+      <Button @click="openCreate"><Plus size="16" /> Thêm câu hỏi</Button>
     </div>
 
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
@@ -77,23 +195,29 @@ const handleCreate = () => {
       <div style="display: flex; gap: 16px; margin-bottom: 24px">
         <div style="position: relative; flex: 1; max-width: 400px">
           <Search size="16" style="position: absolute; left: 12px; top: 12px; color: var(--text-muted)" />
-          <input 
-            type="text" 
-            placeholder="Tìm kiếm nội dung câu hỏi..." 
+          <input
+            type="text"
+            placeholder="Tìm kiếm nội dung câu hỏi..."
             class="input-field"
             style="width: 100%; padding-left: 36px"
+            v-model="searchKeyword"
+            @keyup.enter="loadQuestions"
           />
         </div>
-        <select class="input-field" style="width: 180px">
-          <option value="">Tất cả vị trí (Role)</option>
-          <option value="frontend">Frontend</option>
-          <option value="backend">Backend</option>
+        <select class="input-field" style="width: 180px" v-model="filterType" @change="loadQuestions">
+          <option value="">Tất cả loại</option>
+          <option value="technical">Technical</option>
+          <option value="behavioral">Behavioral</option>
+          <option value="system design">System Design</option>
         </select>
-        <select class="input-field" style="width: 180px">
+        <select class="input-field" style="width: 180px" v-model="filterLevel" @change="loadQuestions">
           <option value="">Tất cả cấp độ</option>
           <option value="fresher">Fresher</option>
+          <option value="junior">Junior</option>
+          <option value="middle">Middle</option>
           <option value="senior">Senior</option>
         </select>
+        <Button variant="secondary" @click="loadQuestions"><Search size="16" /> Tìm</Button>
         <Button variant="secondary" @click="showFilterModal = true"><Filter size="16" /> Lọc nâng cao</Button>
       </div>
 
@@ -108,7 +232,7 @@ const handleCreate = () => {
         </template>
         <template #action="{ row }">
           <div style="display: flex; gap: 8px">
-            <Button variant="ghost" style="padding: 4px" @click="toast = { type: 'info', message: 'Tính năng chỉnh sửa đang phát triển' }"><Edit size="16" /></Button>
+            <Button variant="ghost" style="padding: 4px" @click="openEdit(row)"><Edit size="16" /></Button>
             <Button variant="ghost" style="padding: 4px; color: var(--danger)" @click="deletingId = row.id; showDeleteModal = true"><Trash2 size="16" /></Button>
           </div>
         </template>
@@ -123,7 +247,7 @@ const handleCreate = () => {
       </div>
     </div>
 
-    <Modal :isOpen="showCreateModal" @close="showCreateModal = false" title="Thêm câu hỏi mới">
+    <Modal :isOpen="showCreateModal" @close="showCreateModal = false" :title="editingId ? 'Chỉnh sửa câu hỏi' : 'Thêm câu hỏi mới'">
       <Input label="Nội dung câu hỏi" v-model="newQuestion.text" placeholder="Nhập câu hỏi..." style="margin-bottom: 16px" />
       
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px">
@@ -161,7 +285,7 @@ const handleCreate = () => {
 
       <div style="display: flex; justify-content: flex-end; gap: 12px">
         <Button variant="ghost" @click="showCreateModal = false">Hủy</Button>
-        <Button variant="primary" @click="handleCreate">Lưu câu hỏi</Button>
+        <Button variant="primary" :disabled="saving" @click="handleCreate">{{ saving ? 'Đang lưu...' : (editingId ? 'Cập nhật' : 'Lưu câu hỏi') }}</Button>
       </div>
     </Modal>
 
@@ -177,29 +301,31 @@ const handleCreate = () => {
       <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px">
         <div class="input-group">
           <label class="input-label">Loại câu hỏi (Type)</label>
-          <select class="input-field">
+          <select class="input-field" v-model="filterType">
             <option value="">Tất cả</option>
-            <option value="Technical">Technical</option>
-            <option value="Behavioral">Behavioral</option>
-            <option value="System Design">System Design</option>
+            <option value="technical">Technical</option>
+            <option value="behavioral">Behavioral</option>
+            <option value="system design">System Design</option>
           </select>
         </div>
         <div class="input-group">
-          <label class="input-label">Nguồn câu hỏi</label>
-          <select class="input-field">
-            <option value="">Tất cả nguồn</option>
-            <option value="System">Từ hệ thống AI</option>
-            <option value="Custom">Tự tạo</option>
+          <label class="input-label">Cấp độ (Level)</label>
+          <select class="input-field" v-model="filterLevel">
+            <option value="">Tất cả cấp độ</option>
+            <option value="fresher">Fresher</option>
+            <option value="junior">Junior</option>
+            <option value="middle">Middle</option>
+            <option value="senior">Senior</option>
           </select>
         </div>
         <div class="input-group">
-          <label class="input-label">Từ khóa/Tags</label>
-          <Input placeholder="Nhập tags, cách nhau bởi dấu phẩy..." />
+          <label class="input-label">Từ khóa</label>
+          <Input v-model="searchKeyword" placeholder="Nhập từ khóa nội dung câu hỏi..." />
         </div>
       </div>
       <div style="display: flex; justify-content: flex-end; gap: 12px">
-        <Button variant="ghost" @click="showFilterModal = false">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="showFilterModal = false; toast = { type: 'success', message: 'Đã áp dụng bộ lọc nâng cao!' }">Áp dụng</Button>
+        <Button variant="ghost" @click="searchKeyword = ''; filterType = ''; filterLevel = ''; showFilterModal = false; loadQuestions()">Xóa bộ lọc</Button>
+        <Button variant="primary" @click="showFilterModal = false; loadQuestions()">Áp dụng</Button>
       </div>
     </Modal>
   </div>

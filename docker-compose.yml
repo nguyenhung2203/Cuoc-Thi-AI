@@ -1,32 +1,27 @@
 version: '3.8'
 
 services:
-  # ===== DATABASE =====
-  postgres:
-    image: postgres:15-alpine
-    container_name: ai-interview-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ai_interview
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # ===== CACHE =====
   redis:
     image: redis:7-alpine
     container_name: ai-interview-redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis_data:/data
+
+  # ===== DATABASE =====
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-interview-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_interview
+    ports:
+      - "15432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
 
   # ===== LIVEKIT =====
   livekit:
@@ -34,9 +29,9 @@ services:
     container_name: ai-interview-livekit
     command: --config /etc/livekit.yaml --dev
     ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "7882:7882/udp"
+      - "17880:7880"
+      - "17881:7881"
+      - "17882:7882/udp"
     volumes:
       - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml
 
@@ -49,8 +44,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "19000:9000"
+      - "19001:9001"
     volumes:
       - minio_data:/data
 
@@ -61,14 +56,16 @@ services:
       dockerfile: ../deploy/docker/backend-api.Dockerfile
     container_name: ai-interview-api
     ports:
-      - "8080:8080"
+      - "18080:8080"
     env_file:
       - .env
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_started
+      postgres:
+        condition: service_started
+    volumes:
+      - uploads_data:/app/uploads
 
   # ===== BACKEND REALTIME =====
   backend-realtime:
@@ -77,13 +74,13 @@ services:
       dockerfile: ../deploy/docker/backend-realtime.Dockerfile
     container_name: ai-interview-realtime
     ports:
-      - "8081:8081"
+      - "18081:8081"
     env_file:
       - .env
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
+        condition: service_started
+      postgres:
         condition: service_started
 
   # ===== AI SERVICE =====
@@ -93,7 +90,7 @@ services:
       dockerfile: ../deploy/docker/ai-service.Dockerfile
     container_name: ai-interview-ai
     ports:
-      - "8000:8000"
+      - "18000:8000"
     env_file:
       - .env
     depends_on:
@@ -106,11 +103,12 @@ services:
       dockerfile: ../deploy/docker/frontend.Dockerfile
     container_name: ai-interview-frontend
     ports:
-      - "3000:3000"
+      - "13000:80"
     depends_on:
       - backend-api
 
 volumes:
-  postgres_data:
   redis_data:
   minio_data:
+  pg_data:
+  uploads_data:

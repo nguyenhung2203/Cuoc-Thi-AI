@@ -1,1 +1,2 @@
--- Migration DOWN: 000002_create_companies
+DROP TABLE IF EXISTS company_members;
+DROP TABLE IF EXISTS companies;
