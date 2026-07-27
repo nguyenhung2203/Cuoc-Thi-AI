@@ -48,6 +48,9 @@ htmlcov/
 # Docker
 docker-compose.override.yml
 
+# Runtime uploads (candidate CVs, etc. — not source)
+backend/uploads/
+
 # Temp
 tmp/
 temp/

@@ -55,14 +55,15 @@ const handleUploadDocument = async (event) => {
   
   try {
     uploading.value = true;
+    // api.service đã bóc envelope — response chính là file record
     const response = await fileService.uploadFile(file, 'image');
-    
+
     // Call Verify Document API
-    await authService.verifyDocument(response.data.id);
-    
+    await authService.verifyDocument(response.id);
+
     // Update local state
     if (authStore.user) {
-      authStore.user.verification_file_id = response.data.id;
+      authStore.user.verification_file_id = response.id;
     }
     
     alert('Đã tải tài liệu lên thành công. Vui lòng chờ Admin phê duyệt.');

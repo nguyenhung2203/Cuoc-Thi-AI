@@ -38,9 +38,8 @@ func (h *CandidatePortalHandler) ApplyJob(w http.ResponseWriter, r *http.Request
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	jobID := chi.URLParam(r, "jobID")
 
-	err := r.ParseMultipartForm(10 << 20) // 10 MB max
-	if err != nil {
-		response.Error(w, errors.NewBadRequest("failed to parse form data"), requestID)
+	if appErr := parseUploadForm(w, r, h.fileSvc.MaxUploadBytes()); appErr != nil {
+		response.Error(w, appErr, requestID)
 		return
 	}
 
@@ -189,16 +188,15 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse multipart form
-	err := r.ParseMultipartForm(10 << 20) // 10 MB
-	if err != nil {
-		response.Error(w, errors.NewBadRequest("failed to parse form data"), requestID)
+	// Parse multipart form with the configured size cap (413 on overflow)
+	if appErr := parseUploadForm(w, r, h.fileSvc.MaxUploadBytes()); appErr != nil {
+		response.Error(w, appErr, requestID)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		response.Error(w, errors.NewBadRequest("file is required"), requestID)
+		response.Error(w, errors.NewValidation("file", []string{"file part is required"}), requestID)
 		return
 	}
 	defer file.Close()
@@ -219,7 +217,7 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	cvUrl := h.fileSvc.PublicURL(fileRecord.StorageKey)
+	cvUrl, _ := h.fileSvc.SignedURL(fileRecord.StorageKey)
 
 	// Fetch the freshly parsed profile so the client can show real extracted data.
 	profile, _ := h.svc.GetProfile(r.Context(), userID)

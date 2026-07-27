@@ -44,22 +44,23 @@ func NewCandidateHandler(svc *service.CandidateService, aiSvc *service.AIService
 //	DELETE /jobs/{job_id}/candidates/{candidate_id}/unassign → UnassignFromJob
 func (h *CandidateHandler) Routes(r chi.Router) {
 	r.Route("/candidates", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.Post("/", h.Create)
+		r.With(middleware.RequirePermission("candidate:read")).Get("/", h.List)
+		r.With(middleware.RequirePermission("candidate:create")).Post("/", h.Create)
 		r.Route("/{candidate_id}", func(r chi.Router) {
-			r.Get("/", h.GetByID)
-			r.Post("/cv", h.UploadCV)
-			r.Post("/parse-cv", h.ParseCV)
-			r.Put("/", h.Update)
-			r.Delete("/", h.Delete)
+			r.With(middleware.RequirePermission("candidate:read")).Get("/", h.GetByID)
+			r.With(middleware.RequirePermission("candidate:update")).Post("/cv", h.UploadCV)
+			r.With(middleware.RequirePermission("candidate:update")).Post("/parse-cv", h.ParseCV)
+			r.With(middleware.RequirePermission("candidate:update")).Put("/", h.Update)
+			r.With(middleware.RequirePermission("candidate:delete")).Delete("/", h.Delete)
 		})
 	})
 
 	r.Route("/jobs/{job_id}/candidates", func(r chi.Router) {
-		r.Get("/", h.ListByJob)
-		r.Post("/{candidate_id}/assign", h.AssignToJob)
-		r.Put("/{candidate_id}/pipeline", h.UpdatePipeline)
-		r.Delete("/{candidate_id}/unassign", h.UnassignFromJob)
+		r.With(middleware.RequirePermission("candidate:read")).Get("/", h.ListByJob)
+		r.With(middleware.RequirePermission("candidate:update")).Post("/{candidate_id}/assign", h.AssignToJob)
+		r.With(middleware.RequirePermission("candidate:update")).Put("/{candidate_id}/pipeline", h.UpdatePipeline)
+		// Unassign removes the job link, not the candidate — update, not delete.
+		r.With(middleware.RequirePermission("candidate:update")).Delete("/{candidate_id}/unassign", h.UnassignFromJob)
 	})
 }
 
@@ -423,16 +424,15 @@ func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
 	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
 	candidateID := chi.URLParam(r, "candidate_id")
 
-	// Parse multipart form
-	err := r.ParseMultipartForm(10 << 20) // 10 MB
-	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("failed to parse form data"), requestID)
+	// Parse multipart form with the configured size cap (413 on overflow)
+	if appErr := parseUploadForm(w, r, h.fileSvc.MaxUploadBytes()); appErr != nil {
+		pkgresponse.Error(w, appErr, requestID)
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		pkgresponse.Error(w, apierrors.NewBadRequest("file is required"), requestID)
+		pkgresponse.Error(w, apierrors.NewValidation("file", []string{"file part is required"}), requestID)
 		return
 	}
 	defer file.Close()
@@ -442,7 +442,9 @@ func (h *CandidateHandler) UploadCV(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	fileRecord, err := h.fileSvc.ProcessUpload(r.Context(), file, header, userID, companyID, "cv")
 	if err != nil {
-		pkgresponse.Error(w, apierrors.NewInternal("failed to process file upload"), requestID)
+		// Pass AppErrors through so 413/422 (size, unsupported type) reach the
+		// client instead of a blanket 500.
+		writeServiceError(w, err, requestID)
 		return
 	}
 

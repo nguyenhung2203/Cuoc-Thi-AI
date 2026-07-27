@@ -46,3 +46,48 @@ func (r *AILogRepository) Create(ctx context.Context, log *models.AIRequestLog) 
 
 	return nil
 }
+
+// AILogFilter narrows an AI request-log query. Empty fields are ignored.
+type AILogFilter struct {
+	InterviewID string
+	JobID       string
+	CandidateID string
+	Limit       int
+	Offset      int
+}
+
+// List returns AI request logs matching the filter, newest first. Used by the
+// admin AI-logs endpoint for debugging and cost auditing.
+func (r *AILogRepository) List(ctx context.Context, f AILogFilter) ([]models.AIRequestLog, error) {
+	q := `SELECT * FROM ai_request_logs WHERE 1=1`
+	args := []interface{}{}
+	i := 1
+
+	if f.InterviewID != "" {
+		q += fmt.Sprintf(" AND interview_id = $%d", i)
+		args = append(args, f.InterviewID)
+		i++
+	}
+	if f.JobID != "" {
+		q += fmt.Sprintf(" AND job_id = $%d", i)
+		args = append(args, f.JobID)
+		i++
+	}
+	if f.CandidateID != "" {
+		q += fmt.Sprintf(" AND candidate_id = $%d", i)
+		args = append(args, f.CandidateID)
+		i++
+	}
+
+	if f.Limit <= 0 || f.Limit > 200 {
+		f.Limit = 50
+	}
+	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", i, i+1)
+	args = append(args, f.Limit, f.Offset)
+
+	logs := []models.AIRequestLog{}
+	if err := r.db.SelectContext(ctx, &logs, q, args...); err != nil {
+		return nil, fmt.Errorf("list ai request logs: %w", err)
+	}
+	return logs, nil
+}

@@ -22,12 +22,14 @@ type AIService struct {
 	fileRepo      *repository.FileRepository
 	candidateRepo *repository.CandidateRepository
 	geminiKeys    []string
+	uploadDir     string
 }
 
 func NewAIService(
 	fileRepo *repository.FileRepository,
 	candidateRepo *repository.CandidateRepository,
 	geminiKey string,
+	uploadDir string,
 ) *AIService {
 	rand.Seed(time.Now().UnixNano())
 	
@@ -49,10 +51,15 @@ func NewAIService(
 		keys = []string{""} // Fallback to empty string if missing
 	}
 
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
+
 	return &AIService{
 		fileRepo:      fileRepo,
 		candidateRepo: candidateRepo,
 		geminiKeys:    keys,
+		uploadDir:     uploadDir,
 	}
 }
 
@@ -143,7 +150,7 @@ type AIExtractionResult struct {
 // extract structured info, and returns the raw JSON plus a short summary.
 // Reusable by both the recruiter candidate flow and the candidate portal.
 func (s *AIService) ExtractAndParseCV(ctx context.Context, storageKey string) (string, string, error) {
-	filePath := filepath.Join(".", "uploads", storageKey)
+	filePath := filepath.Join(s.uploadDir, storageKey)
 	text, err := ExtractTextFromPDF(filePath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read PDF: %w", err)
@@ -188,7 +195,7 @@ func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) 
 	}
 
 	// 1. Read PDF text
-	filePath := filepath.Join(".", "uploads", fileRecord.StorageKey)
+	filePath := filepath.Join(s.uploadDir, fileRecord.StorageKey)
 	text, err := ExtractTextFromPDF(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read PDF: %w", err)

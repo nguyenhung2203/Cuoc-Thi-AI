@@ -2,7 +2,6 @@ package realtime
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,10 +9,20 @@ import (
 	"backend/internal/realtime/events"
 )
 
+// targetRoomAllowed reports whether a message addressed to envRoom may be
+// processed on a connection bound to connRoom. An empty envRoom is allowed —
+// the FE can send room_id="" before its store hydrates, in which case the
+// connection's own room is used.
+func targetRoomAllowed(connRoom, envRoom string) bool {
+	return envRoom == "" || envRoom == connRoom
+}
+
 // handleChatSend handles the "chat:send" event from clients.
 func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envelope) {
-	// Block requests targetting a different room than authorized (unless mock dev env)
-	if env.RoomID != conn.RoomID && os.Getenv("LIVEKIT_API_SECRET") != "" && os.Getenv("LIVEKIT_API_SECRET") != "devsecret" {
+	// Room check runs unconditionally — it used to be disabled whenever
+	// LIVEKIT_API_SECRET was the dev fallback, which leaked chat across rooms
+	// on any default-config deployment.
+	if !targetRoomAllowed(conn.RoomID, env.RoomID) {
 		log.Printf("[chat] send rejected: room ID mismatch client=%s message=%s", conn.RoomID, env.RoomID)
 		r.sendError(conn, env.RequestID, "FORBIDDEN", "Không có quyền truy cập phòng này")
 		return
@@ -92,12 +101,11 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	// Filter and broadcast based on visibility payload
 	if msgPayload.Visibility == events.VisibilityRecruiterOnly {
 		room.BroadcastRecruitersOnly(raw)
+	} else if devBroadcastAllRooms() {
+		// Dev-only multi-tab demo mirror; requires explicit
+		// REALTIME_DEV_BROADCAST_ALL=true and never activates in production.
+		r.roomManager.BroadcastToAllRooms(raw)
 	} else {
-		// In mock dev mode, broadcast across all rooms so candidate and recruiter tabs hear each other
-		if os.Getenv("LIVEKIT_API_SECRET") == "" || os.Getenv("LIVEKIT_API_SECRET") == "devsecret" {
-			r.roomManager.BroadcastToAllRooms(raw)
-		} else {
-			room.BroadcastAll(raw)
-		}
+		room.BroadcastAll(raw)
 	}
 }

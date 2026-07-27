@@ -1,11 +1,16 @@
 package realtime
 
 import (
+	"context"
 	"log"
 	"time"
 
 	"backend/internal/realtime/events"
 )
+
+// persistTimeout bounds the synchronous DB writes performed on interview
+// lifecycle events; a slow DB must not stall the broadcast for long.
+const persistTimeout = 5 * time.Second
 
 // handleInterviewStart handles the "interview:start" event from clients.
 func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events.Envelope) {
@@ -53,11 +58,21 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 	room.StartedAt = &now
 	room.mu.Unlock()
 
-	// 6. Simulate DB & Redis updates
-	log.Printf("[db] UPDATE interview_rooms SET status = 'active' WHERE id = '%s'", room.ID)
-	log.Printf("[db] UPDATE interviews SET status = 'active', started_at = '%s' WHERE id = '%s'",
-		now.Format(time.RFC3339), room.InterviewID)
-	log.Printf("[redis] SET room_status:%s value=active", room.ID)
+	// 6. Persist status + started_at. This is the path the real FE flow takes
+	// (interview:start over WS, not the REST endpoint), so the write happens
+	// here; MarkStarted is idempotent (COALESCE) so a REST start cannot
+	// double-stamp. Broadcast continues even if the DB write fails — a DB
+	// hiccup must not break a live interview.
+	if r.interviewRepo != nil {
+		dbCtx, cancel := context.WithTimeout(context.Background(), persistTimeout)
+		if _, err := r.interviewRepo.MarkStarted(dbCtx, room.InterviewID, now); err != nil {
+			log.Printf("[room] failed to persist interview start interview=%s: %v", room.InterviewID, err)
+		}
+		if err := r.interviewRepo.MarkRoomOpened(dbCtx, room.InterviewID, now); err != nil {
+			log.Printf("[room] failed to persist room open interview=%s: %v", room.InterviewID, err)
+		}
+		cancel()
+	}
 
 	if r.auditLogger != nil {
 		r.auditLogger.LogEvent("interview_start", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "consent_ai": payload.ConsentAI})
@@ -127,11 +142,17 @@ func (r *MessageRouter) handleInterviewEnd(conn *ClientConnection, env *events.E
 	room.EndedAt = &now
 	room.mu.Unlock()
 
-	// 6. Simulate DB & Redis updates
-	log.Printf("[db] UPDATE interview_rooms SET status = 'completed' WHERE id = '%s'", room.ID)
-	log.Printf("[db] UPDATE interviews SET status = 'completed', ended_at = '%s' WHERE id = '%s'",
-		now.Format(time.RFC3339), room.InterviewID)
-	log.Printf("[redis] SET room_status:%s value=completed", room.ID)
+	// 6. Persist status + ended_at (real write — see handleInterviewStart).
+	if r.interviewRepo != nil {
+		dbCtx, cancel := context.WithTimeout(context.Background(), persistTimeout)
+		if _, err := r.interviewRepo.MarkEnded(dbCtx, room.InterviewID, now); err != nil {
+			log.Printf("[room] failed to persist interview end interview=%s: %v", room.InterviewID, err)
+		}
+		if err := r.interviewRepo.MarkRoomClosed(dbCtx, room.InterviewID, now); err != nil {
+			log.Printf("[room] failed to persist room close interview=%s: %v", room.InterviewID, err)
+		}
+		cancel()
+	}
 
 	if r.auditLogger != nil {
 		r.auditLogger.LogEvent("interview_end", conn.UserID, conn.Role, "interview_room", room.ID, "", conn.IPAddress, map[string]interface{}{"room_id": room.ID, "interview_id": room.InterviewID, "generate_report": payload.GenerateReport})

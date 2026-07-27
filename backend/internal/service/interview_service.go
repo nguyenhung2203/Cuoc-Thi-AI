@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -169,15 +168,9 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 		return nil, errors.NewForbidden("token expired")
 	}
 
-	// Generate LiveKit token for candidate
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
-	}
+	// Generate LiveKit token for candidate — credentials come from the shared
+	// config (production refuses dev fallbacks at startup).
+	lkCfg := livekit.Current()
 
 	identity := "candidate-" + info.CandidateID
 	if info.UserID != nil {
@@ -190,8 +183,8 @@ func (s *InterviewService) JoinByToken(ctx context.Context, token string) (*Cand
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		lkCfg.APIKey,
+		lkCfg.APISecret,
 		roomID,
 		identity,
 		info.CandidateName,
@@ -274,6 +267,39 @@ func (s *InterviewService) UpdateNotes(ctx context.Context, interviewID, company
 	return s.repo.UpdateNotes(ctx, interviewID, companyID, notes)
 }
 
+// RescheduleInterview changes an interview's scheduled time. Only allowed while
+// the interview is still in the "scheduled" state — once it is waiting/active/
+// completed/cancelled, rescheduling is rejected (cancel + recreate instead).
+func (s *InterviewService) RescheduleInterview(ctx context.Context, interviewID, companyID string, scheduledAt time.Time) error {
+	i, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID)
+	if err != nil {
+		return errors.NewNotFound("interview not found")
+	}
+	if i.Status != "scheduled" {
+		return errors.NewBadRequest("can only reschedule an interview in 'scheduled' state, current: " + i.Status)
+	}
+	if err := s.repo.UpdateScheduledAt(ctx, interviewID, companyID, scheduledAt); err != nil {
+		return err
+	}
+
+	// Notify candidate about the new time if possible.
+	if s.candidateRepo != nil && s.notifRepo != nil {
+		if cand, candErr := s.candidateRepo.GetByID(ctx, companyID, i.CandidateID); candErr == nil && cand != nil {
+			if cand.UserID.Valid {
+				_ = s.notifRepo.Create(ctx, &models.Notification{
+					UserID:  cand.UserID.String,
+					Title:   "Lịch phỏng vấn được dời",
+					Message: "Lịch phỏng vấn: " + i.Title + " đã được dời sang thời gian mới.",
+					Type:    "interview_rescheduled",
+					Link:    "/my-interviews",
+				})
+			}
+		}
+	}
+
+	return nil
+}
+
 // GetRoom returns room metadata for an interview (after verifying company scope).
 func (s *InterviewService) GetRoom(ctx context.Context, interviewID, companyID string) (*models.InterviewRoom, error) {
 	if _, err := s.repo.GetByIDAndCompany(ctx, interviewID, companyID); err != nil {
@@ -295,7 +321,7 @@ func (s *InterviewService) CancelInterview(ctx context.Context, interviewID, com
 	if i.Status == "completed" || i.Status == "cancelled" {
 		return errors.NewBadRequest("cannot cancel an interview in state: " + i.Status)
 	}
-	if err := s.repo.UpdateStatus(ctx, interviewID, "cancelled"); err != nil {
+	if err := s.repo.UpdateStatus(ctx, interviewID, companyID, "cancelled"); err != nil {
 		return err
 	}
 	if i.RoomID.Valid {
@@ -347,20 +373,22 @@ func (s *InterviewService) GenerateRoomAccessToken(ctx context.Context, intervie
 		displayName = "Recruiter"
 	}
 
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
-	}
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-
-	token, err := livekit.GenerateToken(livekitKey, livekitSecret, roomName, userID, displayName, role, interviewID)
+	lkCfg := livekit.Current()
+	token, err := livekit.GenerateToken(lkCfg.APIKey, lkCfg.APISecret, roomName, userID, displayName, role, interviewID)
 	if err != nil {
 		return "", "", errors.NewInternal("failed to generate room access token")
 	}
 	return token, roomName, nil
+}
+
+// canStartInterview reports whether an interview in status s may be started.
+func canStartInterview(status string) bool {
+	return status == "scheduled" || status == "waiting"
+}
+
+// canEndInterview reports whether an interview in status s may be ended.
+func canEndInterview(status string) bool {
+	return status != "completed" && status != "cancelled"
 }
 
 func (s *InterviewService) StartInterview(ctx context.Context, interviewID, companyID string) error {
@@ -369,20 +397,21 @@ func (s *InterviewService) StartInterview(ctx context.Context, interviewID, comp
 		return errors.NewNotFound("interview not found")
 	}
 
-	if i.Status != "scheduled" && i.Status != "waiting" {
-		return errors.NewBadRequest("cannot start an interview in state: " + i.Status)
+	if !canStartInterview(i.Status) {
+		return errors.NewConflict("cannot start an interview in state: " + i.Status)
 	}
 
-	err = s.repo.UpdateStatus(ctx, interviewID, "active")
+	// Atomic: the WHERE clause re-checks the state, so a concurrent start
+	// loses cleanly instead of double-stamping.
+	ok, err := s.repo.MarkStarted(ctx, interviewID, time.Now().UTC())
 	if err != nil {
-		return err
+		return errors.NewInternal("failed to start interview")
 	}
-	
-	if i.RoomID.Valid {
-		_ = s.repo.UpdateRoomStatus(ctx, i.RoomID.String, "active")
+	if !ok {
+		return errors.NewConflict("interview already started or not in a startable state")
 	}
 
-	// Stub: Trigger webhook or Pub/Sub event here
+	_ = s.repo.MarkRoomOpened(ctx, interviewID, time.Now().UTC())
 	return nil
 }
 
@@ -392,16 +421,23 @@ func (s *InterviewService) EndInterview(ctx context.Context, interviewID, compan
 		return errors.NewNotFound("interview not found")
 	}
 
-	err = s.repo.UpdateStatus(ctx, interviewID, "completed")
-	if err != nil {
-		return err
-	}
-	
-	if i.RoomID.Valid {
-		_ = s.repo.UpdateRoomStatus(ctx, i.RoomID.String, "closed")
+	if !canEndInterview(i.Status) {
+		return errors.NewConflict("cannot end an interview in state: " + i.Status)
 	}
 
-	// Trigger report generation async
+	ok, err := s.repo.MarkEnded(ctx, interviewID, time.Now().UTC())
+	if err != nil {
+		return errors.NewInternal("failed to end interview")
+	}
+	if !ok {
+		// Lost a race with another end call — report generation already
+		// triggered by the winner, do not spawn a second one.
+		return errors.NewConflict("interview already ended")
+	}
+
+	_ = s.repo.MarkRoomClosed(ctx, interviewID, time.Now().UTC())
+
+	// Trigger report generation async — only on the winning transition.
 	if s.reportSvc != nil && i.JobID.Valid && i.ConsentAI {
 		generatedBy := "system"
 		if i.RecruiterID.Valid {

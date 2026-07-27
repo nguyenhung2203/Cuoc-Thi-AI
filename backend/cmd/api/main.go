@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -18,11 +17,13 @@ import (
 	"backend/internal/ai"
 	"backend/internal/config"
 	"backend/internal/handler"
+	"backend/internal/livekit"
 	"backend/internal/middleware"
 	"backend/internal/pkg/email"
 	"backend/internal/queue"
 	"backend/internal/repository"
 	"backend/internal/service"
+	"backend/internal/storage"
 )
 
 func main() {
@@ -31,6 +32,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	// Fail fast in production when LiveKit credentials are missing/dev
+	// fallbacks — same guard the realtime gateway already has.
+	if _, err := livekit.Load(); err != nil {
+		log.Fatalf("livekit config: %v", err)
+	}
+
+	// File storage: signed download URLs + jailed uploads directory.
+	fileStore, err := storage.NewLocalStore(cfg.UploadDir)
+	if err != nil {
+		log.Fatalf("storage: %v", err)
+	}
+	log.Printf("storage: serving uploads from %s", fileStore.Dir())
+	urlSigner := storage.NewSigner(cfg.FileURLSecret, cfg.FileURLTTL)
 
 	// 2. Connect to PostgreSQL
 	dsn := os.Getenv("DATABASE_URL")
@@ -100,7 +114,7 @@ func main() {
 	companySvc := service.NewCompanyService(companyRepo)
 	jobSvc := service.NewJobService(jobRepo, jdAnalyzer, qGenerator, rubricRepo, questionRepo)
 	candidateSvc := service.NewCandidateService(candidateRepo, jobRepo, cvAnalyzer)
-	fileSvc := service.NewFileService(fileRepo, cfg.PublicBaseURL)
+	fileSvc := service.NewFileService(fileRepo, cfg.PublicBaseURL, fileStore, urlSigner, cfg.MaxUploadBytes)
 	transcriptSvc := service.NewTranscriptService(transcriptRepo, interviewRepo)
 	rubricSvc := service.NewRubricService(rubricRepo)
 	scoreSvc := service.NewScoreService(scoreRepo, transcriptRepo, rubricRepo, interviewRepo, aiOrchestrator)
@@ -113,11 +127,11 @@ func main() {
 		WithMailer(candidateRepo, mailer, cfg.FrontendURL)
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
-	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey)
+	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey, cfg.UploadDir)
 	matchCache := service.NewMatchCacheService(redisClient)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, aiOrchestrator, matchCache, notificationRepo, fileSvc)
-	userSvc := service.NewUserService(userRepo)
+	userSvc := service.NewUserService(userRepo, refreshTokenRepo)
 
 	// 4b. Async queue (Redis/asynq). Best-effort: if Redis is unavailable the
 	// platform still runs, with heavy jobs processed inline instead.
@@ -146,7 +160,7 @@ func main() {
 	mockHandler := handler.NewMockHandler(mockSvc)
 	transcriptHandler := handler.NewTranscriptHandler(transcriptSvc)
 	reportHandler := handler.NewReportHandler(reportSvc)
-	aiAdminHandler := handler.NewAIAdminHandler(promptSvc)
+	aiAdminHandler := handler.NewAIAdminHandler(promptSvc, aiLogSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationRepo)
 	candidatePortalHandler := handler.NewCandidatePortalHandler(candidatePortalSvc, fileSvc)
 	rubricHandler := handler.NewRubricHandler(rubricSvc)
@@ -180,9 +194,11 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
-	workDir, _ := os.Getwd()
-	filesDir := http.Dir(filepath.Join(workDir, "uploads"))
-	r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(filesDir)))
+	// Signed downloads replace the old anonymous FileServer: the HMAC in the
+	// query string is the credential (no directory listing, no eternal URLs).
+	downloadHandler := handler.NewDownloadHandler(fileStore, urlSigner)
+	r.Method(http.MethodGet, "/uploads/*", downloadHandler)
+	r.Method(http.MethodHead, "/uploads/*", downloadHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -224,6 +240,7 @@ func main() {
 				r.Use(middleware.RoleMiddleware("admin"))
 				r.Get("/ai-prompts", aiAdminHandler.ListTemplates)
 				r.Post("/ai-prompts", aiAdminHandler.CreatePromptTemplate)
+				r.Get("/ai-logs", aiAdminHandler.ListAILogs)
 				r.Get("/logs", auditHandler.ListAllGlobalLogs)
 				r.Get("/settings", systemSettingsHandler.GetSettings)
 				r.Put("/settings", systemSettingsHandler.UpdateSettings)
@@ -243,11 +260,14 @@ func main() {
 			r.Route("/companies/{company_id}", func(r chi.Router) {
 				r.Use(middleware.CompanyScopeMiddleware(db))
 
-				companyHandler.Routes(r)
+				companyHandler.ScopedRoutes(r)
 				jobHandler.Routes(r)
 				candidateHandler.Routes(r)
 
-				r.Get("/audit-logs", auditHandler.ListAuditLogs)
+				// Audit logs expose actor identities and before/after data —
+				// company owner/admin only (system admin bypasses inside).
+				r.With(middleware.RequireCompanyRole("owner", "admin")).
+					Get("/audit-logs", auditHandler.ListAuditLogs)
 
 				r.Route("/rubrics", func(r chi.Router) {
 					r.Post("/", rubricHandler.CreateRubric)
@@ -256,8 +276,8 @@ func main() {
 					r.Put("/{rubric_id}", rubricHandler.UpdateRubric)
 					r.Delete("/{rubric_id}", rubricHandler.DeleteRubric)
 				})
-					questionBankHandler.Routes(r)
-					interviewTemplateHandler.Routes(r)
+				questionBankHandler.Routes(r)
+				interviewTemplateHandler.Routes(r)
 
 				r.Route("/interviews", func(r chi.Router) {
 					interviewHandler.ProtectedRoutes(r)
@@ -266,11 +286,13 @@ func main() {
 						transcriptHandler.Routes(r)
 					})
 					r.Route("/{interview_id}/report", func(r chi.Router) {
-						r.Get("/", reportHandler.GetReport)
-						r.Put("/decision", reportHandler.OverrideDecision)
-						r.Post("/retry", reportHandler.RetryReport)
+						r.With(middleware.RequirePermission("interview:read")).Get("/", reportHandler.GetReport)
+						r.With(middleware.RequirePermission("interview:update")).Put("/decision", reportHandler.OverrideDecision)
+						r.With(middleware.RequirePermission("interview:update")).Post("/retry", reportHandler.RetryReport)
 					})
+					// AI endpoints spend Gemini tokens — viewers must not trigger them.
 					r.Route("/{interview_id}/ai", func(r chi.Router) {
+						r.Use(middleware.RequirePermission("interview:update"))
 						r.Post("/score-answer", aiHandler.ScoreAnswer)
 						r.Post("/generate-report", aiHandler.GenerateReport)
 						r.Post("/suggest-follow-up", aiHandler.SuggestFollowUp)

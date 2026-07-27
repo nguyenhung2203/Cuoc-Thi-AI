@@ -49,29 +49,38 @@ const request = async (endpoint, options = {}) => {
 
     // Xử lý lỗi HTTP hoặc lỗi từ cấu trúc trả về (success: false)
     if (!response.ok || data.success === false) {
+      const errorCode = (data.error?.code || '').toUpperCase();
+
+      // Tài khoản bị khoá — phải bắt TRƯỚC nhánh 403 chung để hiện đúng
+      // trang /403?reason=account_blocked (backend trả 403 ACCOUNT_BLOCKED).
+      if (errorCode === 'ACCOUNT_LOCKED' || errorCode === 'ACCOUNT_BLOCKED') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_role');
+        window.location.href = '/403?reason=account_blocked';
+        // Vẫn throw để caller (vd authStore.login) không đọc data.access_token
+        // của response lỗi trong lúc trang đang điều hướng.
+        throw data.error || { message: 'Tài khoản đã bị khoá.' };
+      }
+      if (errorCode === 'ACCOUNT_PENDING') {
+        window.location.href = '/403?reason=pending_approval';
+        throw data.error || { message: 'Tài khoản đang chờ phê duyệt.' };
+      }
+
       // Bắt lỗi 401 Unauthorized -> Đẩy về login (trừ khi đang ở API đăng nhập/đăng ký)
       if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login'; 
+        window.location.href = '/login';
         return;
       }
 
       // Bắt lỗi 403 Forbidden hoặc lỗi cấm quyền -> Đẩy về trang /403 cảnh báo
-      const errorCode = (data.error?.code || '').toUpperCase();
       if ((response.status === 403 || errorCode === 'FORBIDDEN' || errorCode === 'UNAUTHORIZED_ROLE') && !endpoint.includes('/interviews/join')) {
         window.location.href = '/403?reason=unauthorized&attempted=' + encodeURIComponent(window.location.pathname);
         return;
       }
-      if (errorCode === 'ACCOUNT_LOCKED' || errorCode === 'ACCOUNT_BLOCKED') {
-        window.location.href = '/403?reason=account_blocked';
-        return;
-      }
-      if (errorCode === 'ACCOUNT_PENDING') {
-        window.location.href = '/403?reason=pending_approval';
-        return;
-      }
-      
+
       // Quăng lỗi ra ngoài để component tự xử lý (hiển thị Toast)
       const errorPayload = data.error || { message: 'Đã xảy ra lỗi không xác định.' };
       const errorMessages = {
@@ -99,7 +108,12 @@ const request = async (endpoint, options = {}) => {
           if (d.includes('description: failed min')) return 'Mô tả công việc (JD) phải dài ít nhất 10 ký tự.';
           if (d.includes('title: failed min')) return 'Tiêu đề công việc phải dài ít nhất 2 ký tự.';
           if (d.includes('fullname: failed min')) return 'Họ tên phải dài ít nhất 2 ký tự.';
+          if (d.includes('fullname: failed required')) return 'Vui lòng nhập họ tên.';
           if (d.includes('email: failed email')) return 'Địa chỉ email không đúng định dạng.';
+          if (d.includes('email: failed required')) return 'Vui lòng nhập địa chỉ email.';
+          if (d.includes('password: failed min')) return 'Mật khẩu phải dài ít nhất 6 ký tự.';
+          if (d.includes('password: failed required')) return 'Vui lòng nhập mật khẩu.';
+          if (d.includes('name: failed required')) return 'Vui lòng nhập tên.';
           if (d.includes('jobid: failed required')) return 'Vui lòng chọn Vị trí ứng tuyển.';
           if (d.includes('current password is incorrect')) return 'Mật khẩu hiện tại không chính xác.';
           return 'Dữ liệu nhập vào chưa hợp lệ: ' + detail;

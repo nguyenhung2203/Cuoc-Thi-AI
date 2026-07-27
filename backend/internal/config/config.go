@@ -1,8 +1,11 @@
 package config
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -58,6 +61,12 @@ type Config struct {
 	StorageEndpoint  string
 	StorageAccessKey string
 	StorageSecretKey string
+
+	// File uploads / signed download URLs
+	MaxUploadBytes int64         // hard cap for multipart upload bodies
+	UploadDir      string        // directory where uploaded files are stored
+	FileURLSecret  []byte        // HMAC key for signing /uploads/ download URLs
+	FileURLTTL     time.Duration // validity window of a signed download URL
 }
 
 // Load reads .env (if present) and then populates Config from environment
@@ -100,13 +109,50 @@ func Load() (*Config, error) {
 		StorageEndpoint:  getEnv("STORAGE_ENDPOINT", ""),
 		StorageAccessKey: getEnv("STORAGE_ACCESS_KEY", ""),
 		StorageSecretKey: getEnv("STORAGE_SECRET_KEY", ""),
+
+		MaxUploadBytes: parseUploadMB(getEnv("MAX_UPLOAD_MB", "10")),
+		UploadDir:      getEnv("UPLOAD_DIR", "uploads"),
+		FileURLTTL:     parseTTL(getEnv("FILE_URL_TTL", "15m"), 15*time.Minute),
 	}
 
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("config: JWT_SECRET must be set")
 	}
 
+	cfg.FileURLSecret = deriveFileURLSecret(getEnv("FILE_URL_SECRET", ""), cfg.JWTSecret)
+
 	return cfg, nil
+}
+
+// parseUploadMB converts MAX_UPLOAD_MB to bytes, clamped to [1, 100] MB with a
+// fallback of 10 MB on malformed input.
+func parseUploadMB(s string) int64 {
+	mb, err := strconv.Atoi(s)
+	if err != nil || mb < 1 || mb > 100 {
+		mb = 10
+	}
+	return int64(mb) << 20
+}
+
+// parseTTL parses a duration string, returning fallback on malformed input.
+func parseTTL(s string, fallback time.Duration) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
+}
+
+// deriveFileURLSecret returns the HMAC key for signed download URLs. When
+// FILE_URL_SECRET is unset it derives a stable key from JWT_SECRET with domain
+// separation, so file-URL MACs can never be replayed as JWT MACs and URLs
+// survive process restarts.
+func deriveFileURLSecret(explicit, jwtSecret string) []byte {
+	if explicit != "" {
+		return []byte(explicit)
+	}
+	sum := sha256.Sum256([]byte("file-url-signing-v1|" + jwtSecret))
+	return sum[:]
 }
 
 // getEnv returns the environment variable named by key, or fallback if unset/empty.
