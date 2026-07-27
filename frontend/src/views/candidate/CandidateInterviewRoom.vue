@@ -3,6 +3,9 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter, useRoute, onBeforeRouteLeave } from 'vue-router'
 import Button from '../../components/common/AppButton.vue'
 import Modal from '../../components/common/AppModal.vue'
+// Toast trước đây bị dùng trong template mà KHÔNG import — cả entryToast lẫn
+// isLeaving toast chưa từng render được.
+import Toast from '../../components/common/AppToast.vue'
 import { Mic, MicOff, Video, VideoOff, MonitorUp, MessageSquare, PhoneOff, CheckCircle, FileText, ChevronsRight, ChevronsLeft, X, Send } from 'lucide-vue-next'
 import { useLiveKit } from '../../composables/useLiveKit'
 import { useSpeechToText } from '../../composables/useSpeechToText'
@@ -21,7 +24,8 @@ const chatStore = useChatStore()
 const {
   isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn, isScreenSharing,
   localVideoEl, remoteVideoEl,
-  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
+  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect,
+  clearError
 } = useLiveKit()
 
 // Live transcription of THIS candidate's mic (free Web Speech API). Pushes
@@ -272,6 +276,8 @@ onUnmounted(() => {
   <div class="h-screen flex flex-col bg-slate-50 font-sans text-slate-800 overflow-hidden relative">
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
     <Toast v-if="isLeaving" type="info" message="Đang rời phòng phỏng vấn..." :duration="1500" />
+    <!-- Cảnh báo quyền/thiết bị media: duration=0 để bám lại tới khi user xử lý -->
+    <Toast v-if="liveKitError" type="error" :message="liveKitError" :duration="0" @close="clearError()" />
 
     <!-- Top Header -->
     <header class="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-20 shadow-sm shrink-0">

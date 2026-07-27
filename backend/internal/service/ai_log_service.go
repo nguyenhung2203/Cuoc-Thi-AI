@@ -46,3 +46,8 @@ func (s *AILogService) LogAsync(logEntry *models.AIRequestLog) {
 		log.Printf("[AILogService] WARNING: log queue is full, dropping AI log for template %s", logEntry.TemplateID.String)
 	}
 }
+
+// List returns AI request logs matching the filter (admin debugging / cost audit).
+func (s *AILogService) List(ctx context.Context, f repository.AILogFilter) ([]models.AIRequestLog, error) {
+	return s.repo.List(ctx, f)
+}

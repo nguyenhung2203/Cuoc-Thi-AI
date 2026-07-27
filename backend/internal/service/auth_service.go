@@ -59,6 +59,24 @@ func hashToken(token string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// ensureNotBlocked rejects users whose account has been blocked by an admin.
+// Only "blocked" is rejected: "pending" recruiters MUST be able to log in to
+// upload their verification document (RecruiterLayout overlay), and "inactive"
+// users are already filtered out by the deleted_at IS NULL clause in the repo.
+//
+// Callers must check the returned pointer explicitly:
+//
+//	if e := ensureNotBlocked(user); e != nil { return nil, "", e }
+//
+// Never return the result directly through an error interface — a typed-nil
+// *AppError wrapped in error is non-nil.
+func ensureNotBlocked(u *models.User) *errors.AppError {
+	if u != nil && u.Status == models.UserStatusBlocked {
+		return errors.NewAccountBlocked("tài khoản của bạn đã bị khoá, vui lòng liên hệ quản trị viên")
+	}
+	return nil
+}
+
 // stripPort loại bỏ phần :port khỏi RemoteAddr (ví dụ "192.168.1.1:12345" → "192.168.1.1")
 func stripPort(addr string) string {
 	host, _, err := net.SplitHostPort(addr)
@@ -117,8 +135,11 @@ func (s *AuthService) Register(ctx context.Context, req request.RegisterRequest,
 		return nil, "", errors.NewInternal("failed to hash password")
 	}
 
+	// Self-registration may only create recruiter or candidate accounts.
+	// admin (or any other value) is never accepted from client input — the
+	// public /register endpoint must not be a path to privilege escalation.
 	role := models.UserRole(req.Role)
-	if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+	if role != models.RoleRecruiter && role != models.RoleCandidate {
 		role = models.RoleCandidate // default
 	}
 
@@ -180,6 +201,12 @@ func (s *AuthService) Login(ctx context.Context, req request.LoginRequest, ipAdd
 		return nil, "", errors.NewUnauthorized("invalid email or password")
 	}
 
+	// Status check runs AFTER the bcrypt match so callers without valid
+	// credentials cannot enumerate which accounts are blocked.
+	if e := ensureNotBlocked(user); e != nil {
+		return nil, "", e
+	}
+
 	accessToken, _, err := jwt.GenerateTokenPair(
 		user.ID, user.Email, string(user.Role), s.jwtSecret,
 		15*time.Minute, 7*24*time.Hour,
@@ -231,9 +258,11 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRe
 	// Look up user by verified email in PostgreSQL
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		// User not found -> Auto create a real user record in database
+		// User not found -> Auto create a real user record in database.
+		// Only recruiter/candidate may be self-assigned; admin can never be
+		// obtained through this public path (privilege escalation guard).
 		role := models.UserRole(req.Role)
-		if role != models.RoleAdmin && role != models.RoleRecruiter && role != models.RoleCandidate {
+		if role != models.RoleRecruiter && role != models.RoleCandidate {
 			role = models.RoleCandidate
 		}
 		status := models.UserStatusActive
@@ -256,6 +285,11 @@ func (s *AuthService) GoogleLogin(ctx context.Context, req request.GoogleLoginRe
 		}
 	} else if user.FullName == "" && fullName != "" {
 		_ = s.userRepo.UpdateProfile(ctx, user.ID, fullName, avatar)
+	}
+
+	// Google OAuth must not be a side door around an admin block.
+	if e := ensureNotBlocked(user); e != nil {
+		return nil, "", e
 	}
 
 	accessToken, _, err := jwt.GenerateTokenPair(
@@ -406,6 +440,13 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken, ipAddress,
 	user, err := s.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, "", errors.NewUnauthorized("user not found")
+	}
+
+	// Defense-in-depth: blocking an admin-side account also revokes its
+	// refresh tokens, but if that revoke ever fails (or status was changed
+	// directly in the DB) the rotation path must still refuse a session.
+	if e := ensureNotBlocked(user); e != nil {
+		return nil, "", e
 	}
 
 	newAccessToken, _, err := jwt.GenerateTokenPair(

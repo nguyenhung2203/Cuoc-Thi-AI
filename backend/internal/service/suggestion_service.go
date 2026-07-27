@@ -17,11 +17,11 @@ import (
 
 // SuggestionService handles AI follow-up suggestion generation.
 type SuggestionService struct {
-	orchestrator   *AIOrchestratorService
+	orchestrator    *AIOrchestratorService
 	suggestAnalyzer *ai.SuggestFollowUpAnalyzer
-	transcriptRepo *repository.TranscriptRepository
-	interviewRepo  *repository.InterviewRepository
-	jobRepo        *repository.JobRepository
+	transcriptRepo  *repository.TranscriptRepository
+	interviewRepo   *repository.InterviewRepository
+	jobRepo         *repository.JobRepository
 }
 
 func NewSuggestionService(
@@ -69,13 +69,13 @@ func (s *SuggestionService) SuggestFollowUp(
 	var windowItems []response.TranscriptItem
 	for _, t := range transcripts {
 		content := t.Content
-		if t.EditedContent.Valid && t.EditedContent.String != "" {
-			content = t.EditedContent.String
+		if t.EditedContent != nil && *t.EditedContent != "" {
+			content = *t.EditedContent
 		}
-		transcriptLines = append(transcriptLines, fmt.Sprintf("%s: %s", t.SpeakerRole, content))
+		transcriptLines = append(transcriptLines, fmt.Sprintf("%s: %s", t.SpeakerType, content))
 		windowItems = append(windowItems, response.TranscriptItem{
 			ID:      t.ID,
-			Speaker: t.SpeakerRole,
+			Speaker: t.SpeakerType,
 			Content: content,
 			IsFinal: t.IsFinal,
 		})

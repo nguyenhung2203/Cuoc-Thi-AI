@@ -81,6 +81,10 @@ const removeSkill = (index) => {
   profile.value.skills = skillsArray.join(', ')
 }
 
+// v2: đổi key để xoá cache URL tĩnh /uploads/ cũ (đã chết sau khi chuyển
+// sang signed URL); URL trong cache cũ không còn mở được.
+const CV_STORAGE_KEY = 'candidate_cvs_v2'
+
 const uploadedCvs = ref([])
 const fileInput = ref(null)
 const avatarInput = ref(null)
@@ -143,9 +147,10 @@ const handleFileUpload = async (e) => {
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
             targetCv.status = 'done'
-            if (res.data && res.data.cv_url) targetCv.url = res.data.cv_url
-            if (res.data && res.data.parsed_data) targetCv.parsedData = res.data.parsed_data
-            localStorage.setItem('candidate_cvs', JSON.stringify(uploadedCvs.value))
+            // api.service đã bóc envelope (trả về data.data) nên đọc trực tiếp
+            if (res && res.cv_url) targetCv.url = res.cv_url
+            if (res && res.parsed_data) targetCv.parsedData = res.parsed_data
+            localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
           }
         } catch (error) {
           console.error("Upload failed", error)
@@ -162,7 +167,7 @@ const handleFileUpload = async (e) => {
 
 const deleteCv = (id) => {
   uploadedCvs.value = uploadedCvs.value.filter(cv => cv.id !== id)
-  localStorage.setItem('candidate_cvs', JSON.stringify(uploadedCvs.value))
+  localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
   if (fileInput.value) fileInput.value.value = ''
 }
 
@@ -240,23 +245,28 @@ onMounted(async () => {
     profile.value.email = authStore.user.email || ''
   }
 
-  // Load backend profile
+  // Load backend profile (api.service đã bóc envelope — res chính là payload)
   try {
     const res = await candidatePortalService.getProfile()
-    if (res.data) {
-      if (res.data.full_name) profile.value.name = res.data.full_name
-      if (res.data.email) profile.value.email = res.data.email
-      if (res.data.cv_url && res.data.cv_name) {
-        const hasCv = uploadedCvs.value.find(cv => cv.name === res.data.cv_name)
-        if (!hasCv) {
+    if (res) {
+      if (res.full_name) profile.value.name = res.full_name
+      if (res.email) profile.value.email = res.email
+      if (res.cv_url && res.cv_name) {
+        const hasCv = uploadedCvs.value.find(cv => cv.name === res.cv_name)
+        if (hasCv) {
+          // Cập nhật URL đã ký mới nhất thay vì giữ URL cũ đã hết hạn
+          hasCv.url = res.cv_url
+          hasCv.status = 'done'
+          if (res.parsed_data) hasCv.parsedData = res.parsed_data
+        } else {
           uploadedCvs.value.push({
             id: 'db-' + Date.now(),
-            name: res.data.cv_name,
+            name: res.cv_name,
             size: 'N/A',
             date: 'Từ hệ thống',
             status: 'done',
-            url: res.data.cv_url,
-            parsedData: res.data.parsed_data || null
+            url: res.cv_url,
+            parsedData: res.parsed_data || null
           })
         }
       }
@@ -290,10 +300,11 @@ onMounted(async () => {
     profile.value.bio = parsed.bio || profile.value.bio
   }
 
-  const savedCvs = localStorage.getItem('candidate_cvs')
+  const savedCvs = localStorage.getItem(CV_STORAGE_KEY)
   if (savedCvs) {
     const parsedCvs = JSON.parse(savedCvs)
     parsedCvs.forEach(savedCv => {
+      // Bản ghi từ DB (đã có URL ký mới) luôn thắng bản cache cùng tên
       if (!uploadedCvs.value.find(cv => cv.name === savedCv.name)) {
         uploadedCvs.value.push(savedCv)
       }

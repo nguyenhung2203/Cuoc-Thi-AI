@@ -2,7 +2,6 @@ package realtime
 
 import (
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -244,8 +243,10 @@ func (rm *RoomManager) SaveChatMessage(roomID string, msg events.ChatMessagePayl
 		rm.simulatedChat = make(map[string][]events.ChatMessagePayload)
 	}
 	rm.simulatedChat[roomID] = append(rm.simulatedChat[roomID], msg)
-	// In dev mode, replicate chat history across all active rooms so reconnecting Candidate or Recruiter tab sees everything
-	if os.Getenv("LIVEKIT_API_SECRET") == "" || os.Getenv("LIVEKIT_API_SECRET") == "devsecret" {
+	// Dev-only multi-tab demo mirror (REALTIME_DEV_BROADCAST_ALL=true, never
+	// in production) — must match the broadcast gate in chat_handler.go so a
+	// reconnect replay can't leak history a live client never received.
+	if devBroadcastAllRooms() {
 		for id := range rm.rooms {
 			if id != roomID {
 				rm.simulatedChat[id] = append(rm.simulatedChat[id], msg)

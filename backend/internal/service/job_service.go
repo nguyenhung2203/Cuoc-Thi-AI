@@ -224,6 +224,18 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 	safeDescription := utils.TruncateText(job.Description, 15000)
 
 	result, err := s.jdAnalyzer.AnalyzeJD(ctx, safeDescription, job.Title, job.Level.String, job.Department.String, companyID)
+	if err != nil {
+		// Preserve upstream AppErrors (502 circuit breaker, 422 insufficient
+		// data); everything else is an AI outage → 502, not a raw 500.
+		if appErr, ok := errors.IsAppError(err); ok {
+			return appErr
+		}
+		return errors.NewAIServiceError("AI phân tích JD thất bại: " + err.Error())
+	}
+	if result == nil {
+		return errors.NewAIServiceError("AI phân tích JD không trả về kết quả")
+	}
+
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		return errors.NewInternal(fmt.Sprintf("failed to marshal AI analysis result: %v", err))
@@ -314,7 +326,13 @@ func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID str
 
 	result, err := s.qGenerator.GenerateQuestions(ctx, safeDescription, "", "", req.Level, fmt.Sprintf("%d", count), questionTypes, companyID)
 	if err != nil {
-		return nil, errors.NewInternal(fmt.Sprintf("AI question generation failed: %v", err))
+		if appErr, ok := errors.IsAppError(err); ok {
+			return nil, appErr
+		}
+		return nil, errors.NewAIServiceError("AI sinh câu hỏi thất bại: " + err.Error())
+	}
+	if result == nil {
+		return nil, errors.NewAIServiceError("AI sinh câu hỏi không trả về kết quả")
 	}
 
 	var questions []models.QuestionBank

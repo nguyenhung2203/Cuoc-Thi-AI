@@ -46,6 +46,9 @@ func TestErrorConstructors(t *testing.T) {
 		{"NewBadRequest", NewBadRequest, BAD_REQUEST, http.StatusBadRequest},
 		{"NewInternal", NewInternal, INTERNAL_ERROR, http.StatusInternalServerError},
 		{"NewRateLimited", NewRateLimited, RATE_LIMITED, http.StatusTooManyRequests},
+		{"NewAccountBlocked", NewAccountBlocked, ACCOUNT_BLOCKED, http.StatusForbidden},
+		{"NewPayloadTooLarge", NewPayloadTooLarge, PAYLOAD_TOO_LARGE, http.StatusRequestEntityTooLarge},
+		{"NewAIServiceError", NewAIServiceError, AI_SERVICE_ERROR, http.StatusBadGateway},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,6 +63,15 @@ func TestErrorConstructors(t *testing.T) {
 				t.Errorf("msg: got %s, want %s", err.Message, tt.name)
 			}
 		})
+	}
+}
+
+// TestAccountBlockedCode_FrontendContract locks the literal error code the
+// frontend switches on (api.service.js redirects ACCOUNT_BLOCKED to
+// /403?reason=account_blocked). Renaming the constant must fail this test.
+func TestAccountBlockedCode_FrontendContract(t *testing.T) {
+	if ACCOUNT_BLOCKED != "ACCOUNT_BLOCKED" {
+		t.Fatalf("ACCOUNT_BLOCKED constant changed to %q — update frontend/src/services/api.service.js in lockstep", ACCOUNT_BLOCKED)
 	}
 }
 

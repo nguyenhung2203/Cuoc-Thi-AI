@@ -30,7 +30,8 @@ const aiStore = useAiStore()
 const {
   isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn, isScreenSharing,
   localVideoEl, remoteVideoEl,
-  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect
+  connectToRoom, toggleMic, toggleCamera, toggleScreenShare, disconnect: liveKitDisconnect,
+  clearError
 } = useLiveKit()
 
 // Live transcription of THIS recruiter's mic (free Web Speech API). Pushes
@@ -342,6 +343,8 @@ onUnmounted(() => {
     <Toast v-if="entryToast" :type="entryToast.type" :message="entryToast.message" @close="entryToast = null" />
     <Toast v-if="activeToast" :type="activeToast.type" :message="activeToast.message" @close="activeToast = null" />
     <Toast v-if="isEnding" type="success" message="Đã kết thúc phỏng vấn. Đang lưu kết quả..." :duration="1500" />
+    <!-- Cảnh báo quyền/thiết bị media: duration=0 để bám lại tới khi user xử lý -->
+    <Toast v-if="liveKitError" type="error" :message="liveKitError" :duration="0" @close="clearError()" />
     
     <!-- Room Expired/Cancelled Banner -->
     <div v-if="roomStore.status === 'expired'" style="background-color: var(--warning); color: white; padding: 12px 24px; text-align: center; font-size: 14px; font-weight: 600;">

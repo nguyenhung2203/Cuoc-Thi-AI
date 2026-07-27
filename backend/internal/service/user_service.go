@@ -5,15 +5,17 @@ import (
 
 	"backend/internal/dto/response"
 	"backend/internal/pkg/errors"
+	"backend/internal/pkg/logger"
 	"backend/internal/repository"
 )
 
 type UserService struct {
-	userRepo *repository.UserRepository
+	userRepo         *repository.UserRepository
+	refreshTokenRepo repository.RefreshTokenRepository
 }
 
-func NewUserService(userRepo *repository.UserRepository) *UserService {
-	return &UserService{userRepo: userRepo}
+func NewUserService(userRepo *repository.UserRepository, refreshTokenRepo repository.RefreshTokenRepository) *UserService {
+	return &UserService{userRepo: userRepo, refreshTokenRepo: refreshTokenRepo}
 }
 
 func (s *UserService) ListPendingUsers(ctx context.Context) ([]response.UserMeResponse, error) {
@@ -68,14 +70,32 @@ func (s *UserService) ApproveUser(ctx context.Context, userID string) error {
 }
 
 func (s *UserService) UpdateUserStatus(ctx context.Context, userID string, status string) error {
+	// Validate before touching the DB so a bad status never reaches the repo.
+	if status != "active" && status != "blocked" && status != "pending" {
+		return errors.NewBadRequest("invalid status value")
+	}
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil || user == nil {
 		return errors.NewNotFound("user not found")
 	}
-	if status != "active" && status != "blocked" && status != "pending" {
-		return errors.NewBadRequest("invalid status value")
+	if err := s.userRepo.UpdateStatus(ctx, userID, status); err != nil {
+		return errors.NewInternal("failed to update user status")
 	}
-	return s.userRepo.UpdateStatus(ctx, userID, status)
+	s.revokeSessionsIfBlocked(ctx, userID, status)
+	return nil
+}
+
+// revokeSessionsIfBlocked revokes every refresh token of a user who has just
+// been blocked, so their session dies as soon as the access token expires.
+// Best-effort: a revoke failure must not roll back the block itself (the
+// RefreshToken path re-checks status as defense-in-depth).
+func (s *UserService) revokeSessionsIfBlocked(ctx context.Context, userID, newStatus string) {
+	if newStatus != "blocked" || s.refreshTokenRepo == nil {
+		return
+	}
+	if _, err := s.refreshTokenRepo.RevokeAllByUserID(ctx, userID); err != nil {
+		logger.Error("failed to revoke sessions for blocked user", "user_id", userID, "error", err)
+	}
 }
 
 type DashboardStats struct {

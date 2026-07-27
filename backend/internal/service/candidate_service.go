@@ -295,7 +295,13 @@ func (s *CandidateService) ParseCV(ctx context.Context, companyID, candidateID, 
 
 	result, err := s.cvAnalyzer.AnalyzeCV(ctx, safeCVText, jobContext, companyID)
 	if err != nil {
-		return errors.NewInternal(fmt.Sprintf("failed to analyze CV with AI: %v", err))
+		if appErr, ok := errors.IsAppError(err); ok {
+			return appErr
+		}
+		return errors.NewAIServiceError("AI phân tích CV thất bại: " + err.Error())
+	}
+	if result == nil {
+		return errors.NewAIServiceError("AI phân tích CV không trả về kết quả")
 	}
 
 	resultBytes, err := json.Marshal(result)

@@ -1360,8 +1360,10 @@ Response:
 ## 12.2. Get signed download URL
 
 ```http
-GET /files/:file_id/download-url
+GET /files/:file_id/signed-url?company_id=uuid
 ```
+
+`company_id` là query param bắt buộc khi người gọi là recruiter (BE dùng để kiểm tra quyền truy cập file theo company). Admin không cần `company_id`.
 
 Response:
 
@@ -1369,7 +1371,7 @@ Response:
 {
   "success": true,
   "data": {
-    "download_url": "signed-url",
+    "url": "signed-url",
     "expires_at": "2026-06-23T10:00:00Z"
   }
 }

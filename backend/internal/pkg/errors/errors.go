@@ -17,6 +17,10 @@ const (
 	REALTIME_ERROR   = "REALTIME_ERROR"
 	INTERNAL_ERROR   = "INTERNAL_ERROR"
 	BAD_REQUEST      = "BAD_REQUEST"
+	// ACCOUNT_BLOCKED must stay in sync with the frontend check in
+	// frontend/src/services/api.service.js (redirect to /403?reason=account_blocked).
+	ACCOUNT_BLOCKED   = "ACCOUNT_BLOCKED"
+	PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
 )
 
 // AppError is a structured application error with an HTTP status code.
@@ -111,6 +115,33 @@ func NewRateLimited(msg string) *AppError {
 		Code:       RATE_LIMITED,
 		Message:    msg,
 		HTTPStatus: http.StatusTooManyRequests,
+	}
+}
+
+// NewAccountBlocked returns a 403 AppError for blocked user accounts.
+func NewAccountBlocked(msg string) *AppError {
+	return &AppError{
+		Code:       ACCOUNT_BLOCKED,
+		Message:    msg,
+		HTTPStatus: http.StatusForbidden,
+	}
+}
+
+// NewPayloadTooLarge returns a 413 AppError for oversized request bodies.
+func NewPayloadTooLarge(msg string) *AppError {
+	return &AppError{
+		Code:       PAYLOAD_TOO_LARGE,
+		Message:    msg,
+		HTTPStatus: http.StatusRequestEntityTooLarge,
+	}
+}
+
+// NewAIServiceError returns a 502 AppError for upstream AI failures.
+func NewAIServiceError(msg string) *AppError {
+	return &AppError{
+		Code:       AI_SERVICE_ERROR,
+		Message:    msg,
+		HTTPStatus: http.StatusBadGateway,
 	}
 }
 

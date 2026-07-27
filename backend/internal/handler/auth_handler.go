@@ -13,6 +13,7 @@ import (
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	pkgresponse "backend/internal/pkg/response"
+	"backend/internal/pkg/validator"
 	"backend/internal/service"
 )
 
@@ -86,6 +87,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req request.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		pkgresponse.Error(w, errors.NewBadRequest("invalid request body"), "")
+		return
+	}
+	// Struct-tag validation (required/email/min=6) must run regardless of the
+	// OTP gate — with OTP disabled nothing else rejects malformed input.
+	if msgs := validator.Validate(&req); msgs != nil {
+		pkgresponse.Error(w, errors.NewValidation("validation failed", msgs), "")
 		return
 	}
 
