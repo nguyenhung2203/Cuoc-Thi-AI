@@ -108,14 +108,7 @@ func (s *Server) handleMockLive(w http.ResponseWriter, r *http.Request) {
 		_ = conn.WriteJSON(m)
 	}
 
-	// Prompt Gemini to greet first so the candidate hears a question immediately.
-	_ = session.SendClientContent(genai.LiveClientContentInput{
-		Turns: []*genai.Content{{
-			Role:  "user",
-			Parts: []*genai.Part{{Text: "Xin chào, hãy bắt đầu buổi phỏng vấn và đặt câu hỏi đầu tiên cho tôi."}},
-		}},
-		TurnComplete: genai.Ptr(true),
-	})
+	// We will wait for the client to send a 'start_interview' message to trigger the greeting.
 
 	// Gemini -> browser pump.
 	go pumpGeminiToBrowser(ctx, cancel, session, send)
@@ -202,6 +195,14 @@ func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *w
 					TurnComplete: genai.Ptr(true),
 				})
 			}
+		case "start_interview":
+			_ = session.SendClientContent(genai.LiveClientContentInput{
+				Turns: []*genai.Content{{
+					Role:  "user",
+					Parts: []*genai.Part{{Text: "Xin chào, tôi đã sẵn sàng. Hãy bắt đầu buổi phỏng vấn và đặt câu hỏi đầu tiên."}},
+				}},
+				TurnComplete: genai.Ptr(true),
+			})
 		case "close":
 			return
 		}
@@ -220,7 +221,12 @@ func pumpGeminiToBrowser(ctx context.Context, cancel context.CancelFunc, session
 
 		resp, err := session.Receive()
 		if err != nil {
-			// Live session closed or errored.
+			// Surface unexpected Gemini disconnects instead of silently ending the
+			// browser socket after only a partial transcription has arrived.
+			if ctx.Err() == nil {
+				log.Printf("[mock-live] gemini receive failed: %v", err)
+				send(mockLiveServerMsg{Type: "error", Message: "Kết nối AI bị gián đoạn. Vui lòng bắt đầu lại phiên luyện tập."})
+			}
 			return
 		}
 		if resp == nil || resp.ServerContent == nil {
@@ -252,9 +258,6 @@ func pumpGeminiToBrowser(ctx context.Context, cancel context.CancelFunc, session
 						Type: "audio",
 						Data: base64.StdEncoding.EncodeToString(part.InlineData.Data),
 					})
-				}
-				if part.Text != "" {
-					send(mockLiveServerMsg{Type: "transcript", Role: "ai", Text: part.Text})
 				}
 			}
 		}

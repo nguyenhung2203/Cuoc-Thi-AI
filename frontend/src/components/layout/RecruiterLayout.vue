@@ -18,6 +18,7 @@ const isCollapsed = ref(false)
 const uploading = ref(false)
 const currentTheme = ref(localStorage.getItem('app_theme') || 'light')
 const currentLang = computed(() => langStore.lang)
+const isRoomView = computed(() => route.path.includes('/recruiter-room'))
 
 const notifications = computed(() => notificationStore.notifications)
 const unreadCount = computed(() => notificationStore.unreadCount)
@@ -212,7 +213,7 @@ const currentMenu = computed(() => recruiterMenu)
     
     <!-- Main Content -->
     <main class="rc-main custom-scrollbar">
-      <header v-if="!route.path.includes('/recruiter-room')" class="rc-header">
+      <header v-if="!isRoomView" class="rc-header">
         <!-- Language Selector Dropdown -->
         <div style="position: relative; cursor: pointer;" @click.stop="showLangMenu = !showLangMenu; showNotifications = false">
           <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background-color: var(--surface-soft); border: 1px solid var(--border); transition: all 0.2s; font-size: 13px; font-weight: 600; color: var(--text-main)" class="hover-border">
@@ -284,9 +285,11 @@ const currentMenu = computed(() => recruiterMenu)
       </header>
       
       <!-- Page Content -->
-      <div :class="route.path.includes('/recruiter-room') ? 'flex-1 p-0 overflow-hidden flex flex-col' : 'flex-1 p-6 lg:p-8'">
-        <div :class="route.path.includes('/recruiter-room') ? 'w-full h-full flex-1 flex flex-col' : 'max-w-7xl mx-auto'">
-          <router-view />
+      <div :class="isRoomView ? 'flex-1 p-0 overflow-hidden flex flex-col' : 'flex-1 p-6 lg:p-8'">
+        <div :class="isRoomView ? 'w-full h-full flex-1 flex flex-col' : 'max-w-7xl mx-auto'">
+          <router-view v-slot="{ Component }">
+            <component :is="Component" :key="route.path" />
+          </router-view>
         </div>
       </div>
     </main>

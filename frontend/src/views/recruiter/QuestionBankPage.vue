@@ -9,6 +9,7 @@ import Input from '../../components/common/AppInput.vue'
 import { Plus, Search, Filter, Layers, Edit, Trash2, Sparkles, RefreshCw } from 'lucide-vue-next'
 import { questionBankService } from '../../services/questionBank.service'
 import { authStore } from '../../stores/auth.store'
+import { hasDuplicateNormalized, isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const questions = ref([])
 const loading = ref(true)
@@ -33,6 +34,8 @@ const deletingId = ref(null)
 const editingId = ref(null)
 const saving = ref(false)
 const toast = ref(null)
+const formErrors = ref({})
+const generateCount = ref(10)
 const newQuestion = ref({
   text: '',
   role: 'All',
@@ -95,7 +98,24 @@ const openCreate = () => {
 }
 
 const handleCreate = async () => {
-  if (!newQuestion.value.text) return
+  if (saving.value) return
+  const values = { ...newQuestion.value, text: normalizeText(newQuestion.value.text) }
+  const validation = validateForm(values, {
+    text: [
+      (value) => requiredTrim(value, 'Vui lòng nhập nội dung câu hỏi.'),
+      (value) => minLength(value, 10, 'Câu hỏi phải có ít nhất 10 ký tự.'),
+      (value) => maxLength(value, 2000, 'Câu hỏi không được vượt quá 2.000 ký tự.'),
+    ],
+    level: [(value) => isOneOf(value, ['Fresher', 'Junior', 'Middle', 'Senior'], 'Cấp độ không hợp lệ.')],
+    type: [(value) => isOneOf(value, ['Technical', 'Behavioral', 'System Design', 'Custom'], 'Loại câu hỏi không hợp lệ.')],
+  })
+  if (!editingId.value && hasDuplicateNormalized([...questions.value.map(item => item.text), values.text])) {
+    validation.errors.text = 'Câu hỏi này đã tồn tại trong kho.'
+    validation.isValid = false
+  }
+  formErrors.value = validation.errors
+  if (!validation.isValid) return
+  newQuestion.value.text = values.text
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -141,9 +161,14 @@ const confirmDelete = async () => {
 const handleGenerateAI = async () => {
   const companyId = authStore.user?.companies?.[0]?.id
   if (!companyId) return
+  const count = Number(generateCount.value)
+  if (!Number.isInteger(count) || count < 1 || count > 20) {
+    toast.value = { type: 'error', message: 'Số câu hỏi AI phải nằm trong khoảng từ 1 đến 20.' }
+    return
+  }
   aiGenerating.value = true
   try {
-    await questionBankService.generateWithAI(companyId, null, { count: 10, level: filterLevel.value || 'middle' })
+    await questionBankService.generateWithAI(companyId, null, { count, level: filterLevel.value || 'middle' })
     toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
     await loadQuestions()
   } catch (err) {

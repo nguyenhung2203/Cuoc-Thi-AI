@@ -1,4 +1,46 @@
 import { ref } from 'vue'
+import { normalizeText } from '../utils/validators.js'
+
+const MAX_TRANSCRIPT_ENTRIES = 200
+const MAX_TRANSCRIPT_TEXT = 5000
+const ALLOWED_ROLES = new Set(['frontend', 'backend', 'fullstack', 'ai_ml', 'devops', 'pm', 'mobile', 'qa', 'custom'])
+const ALLOWED_LEVELS = new Set(['fresher', 'junior', 'middle', 'senior', 'lead'])
+
+const INTERNAL_AI_BLOCKS = [
+  /<analysis>[\s\S]*?<\/analysis>/gi,
+  /<thinking>[\s\S]*?<\/thinking>/gi,
+  /\*\*(?:assessing|evaluating|analyzing|analysis)[^*]*\*\*\s*/gi,
+]
+
+const INTERNAL_AI_PATTERNS = [
+  /\bchain[- ]of[- ]thought\b/i,
+  /\binternal (?:reasoning|analysis|thoughts?)\b/i,
+  /\b(?:system|developer) (?:prompt|instruction)s?\b/i,
+  /\b(?:assistant )?analysis\s*:/i,
+  /\b(?:reasoning|thought process)\s*:/i,
+  /\b(?:i|we) need to\b/i,
+  /\bi should\b/i,
+  /\blet(?:'|’)s craft\b/i,
+  /\bfinal answer\b/i,
+  /\bassessing\s+.+\s+proficiency\b/i,
+  /\bi(?:'|’)m noting\b/i,
+  /\bnow,? i(?:'|’)ll dive into\b/i,
+]
+
+export function sanitizeLiveTranscriptText(role, text) {
+  if (text == null) return ''
+
+  let clean = String(text)
+  if (role === 'ai') {
+    for (const block of INTERNAL_AI_BLOCKS) clean = clean.replace(block, '')
+    if (INTERNAL_AI_PATTERNS.some(pattern => pattern.test(clean))) return ''
+  }
+
+  // Preserve whitespace at streaming-chunk boundaries. Gemini commonly starts
+  // the next transcript chunk with a space; trimming each chunk would produce
+  // joined Vietnamese words such as "bắtđầunhé".
+  return clean
+}
 
 /**
  * useGeminiLive — drives a spoken, real-time mock interview through the
@@ -44,12 +86,15 @@ export function useGeminiLive() {
   // Append transcript text, merging consecutive same-role fragments into one
   // bubble so streaming partials read naturally.
   const pushTranscript = (role, text) => {
-    if (!text) return
+    const cleanText = sanitizeLiveTranscriptText(role, text).slice(0, MAX_TRANSCRIPT_TEXT)
+    if (!cleanText.trim()) return
+
     const last = transcript.value[transcript.value.length - 1]
     if (last && last.role === role && !last.done) {
-      last.text += text
+      last.text = (last.text + cleanText).slice(0, MAX_TRANSCRIPT_TEXT)
     } else {
-      transcript.value.push({ role, text, done: false })
+      transcript.value.push({ role, text: cleanText.trimStart(), done: false })
+      if (transcript.value.length > MAX_TRANSCRIPT_ENTRIES) transcript.value.splice(0, transcript.value.length - MAX_TRANSCRIPT_ENTRIES)
     }
   }
 
@@ -59,8 +104,14 @@ export function useGeminiLive() {
   }
 
   async function start({ role, level } = {}) {
+    if (ws && [WebSocket.CONNECTING, WebSocket.OPEN].includes(ws.readyState)) return
     error.value = null
     transcript.value = []
+    const normalizedRole = normalizeText(role).slice(0, 100)
+    const normalizedLevel = normalizeText(level).toLowerCase()
+    if (!normalizedRole) throw new Error('Vị trí phỏng vấn không hợp lệ.')
+    if (!ALLOWED_LEVELS.has(normalizedLevel)) throw new Error('Cấp độ phỏng vấn không hợp lệ.')
+    const roleParam = ALLOWED_ROLES.has(normalizedRole.toLowerCase()) ? normalizedRole.toLowerCase() : normalizedRole
     try {
       await setupAudio()
     } catch (e) {
@@ -69,8 +120,8 @@ export function useGeminiLive() {
     }
 
     const q = new URLSearchParams()
-    if (role) q.set('role', role)
-    if (level) q.set('level', level)
+    q.set('role', roleParam)
+    q.set('level', normalizedLevel)
     ws = new WebSocket(`${wsBase()}/ws/mock-live?${q.toString()}`)
     ws.binaryType = 'arraybuffer'
 
@@ -83,9 +134,16 @@ export function useGeminiLive() {
   function onServerMessage(ev) {
     let msg
     try { msg = JSON.parse(ev.data) } catch { return }
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return
+    if (msg.type === 'transcript' && (!['ai', 'candidate'].includes(msg.role) || typeof msg.text !== 'string')) return
+    if (msg.type === 'error' && typeof msg.message !== 'string') return
+    if (msg.type === 'audio' && typeof msg.data !== 'string') return
     switch (msg.type) {
       case 'ready':
         listening.value = true
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'start_interview' }))
+        }
         break
       case 'audio':
         playChunk(msg.data)
@@ -132,7 +190,7 @@ export function useGeminiLive() {
     micNode = new AudioWorkletNode(micCtx, 'mic-capture-processor')
     micNode.port.onmessage = (e) => {
       // e.data is a PCM16 ArrayBuffer @16kHz — forward as base64.
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN && isRecording.value) {
         ws.send(JSON.stringify({ type: 'audio', data: arrayBufferToBase64(e.data) }))
       }
     }
@@ -170,8 +228,11 @@ export function useGeminiLive() {
     levelRAF = requestAnimationFrame(tick)
   }
 
+  const isRecording = ref(false)
+
   // Tell the AI the candidate finished speaking (commit the turn).
   function commitTurn() {
+    isRecording.value = false
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'end' }))
     }
@@ -199,11 +260,12 @@ export function useGeminiLive() {
     connected.value = false
     listening.value = false
     aiSpeaking.value = false
+    isRecording.value = false
     audioLevel.value = 0
   }
 
   return {
-    connected, aiSpeaking, listening, error, transcript, audioLevel,
+    connected, aiSpeaking, listening, error, transcript, audioLevel, isRecording,
     start, stop, commitTurn, sendText,
   }
 }

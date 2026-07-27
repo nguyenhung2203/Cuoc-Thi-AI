@@ -4,6 +4,8 @@
  * Không dùng axios để tránh thay đổi package.json gây conflict cho team.
  */
 
+import { normalizeValidationErrors } from '../utils/validators.js';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 
 // Lấy Token từ LocalStorage
@@ -72,7 +74,24 @@ const request = async (endpoint, options = {}) => {
       
       // Quăng lỗi ra ngoài để component tự xử lý (hiển thị Toast)
       const errorPayload = data.error || { message: 'Đã xảy ra lỗi không xác định.' };
-      
+      const errorMessages = {
+        INVALID_CURRENT_PASSWORD: 'Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra và thử lại.',
+        INVALID_CREDENTIALS: 'Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.',
+        EMAIL_ALREADY_EXISTS: 'Email này đã được sử dụng.',
+        INVALID_OTP: 'Mã OTP không chính xác.',
+        OTP_EXPIRED: 'Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.',
+        FILE_TOO_LARGE: 'Tệp vượt quá dung lượng cho phép.',
+        UNSUPPORTED_FILE_TYPE: 'Định dạng tệp không được hỗ trợ.',
+        ALREADY_APPLIED: 'Bạn đã ứng tuyển công việc này.',
+        JOB_CLOSED: 'Công việc này đã đóng và không còn nhận hồ sơ.',
+        INTERVIEW_CONFLICT: 'Thời gian phỏng vấn bị trùng với một lịch đã có.',
+      };
+      if (errorMessages[errorCode]) errorPayload.message = errorMessages[errorCode];
+      if (/current password is incorrect/i.test(errorPayload.message || '')) {
+        errorPayload.message = errorMessages.INVALID_CURRENT_PASSWORD;
+      }
+      errorPayload.validationErrors = normalizeValidationErrors(errorPayload);
+
       // Tự động dịch lỗi Validation từ Backend sang Tiếng Việt
       if (errorPayload.message === 'validation failed' && Array.isArray(errorPayload.details)) {
         const translatedDetails = errorPayload.details.map(detail => {
@@ -82,6 +101,7 @@ const request = async (endpoint, options = {}) => {
           if (d.includes('fullname: failed min')) return 'Họ tên phải dài ít nhất 2 ký tự.';
           if (d.includes('email: failed email')) return 'Địa chỉ email không đúng định dạng.';
           if (d.includes('jobid: failed required')) return 'Vui lòng chọn Vị trí ứng tuyển.';
+          if (d.includes('current password is incorrect')) return 'Mật khẩu hiện tại không chính xác.';
           return 'Dữ liệu nhập vào chưa hợp lệ: ' + detail;
         });
         errorPayload.message = translatedDetails.join(' ');

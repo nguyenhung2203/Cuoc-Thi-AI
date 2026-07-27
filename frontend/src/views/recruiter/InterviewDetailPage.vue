@@ -10,6 +10,7 @@ import { interviewService } from '../../services/interview.service'
 import { jobService } from '../../services/job.service'
 import { candidateService } from '../../services/candidate.service'
 import { authStore } from '../../stores/auth.store'
+import { maxLength, normalizeText, requiredTrim, isValidId, isUrl, isValidDate } from '../../utils/validators.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -70,11 +71,19 @@ const savingNote = ref(false)
 const sendingReminder = ref(false)
 
 const handleSaveNotes = async () => {
+  if (savingNote.value) return
+  const normalizedNote = normalizeText(noteContent.value)
+  const noteError = requiredTrim(normalizedNote, 'Vui lòng nhập ghi chú.') || maxLength(normalizedNote, 5000, 'Ghi chú không được vượt quá 5.000 ký tự.')
+  if (noteError) {
+    toast.value = { type: 'error', message: noteError }
+    return
+  }
   const companyId = authStore.user?.companies?.[0]?.id
   if (!companyId) return
   savingNote.value = true
   try {
-    await interviewService.updateNotes(companyId, id, noteContent.value || '')
+    await interviewService.updateNotes(companyId, id, normalizedNote)
+    noteContent.value = normalizedNote
     toast.value = { type: 'success', message: 'Ghi chú đã được lưu thành công!' }
   } catch (err) {
     toast.value = { type: 'error', message: 'Lỗi lưu ghi chú: ' + (err.message || 'Không xác định') }
@@ -98,9 +107,8 @@ const handleSendReminder = async () => {
 }
 
 const dateObj = computed(() => {
-  if (!interview.value || !interview.value.datetime) return null;
-  const d = new Date(interview.value.datetime);
-  return isNaN(d.getTime()) ? null : d;
+  if (!interview.value || !isValidDate(interview.value.datetime)) return null
+  return new Date(interview.value.datetime)
 })
 </script>
 

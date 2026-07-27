@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { publicService } from '../../services/public.service'
+import { validateFile } from '../../utils/validators.js'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import { authStore } from '../../stores/auth.store'
 import Card from '../../components/common/AppCard.vue'
@@ -19,6 +20,7 @@ const job = ref(null)
 const company = ref(null)
 const loading = ref(true)
 const submitting = ref(false)
+const cvError = ref('')
 const toast = ref(null)
 
 const cvFile = ref(null)
@@ -97,14 +99,26 @@ onMounted(async () => {
 
 const validateAndSetFile = (file) => {
   if (!file) return
-  const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg']
-  if (validTypes.includes(file.type)) {
-    cvFile.value = file
+  const error = validateFile(file, {
+    required: true,
+    maxBytes: 5 * 1024 * 1024,
+    mimeTypes: ['application/pdf', 'image/png', 'image/jpeg'],
+    extensions: ['pdf', 'png', 'jpg', 'jpeg'],
+    typeMessage: 'Vui lòng chọn file PDF, PNG hoặc JPG.',
+    sizeMessage: 'CV không được vượt quá 5MB.',
+  })
+  cvError.value = error
+  if (error) {
+    cvFile.value = null
     if (cvPreviewUrl.value) URL.revokeObjectURL(cvPreviewUrl.value)
-    cvPreviewUrl.value = URL.createObjectURL(file)
-  } else {
-    toast.value = { type: 'error', message: 'Vui lòng chọn file PDF, PNG hoặc JPG.' }
+    cvPreviewUrl.value = null
+    toast.value = { type: 'error', message: error }
+    return
   }
+
+  cvFile.value = file
+  if (cvPreviewUrl.value) URL.revokeObjectURL(cvPreviewUrl.value)
+  cvPreviewUrl.value = URL.createObjectURL(file)
 }
 
 const handleFileUpload = (e) => {
@@ -122,6 +136,7 @@ const requireLogin = () => {
 }
 
 const submitApplication = async () => {
+  if (submitting.value) return
   if (!isLoggedIn.value) {
     requireLogin()
     return
@@ -490,6 +505,7 @@ const scrollToApply = () => {
                 </div>
               </div>
               <input type="file" ref="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display: none" @change="handleFileUpload" />
+          <p v-if="cvError" class="error-text mt-2">{{ cvError }}</p>
             </div>
 
             <Button variant="primary" style="width: 100%" :loading="submitting" @click="submitApplication">

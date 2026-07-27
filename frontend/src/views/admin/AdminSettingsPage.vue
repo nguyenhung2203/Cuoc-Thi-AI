@@ -4,6 +4,7 @@ import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
 import { usePlatformStore } from '../../stores/platform.store'
 import { Settings, Sliders, Bot, Shield, Save, RefreshCw, Plus, Edit3, CheckCircle2, AlertCircle, Trash2, Cpu, Key, FileText, Bell } from 'lucide-vue-next'
+import { isEmail, isOneOf, isUrl, maxLength, normalizeText, requiredTrim } from '../../utils/validators.js'
 
 const platformStore = usePlatformStore()
 
@@ -85,6 +86,30 @@ const fetchSettings = async () => {
 }
 
 const saveSettings = async () => {
+  if (saving.value) return
+  settings.system_name = normalizeText(settings.system_name)
+  settings.support_email = normalizeText(settings.support_email)
+  settings.brand_logo_url = normalizeText(settings.brand_logo_url)
+  let validationError = requiredTrim(settings.system_name, 'Vui lòng nhập tên hệ thống.')
+    || maxLength(settings.system_name, 255, 'Tên hệ thống không được vượt quá 255 ký tự.')
+    || requiredTrim(settings.support_email, 'Vui lòng nhập email hỗ trợ.')
+    || isEmail(settings.support_email)
+  if (!validationError && settings.brand_logo_url) validationError = isUrl(settings.brand_logo_url)
+  const numericRules = [
+    ['Dung lượng upload', settings.max_upload_size_mb, 1, 1024],
+    ['Điểm đạt', settings.default_passing_score, 0, 100],
+    ['Thời hạn JWT', settings.jwt_token_expiry_hours, 1, 720],
+    ['Thời gian lưu thông báo', settings.notification_ttl_days, 1, 3650],
+    ['Số thông báo tối đa', settings.notification_max_per_user, 1, 10000],
+  ]
+  for (const [label, value, min, max] of numericRules) {
+    const number = Number(value)
+    if (!validationError && (!Number.isFinite(number) || number < min || number > max)) validationError = `${label} phải nằm trong khoảng ${min} đến ${max}.`
+  }
+  if (validationError) {
+    errorMessage.value = validationError
+    return
+  }
   saving.value = true
   successMessage.value = ''
   errorMessage.value = ''
@@ -129,8 +154,16 @@ const openEditPromptModal = (tmpl) => {
 }
 
 const savePromptTemplate = async () => {
-  if (!editingPrompt.name || !editingPrompt.content) {
-    errorMessage.value = 'Vui lòng nhập tên và nội dung prompt'
+  if (saving.value) return
+  editingPrompt.name = normalizeText(editingPrompt.name)
+  editingPrompt.content = normalizeText(editingPrompt.content)
+  const promptError = requiredTrim(editingPrompt.name, 'Vui lòng nhập tên prompt.')
+    || maxLength(editingPrompt.name, 255, 'Tên prompt không được vượt quá 255 ký tự.')
+    || requiredTrim(editingPrompt.content, 'Vui lòng nhập nội dung prompt.')
+    || maxLength(editingPrompt.content, 50000, 'Nội dung prompt không được vượt quá 50.000 ký tự.')
+    || isOneOf(editingPrompt.model, ['gemini-2.5-flash', 'gemini-2.0-flash-live-001'], 'Mô hình AI không hợp lệ.')
+  if (promptError) {
+    errorMessage.value = promptError
     setTimeout(() => { errorMessage.value = '' }, 3000)
     return
   }

@@ -9,6 +9,7 @@ import Badge from '../../components/common/AppBadge.vue'
 import { Plus, Edit, Trash2, Layers, ChevronDown, ChevronUp, Scale } from 'lucide-vue-next'
 import { rubricService } from '../../services/rubric.service'
 import { authStore } from '../../stores/auth.store'
+import { hasDuplicateNormalized, maxLength, minLength, normalizeText, requiredTrim } from '../../utils/validators.js'
 
 const rubrics = ref([])
 const loading = ref(true)
@@ -19,6 +20,7 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const deletingId = ref(null)
+const formError = ref('')
 const editingRubricId = ref(null)
 
 const newRubric = ref({
@@ -75,12 +77,37 @@ const removeCriteria = (idx) => {
 
 const totalWeight = () => newRubric.value.criteria.reduce((s, c) => s + Number(c.weight || 0), 0)
 
-const handleCreate = async () => {
-  if (!newRubric.value.name) return
-  if (totalWeight() !== 100) {
-    toast.value = { type: 'error', message: `Tổng trọng số phải là 100%. Hiện tại: ${totalWeight()}%` }
-    return
+const validateRubric = () => {
+  formError.value = ''
+  const name = normalizeText(newRubric.value.name)
+  const criteria = Array.isArray(newRubric.value.criteria) ? newRubric.value.criteria : []
+  let error = requiredTrim(name, 'Vui lòng nhập tên Rubric.')
+    || minLength(name, 2, 'Tên Rubric phải có ít nhất 2 ký tự.')
+    || maxLength(name, 255, 'Tên Rubric không được vượt quá 255 ký tự.')
+  if (!error && criteria.length === 0) error = 'Rubric phải có ít nhất một tiêu chí.'
+  if (!error && hasDuplicateNormalized(criteria.map(item => item.name))) error = 'Tên các tiêu chí không được trùng nhau.'
+  for (const criterion of criteria) {
+    if (error) break
+    criterion.name = normalizeText(criterion.name)
+    criterion.scoring_guide = normalizeText(criterion.scoring_guide)
+    error = requiredTrim(criterion.name, 'Vui lòng nhập tên cho tất cả tiêu chí.')
+      || maxLength(criterion.name, 255, 'Tên tiêu chí không được vượt quá 255 ký tự.')
+      || maxLength(criterion.scoring_guide, 5000, 'Hướng dẫn chấm điểm không được vượt quá 5.000 ký tự.')
+    const weight = Number(criterion.weight)
+    const minScore = Number(criterion.min_score)
+    const maxScore = Number(criterion.max_score)
+    if (!error && (!Number.isFinite(weight) || weight <= 0 || weight > 100)) error = 'Trọng số mỗi tiêu chí phải lớn hơn 0 và không vượt quá 100.'
+    if (!error && (!Number.isFinite(minScore) || !Number.isFinite(maxScore) || minScore >= maxScore)) error = 'Điểm tối thiểu phải nhỏ hơn điểm tối đa.'
   }
+  if (!error && totalWeight() !== 100) error = `Tổng trọng số phải là 100%. Hiện tại: ${totalWeight()}%`
+  formError.value = error
+  if (error) toast.value = { type: 'error', message: error }
+  newRubric.value.name = name
+  return !error
+}
+
+const handleCreate = async () => {
+  if (saving.value || !validateRubric()) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -131,11 +158,7 @@ const openEditModal = async (rubric) => {
 }
 
 const handleUpdate = async () => {
-  if (!newRubric.value.name) return
-  if (totalWeight() !== 100) {
-    toast.value = { type: 'error', message: `Tổng trọng số phải là 100%. Hiện tại: ${totalWeight()}%` }
-    return
-  }
+  if (saving.value || !editingRubricId.value || !validateRubric()) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id

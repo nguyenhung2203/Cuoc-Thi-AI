@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
+import { isEmail, normalizeEmail, requiredTrim, validateForm } from '../../utils/validators.js'
 import { ShieldCheck, Lock, Mail, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -9,15 +10,28 @@ const router = useRouter()
 const email = ref('')
 const password = ref('')
 const error = ref('')
+const fieldErrors = ref({})
 const loading = ref(false)
 
 const handleLogin = async (e) => {
   e.preventDefault()
-  if (!email.value || !password.value) {
-    error.value = 'Vui lòng nhập đầy đủ email và mật khẩu'
+  if (loading.value) return
+
+  const normalizedEmail = normalizeEmail(email.value)
+  const validation = validateForm(
+    { email: normalizedEmail, password: password.value },
+    {
+      email: [(value) => requiredTrim(value, 'Vui lòng nhập email quản trị.'), isEmail],
+      password: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu.')],
+    },
+  )
+  fieldErrors.value = validation.errors
+  if (!validation.isValid) {
+    error.value = ''
     return
   }
-  
+
+  email.value = normalizedEmail
   error.value = ''
   loading.value = true
 
@@ -31,11 +45,9 @@ const handleLogin = async (e) => {
       error.value = 'Tài khoản của bạn không có quyền truy cập vào Cổng Quản trị viên (Admin Portal).'
     }
   } catch (err) {
-    if (err.message === 'invalid email or password') {
-      error.value = 'Email hoặc mật khẩu không chính xác.'
-    } else {
-      error.value = err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại.'
-    }
+    error.value = err.code === 'INVALID_CREDENTIALS'
+      ? 'Email hoặc mật khẩu không chính xác.'
+      : (err.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại.')
   } finally {
     loading.value = false
   }
@@ -60,35 +72,39 @@ const handleLogin = async (e) => {
       
       <!-- Login Card -->
       <div class="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl">
-        <form @submit="handleLogin" class="space-y-5">
+        <form @submit="handleLogin" novalidate class="space-y-5">
           <div>
             <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Email Quản trị</label>
             <div class="relative">
               <Mail size="18" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
               <input 
-                type="email" 
-                v-model="email" 
+                type="email"
+                v-model="email"
                 required
+                :class="fieldErrors.email ? 'border-red-500 focus:ring-red-500' : ''"
                 class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 placeholder="admin@wemake.vn"
               />
             </div>
+            <p v-if="fieldErrors.email" class="mt-1.5 text-xs font-medium text-red-400">{{ fieldErrors.email }}</p>
           </div>
-          
+
           <div>
             <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Mật khẩu</label>
             <div class="relative">
               <Lock size="18" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
               <input 
-                type="password" 
-                v-model="password" 
+                type="password"
+                v-model="password"
                 required
+                :class="fieldErrors.password ? 'border-red-500 focus:ring-red-500' : ''"
                 class="w-full pl-11 pr-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
                 placeholder="••••••••"
               />
             </div>
+            <p v-if="fieldErrors.password" class="mt-1.5 text-xs font-medium text-red-400">{{ fieldErrors.password }}</p>
           </div>
-          
+
           <div v-if="error" class="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
             <AlertCircle size="16" class="shrink-0 text-red-400" />
             <span>{{ error }}</span>

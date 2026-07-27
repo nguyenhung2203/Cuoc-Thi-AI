@@ -9,6 +9,19 @@ import Toast from '../../components/common/AppToast.vue'
 import { candidateService } from '../../services/candidate.service'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
+import {
+  isEmail,
+  isOneOf,
+  isVietnamesePhone,
+  maxLength,
+  minLength,
+  normalizeEmail,
+  normalizeText,
+  requiredTrim,
+  validateFile,
+  validateForm,
+} from '../../utils/validators.js'
+import { CV_FILE_RULES } from '../../utils/constants.js'
 import { ArrowLeft, Save, Upload, FileText, Sparkles, CheckCircle } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -25,8 +38,10 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const parsedData = ref(null)
 const localToast = ref(null)
+const errors = ref({})
 const selectedFile = ref(null)
 const cvPreviewUrl = ref(null)
+const cvAvailable = ref(false)
 const isAiParsing = ref(false)
 
 onMounted(async () => {
@@ -38,7 +53,7 @@ onMounted(async () => {
           candidateService.getCandidate(companyId, id),
           jobService.getJobs(companyId)
         ])
-        jobs.value = jobsData
+        jobs.value = Array.isArray(jobsData) ? jobsData : []
         candidate.value = {
           ...data,
           name: data.full_name || data.name,
@@ -55,9 +70,14 @@ onMounted(async () => {
           }
         }
         if (data.cv_file?.id) {
-          const res = await candidateService.getCVUrl(data.cv_file.id, companyId)
-          if (res && res.url) {
-            cvPreviewUrl.value = res.url
+          try {
+            const res = await candidateService.getCVUrl(data.cv_file.id, companyId)
+            if (res && res.url) {
+              cvPreviewUrl.value = res.url
+              cvAvailable.value = true
+            }
+          } catch (error) {
+            cvAvailable.value = false
           }
         }
       }
@@ -71,7 +91,8 @@ onMounted(async () => {
     try {
       const companyId = authStore.user?.companies?.[0]?.id
       if (companyId) {
-        jobs.value = await jobService.getJobs(companyId)
+        const jobsData = await jobService.getJobs(companyId)
+        jobs.value = Array.isArray(jobsData) ? jobsData : []
       }
     } catch (err) {
       console.error(err)
@@ -83,6 +104,28 @@ onMounted(async () => {
 
 const handleSave = async (e) => {
   e.preventDefault()
+  if (saving.value) return
+
+  const allowedStatuses = ['new', 'screening', 'interviewing', 'offered', 'hired', 'rejected', 'New']
+  const validation = validateForm(candidate.value, {
+    name: [
+      (value) => requiredTrim(value, 'Vui lòng nhập họ tên ứng viên.'),
+      (value) => minLength(value, 2, 'Họ tên phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Họ tên không được vượt quá 255 ký tự.'),
+    ],
+    email: [(value) => requiredTrim(value, 'Vui lòng nhập email ứng viên.'), isEmail],
+    phone: [isVietnamesePhone],
+    job_id: [
+      (value) => requiredTrim(value, 'Vui lòng chọn công việc ứng tuyển.'),
+      (value) => jobs.value.some(job => job?.id === value) ? '' : 'Công việc đã chọn không hợp lệ.',
+    ],
+    status: [(value) => isOneOf(value, allowedStatuses, 'Trạng thái ứng viên không hợp lệ.')],
+  })
+  errors.value = validation.errors
+  if (!validation.isValid) return
+
+  candidate.value.name = normalizeText(candidate.value.name)
+  candidate.value.email = normalizeEmail(candidate.value.email)
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -161,24 +204,27 @@ const handleSave = async (e) => {
 
 const validateAndSetFile = (file) => {
   if (!file) return
-  const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/png', 'image/jpeg', 'image/jpg']
-  
-  if (validTypes.includes(file.type)) {
-    selectedFile.value = file
-    if (cvPreviewUrl.value) URL.revokeObjectURL(cvPreviewUrl.value)
-    
-    if (file.type === 'application/pdf' || file.type.startsWith('image/')) {
-      cvPreviewUrl.value = URL.createObjectURL(file)
-    } else {
-      cvPreviewUrl.value = null
-    }
-  } else {
-    localToast.value = { type: 'error', message: 'Vui lòng chọn file PDF, Word hoặc Ảnh (PNG/JPG).' }
+  const fileError = validateFile(file, {
+    required: true,
+    ...CV_FILE_RULES,
+    typeMessage: 'CV chỉ hỗ trợ định dạng PDF, DOC hoặc DOCX.',
+    sizeMessage: 'CV không được vượt quá 5MB.',
+  })
+  errors.value.cv = fileError
+  if (fileError) {
+    selectedFile.value = null
+    if (fileInputRef.value) fileInputRef.value.value = ''
+    localToast.value = { type: 'error', message: fileError }
+    return
   }
+
+  selectedFile.value = file
+  if (cvPreviewUrl.value) URL.revokeObjectURL(cvPreviewUrl.value)
+  cvPreviewUrl.value = file.type === 'application/pdf' ? URL.createObjectURL(file) : null
 }
 
 const handleFileUpload = (e) => {
-  validateAndSetFile(e.target.files[0])
+  validateAndSetFile(e.target.files?.[0])
 }
 
 const handleViewCV = async () => {
@@ -188,17 +234,24 @@ const handleViewCV = async () => {
     const res = await candidateService.getCVUrl(candidate.value.cv_file_id, companyId)
     if (res && res.url) {
       window.open(res.url, '_blank')
+      cvAvailable.value = true
     } else {
-      localToast.value = { type: 'error', message: 'Không lấy được đường dẫn CV' }
+      cvAvailable.value = false
+      localToast.value = { type: 'error', message: 'CV không còn tồn tại hoặc chưa được lưu đúng cách. Vui lòng tải lại CV.' }
     }
   } catch (error) {
-    localToast.value = { type: 'error', message: 'Lỗi khi xem CV: ' + (error.message || '') }
+    cvAvailable.value = false
+    localToast.value = { type: 'error', message: 'CV không còn tồn tại hoặc chưa được lưu đúng cách. Vui lòng tải lại CV.' }
   }
 }
 
 const handleParseCV = async () => {
   if (!candidate.value.cv_file_id || isNew.value) {
     localToast.value = { type: 'error', message: 'Vui lòng lưu ứng viên với CV trước' }
+    return
+  }
+  if (!cvAvailable.value) {
+    localToast.value = { type: 'error', message: 'CV chưa sẵn sàng để phân tích. Vui lòng tải lại CV rồi bấm Lưu ứng viên.' }
     return
   }
   isAiParsing.value = true
@@ -285,8 +338,9 @@ const handleParseCV = async () => {
               v-model="candidate.name" 
               required 
               minlength="2"
-              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
+              :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.name }]"
             />
+            <span v-if="errors.name" class="error-text">{{ errors.name }}</span>
           </div>
           
           <div class="space-y-2">
@@ -294,9 +348,10 @@ const handleParseCV = async () => {
             <input 
               type="email"
               v-model="candidate.email" 
-              required 
-              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
+              required
+              :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.email }]"
             />
+            <span v-if="errors.email" class="error-text">{{ errors.email }}</span>
           </div>
           
           <div class="space-y-2">
@@ -305,11 +360,12 @@ const handleParseCV = async () => {
               v-model="candidate.job_id" 
               required 
               :disabled="!isNew"
-              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] disabled:opacity-50 disabled:cursor-not-allowed', { 'input-error': errors.job_id }]"
             >
               <option value="" disabled>-- Chọn vị trí ứng tuyển --</option>
               <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title }}</option>
             </select>
+            <span v-if="errors.job_id" class="error-text">{{ errors.job_id }}</span>
             <p v-if="!isNew" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Không thể thay đổi vị trí của ứng viên đã tạo</p>
           </div>
           
@@ -317,13 +373,14 @@ const handleParseCV = async () => {
             <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
             <select 
               v-model="candidate.status"
-              class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
+              :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]', { 'input-error': errors.status }]"
             >
               <option value="new">Mới (New)</option>
               <option value="interviewing">Đang phỏng vấn (Interviewing)</option>
               <option value="offered">Đã gửi Offer (Offered)</option>
               <option value="rejected">Từ chối (Rejected)</option>
             </select>
+            <span v-if="errors.status" class="error-text">{{ errors.status }}</span>
           </div>
 
           <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
@@ -347,8 +404,12 @@ const handleParseCV = async () => {
               <div class="flex-1">
                 <p v-if="selectedFile" class="font-medium text-slate-800 dark:text-slate-200">{{ selectedFile.name }}</p>
                 <p v-else class="font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" @click="handleViewCV" title="Nhấn để xem CV">{{ candidate.cv }}</p>
-                <p class="text-emerald-600 dark:text-emerald-400 text-sm flex items-center gap-1 mt-1 font-medium">
-                  <CheckCircle size="14" /> {{ selectedFile ? 'Sẵn sàng tải lên' : 'Đã lưu trên hệ thống' }}
+                <p
+                  class="text-sm flex items-center gap-1 mt-1 font-medium"
+                  :class="selectedFile || cvAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'"
+                >
+                  <CheckCircle size="14" />
+                  {{ selectedFile ? 'Sẵn sàng tải lên' : (cvAvailable ? 'Đã lưu trên hệ thống' : 'CV không khả dụng — vui lòng tải lại') }}
                 </p>
               </div>
               <Button type="button" variant="secondary" @click="fileInputRef?.click()" :disabled="uploading || isAiParsing" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
@@ -363,10 +424,10 @@ const handleParseCV = async () => {
             </div>
 
             <div v-if="candidate.cv_file_id && !selectedFile" class="flex gap-2 mt-4">
-              <Button type="button" variant="secondary" @click="handleViewCV" class="flex-1 bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
+              <Button type="button" variant="secondary" :disabled="!cvAvailable" @click="handleViewCV" class="flex-1 bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
                 Xem CV
               </Button>
-              <Button type="button" :disabled="uploading || isAiParsing" @click="handleParseCV" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none">
+              <Button type="button" :disabled="uploading || isAiParsing || !cvAvailable" @click="handleParseCV" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none">
                 <Sparkles size="16" class="mr-2" v-if="!isAiParsing" />
                 {{ isAiParsing ? 'Đang phân tích...' : 'Phân tích CV' }}
               </Button>
@@ -379,9 +440,10 @@ const handleParseCV = async () => {
           >
             <Upload size="36" class="text-slate-400 group-hover:text-blue-500 mx-auto mb-3 transition-colors" />
             <p class="font-semibold text-slate-700 dark:text-slate-300 mb-1">Click để tải CV lên</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">Hỗ trợ PDF, DOCX, PNG, JPG (tối đa 5MB)</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Hỗ trợ PDF, DOC, DOCX (tối đa 5MB)</p>
           </div>
-          <input 
+          <span v-if="errors.cv" class="error-text mt-2 block">{{ errors.cv }}</span>
+          <input
             type="file" 
             ref="fileInputRef" 
             class="hidden" 

@@ -12,11 +12,13 @@ import {
 import { mockService } from '../../services/mock.service'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import { langStore } from '../../stores/lang.store'
+import { isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const router = useRouter()
 const loading = ref(false)
 const toast = ref(null)
 const cvFileId = ref('')
+const errors = ref({})
 
 // Interactive setup options
 const setup = ref({
@@ -126,6 +128,27 @@ const getSelectedDurationBadge = () => {
 
 const handleStart = async (e) => {
   e.preventDefault()
+  if (loading.value) return
+  const values = { ...setup.value, customRoleName: normalizeText(setup.value.customRoleName), customJd: normalizeText(setup.value.customJd) }
+  const validation = validateForm(values, {
+    jobRole: [(value) => requiredTrim(value, 'Vui lòng chọn vị trí phỏng vấn.')],
+    level: [(value) => isOneOf(value, levels.map(item => item.id), 'Cấp độ không hợp lệ.')],
+    type: [(value) => isOneOf(value, interviewTypes.map(item => item.id), 'Loại phỏng vấn không hợp lệ.')],
+    language: [(value) => isOneOf(value, languages.map(item => item.id), 'Ngôn ngữ không hợp lệ.')],
+    duration: [(value) => isOneOf(value, durations.map(item => item.id), 'Thời lượng không hợp lệ.')],
+    style: [(value) => isOneOf(value, styles.map(item => item.id), 'Phong cách AI không hợp lệ.')],
+    customRoleName: [
+      (value) => setup.value.showCustomInput ? requiredTrim(value, 'Vui lòng nhập tên vị trí.') : '',
+      (value) => setup.value.showCustomInput ? minLength(value, 2, 'Tên vị trí phải có ít nhất 2 ký tự.') : '',
+      (value) => maxLength(value, 100, 'Tên vị trí không được vượt quá 100 ký tự.'),
+    ],
+    customJd: [(value) => maxLength(value, 20000, 'JD không được vượt quá 20.000 ký tự.')],
+  })
+  errors.value = validation.errors
+  if (!validation.isValid) {
+    toast.value = { type: 'error', message: Object.values(validation.errors)[0] }
+    return
+  }
   if (setup.value.useCurrentCv && !cvFileId.value) {
     toast.value = { type: 'warning', message: 'Bạn chưa có CV trong hồ sơ. Vui lòng tải CV lên trước hoặc bỏ chọn tùy chọn sử dụng CV.' }
     return

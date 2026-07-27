@@ -9,6 +9,7 @@ import Modal from '../../components/common/AppModal.vue'
 import { authStore } from '../../stores/auth.store'
 import { authService } from '../../services/auth.service'
 import { companyService } from '../../services/company.service'
+import { confirmPassword, requiredTrim, validateForm, validatePassword } from '../../utils/validators.js'
 import { Settings, Save, Key, Bell, Shield, User, Monitor, Building2 } from 'lucide-vue-next'
 
 const role = localStorage.getItem('role') || 'recruiter'
@@ -23,6 +24,7 @@ const showDeleteModal = ref(false)
 const saving = ref(false)
 const changingPassword = ref(false)
 const passwordForm = ref({ current: '', next: '', confirm: '' })
+const passwordErrors = ref({})
 const settings = ref({
   notify_email_interview: true,
   notify_email_report: true,
@@ -93,18 +95,23 @@ const handleSaveCompany = async (e) => {
 
 const handleChangePassword = async (e) => {
   if (e && e.preventDefault) e.preventDefault()
-  if (!passwordForm.value.current || !passwordForm.value.next) {
-    toast.value = { type: 'warning', message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.' }
-    return
-  }
-  if (passwordForm.value.next.length < 6) {
-    toast.value = { type: 'warning', message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' }
-    return
-  }
-  if (passwordForm.value.next !== passwordForm.value.confirm) {
-    toast.value = { type: 'warning', message: 'Xác nhận mật khẩu mới không khớp.' }
-    return
-  }
+  if (changingPassword.value) return
+
+  const validation = validateForm(passwordForm.value, {
+    current: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu hiện tại.')],
+    next: [
+      (value) => requiredTrim(value, 'Vui lòng nhập mật khẩu mới.'),
+      validatePassword,
+      (value, values) => value === values.current ? 'Mật khẩu mới phải khác mật khẩu hiện tại.' : '',
+    ],
+    confirm: [
+      (value) => requiredTrim(value, 'Vui lòng xác nhận mật khẩu mới.'),
+      (value, values) => confirmPassword(value, values.next),
+    ],
+  })
+  passwordErrors.value = validation.errors
+  if (!validation.isValid) return
+
   changingPassword.value = true
   try {
     await authService.changePassword({
@@ -112,9 +119,11 @@ const handleChangePassword = async (e) => {
       new_password: passwordForm.value.next
     })
     passwordForm.value = { current: '', next: '', confirm: '' }
+    passwordErrors.value = {}
     toast.value = { type: 'success', message: 'Đổi mật khẩu thành công!' }
   } catch (error) {
-    toast.value = { type: 'error', message: 'Lỗi đổi mật khẩu: ' + (error.message || 'Không xác định') }
+    const message = error?.message || 'Không thể đổi mật khẩu. Vui lòng thử lại.'
+    toast.value = { type: 'error', message }
   } finally {
     changingPassword.value = false
   }
@@ -225,9 +234,9 @@ const confirmDeleteAccount = async () => {
               </h3>
               <form @submit="handleChangePassword">
                 <div style="display: flex; flex-direction: column; gap: 16px">
-                  <Input label="Mật khẩu hiện tại" type="password" v-model="passwordForm.current" />
-                  <Input label="Mật khẩu mới" type="password" v-model="passwordForm.next" />
-                  <Input label="Xác nhận mật khẩu mới" type="password" v-model="passwordForm.confirm" />
+                  <Input label="Mật khẩu hiện tại" type="password" v-model="passwordForm.current" :error="passwordErrors.current" required />
+                  <Input label="Mật khẩu mới" type="password" v-model="passwordForm.next" :error="passwordErrors.next" placeholder="Ít nhất 8 ký tự, có chữ hoa, chữ thường và số" required />
+                  <Input label="Xác nhận mật khẩu mới" type="password" v-model="passwordForm.confirm" :error="passwordErrors.confirm" required />
                 </div>
                 <div style="display: flex; justify-content: flex-end; margin-top: 16px">
                   <Button type="submit" :disabled="changingPassword"><Save size="16" /> {{ changingPassword ? 'Đang đổi...' : 'Đổi mật khẩu' }}</Button>

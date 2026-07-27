@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -23,7 +23,9 @@ const loading = ref(true)
 
 onMounted(async () => {
   if (history.state?.message) {
-    window.history.replaceState({}, document.title)
+    const newState = { ...history.state }
+    delete newState.message
+    window.history.replaceState(newState, '')
   }
   
   try {
@@ -96,7 +98,6 @@ const formatTime = (isoStr) => {
   return new Date(isoStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-import { computed } from 'vue'
 const careerLink = computed(() => {
   const companyId = authStore.user?.companies?.[0]?.id
   if (!companyId) return ''

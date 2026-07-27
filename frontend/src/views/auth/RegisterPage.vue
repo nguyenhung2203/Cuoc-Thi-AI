@@ -3,6 +3,19 @@ import { ref, reactive, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
 import { authService } from '../../services/auth.service'
+import { VALIDATION_LIMITS, USER_ROLES } from '../../utils/constants.js'
+import {
+  confirmPassword,
+  isEmail,
+  isOneOf,
+  maxLength,
+  minLength,
+  normalizeEmail,
+  normalizeText,
+  requiredTrim,
+  validateForm,
+  validatePassword,
+} from '../../utils/validators.js'
 import { useGoogleAuth } from '../../composables/useGoogleAuth'
 import AppLogo from '../../components/common/AppLogo.vue'
 import { ShieldCheck, ArrowRight, ArrowLeft, Mail, Lock, User, CheckCircle2, RefreshCw, Sparkles, Building2, UserCheck, AlertCircle, FileCode, TrendingUp } from 'lucide-vue-next'
@@ -22,6 +35,7 @@ const form = reactive({
 })
 
 const error = ref('')
+const fieldErrors = ref({})
 const loading = ref(false)
 
 // Real Google Sign-In via Google Identity Services
@@ -47,21 +61,37 @@ const startOtpTimer = () => {
 
 const handleStep1Submit = async (e) => {
   e.preventDefault()
-  if (!form.name || !form.email || !form.password || !form.confirmPassword) {
-    error.value = 'Vui lòng nhập đầy đủ thông tin cá nhân và mật khẩu!'
-    return
+  if (loading.value) return
+
+  const values = {
+    name: normalizeText(form.name),
+    email: normalizeEmail(form.email),
+    password: form.password,
+    confirmPassword: form.confirmPassword,
+    role: form.role,
   }
-  
-  if (form.password.length < 6) {
-    error.value = 'Mật khẩu phải có ít nhất 6 ký tự!'
+  const validation = validateForm(values, {
+    name: [
+      (value) => requiredTrim(value, 'Vui lòng nhập họ và tên.'),
+      (value) => minLength(value, VALIDATION_LIMITS.NAME_MIN_LENGTH, `Họ và tên phải có ít nhất ${VALIDATION_LIMITS.NAME_MIN_LENGTH} ký tự.`),
+      (value) => maxLength(value, VALIDATION_LIMITS.NAME_MAX_LENGTH, `Họ và tên không được vượt quá ${VALIDATION_LIMITS.NAME_MAX_LENGTH} ký tự.`),
+    ],
+    email: [(value) => requiredTrim(value, 'Vui lòng nhập địa chỉ email.'), isEmail],
+    password: [(value) => requiredTrim(value, 'Vui lòng nhập mật khẩu.'), validatePassword],
+    confirmPassword: [
+      (value) => requiredTrim(value, 'Vui lòng xác nhận mật khẩu.'),
+      (value, allValues) => confirmPassword(value, allValues.password),
+    ],
+    role: [(value) => isOneOf(value, USER_ROLES, 'Vai trò đăng ký không hợp lệ.')],
+  })
+  fieldErrors.value = validation.errors
+  if (!validation.isValid) {
+    error.value = ''
     return
   }
 
-  if (form.password !== form.confirmPassword) {
-    error.value = 'Mật khẩu xác nhận không trùng khớp!'
-    return
-  }
-  
+  form.name = values.name
+  form.email = values.email
   error.value = ''
   loading.value = true
 
@@ -74,11 +104,9 @@ const handleStep1Submit = async (e) => {
       if (otpInputs.value[0]) otpInputs.value[0].focus()
     })
   } catch (err) {
-    if (err.message === 'email already exists') {
-      error.value = 'Email này đã được đăng ký trong hệ thống. Vui lòng dùng email khác hoặc đăng nhập.'
-    } else {
-      error.value = err.message || 'Không thể gửi mã xác nhận. Vui lòng thử lại.'
-    }
+    error.value = err.code === 'EMAIL_ALREADY_EXISTS'
+      ? 'Email này đã được đăng ký trong hệ thống. Vui lòng dùng email khác hoặc đăng nhập.'
+      : (err.message || 'Không thể gửi mã xác nhận. Vui lòng thử lại.')
   } finally {
     loading.value = false
   }
@@ -155,9 +183,10 @@ const resendOtp = async () => {
 }
 
 const handleVerifyOtp = async () => {
+  if (loading.value) return
   const code = otpDigits.value.join('')
-  if (code.length < 6) {
-    error.value = 'Vui lòng nhập đủ 6 chữ số mã xác nhận OTP!'
+  if (!/^\d{6}$/.test(code)) {
+    error.value = 'Vui lòng nhập đúng 6 chữ số mã xác nhận OTP!'
     return
   }
 
@@ -335,7 +364,7 @@ const handleGoogleLogin = async () => {
       <!-- ================= STEP 1: FORM INFORMATION ================= -->
       <div v-if="step === 1" class="space-y-6 animate-fade-in">
         
-        <form @submit="handleStep1Submit" class="space-y-4">
+        <form @submit="handleStep1Submit" novalidate class="space-y-4">
           <!-- Role Selector Tabs -->
           <div>
             <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2">Bạn là ai?</label>
@@ -370,8 +399,10 @@ const handleGoogleLogin = async () => {
                      type="text"
                      required
                      placeholder="Nguyễn Văn A"
+                     :class="fieldErrors.name ? 'border-rose-500 focus:ring-rose-500' : ''"
                      class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
+            <p v-if="fieldErrors.name" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.name }}</p>
           </div>
 
           <!-- Email Input -->
@@ -383,8 +414,10 @@ const handleGoogleLogin = async () => {
                      type="email"
                      required
                      placeholder="nhapemail@congty.com"
+                     :class="fieldErrors.email ? 'border-rose-500 focus:ring-rose-500' : ''"
                      class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
             </div>
+            <p v-if="fieldErrors.email" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.email }}</p>
           </div>
 
           <!-- Password Grid -->
@@ -397,8 +430,10 @@ const handleGoogleLogin = async () => {
                        type="password"
                        required
                        placeholder="••••••••"
+                       :class="fieldErrors.password ? 'border-rose-500 focus:ring-rose-500' : ''"
                        class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
               </div>
+              <p v-if="fieldErrors.password" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.password }}</p>
             </div>
 
             <div>
@@ -409,8 +444,10 @@ const handleGoogleLogin = async () => {
                        type="password"
                        required
                        placeholder="••••••••"
+                       :class="fieldErrors.confirmPassword ? 'border-rose-500 focus:ring-rose-500' : ''"
                        class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm transition-all" />
               </div>
+              <p v-if="fieldErrors.confirmPassword" class="mt-1.5 text-xs font-medium text-rose-600">{{ fieldErrors.confirmPassword }}</p>
             </div>
           </div>
 

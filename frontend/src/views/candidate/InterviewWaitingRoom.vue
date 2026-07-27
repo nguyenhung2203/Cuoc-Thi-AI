@@ -13,7 +13,27 @@ const agreed = ref(false)
 const loading = ref(true)
 const errorMsg = ref('')
 const interviewInfo = ref(null)
-const inviteToken = ref(route.query.token || '')
+const joining = ref(false)
+const deviceReady = ref(false)
+
+const checkDevices = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errorMsg.value = 'Trình duyệt không hỗ trợ truy cập camera hoặc micro.'
+    return false
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+    stream.getTracks().forEach(track => track.stop())
+    deviceReady.value = true
+    return true
+  } catch (error) {
+    const denied = error?.name === 'NotAllowedError'
+    errorMsg.value = denied
+      ? 'Bạn đã từ chối quyền camera hoặc micro. Vui lòng cấp quyền để tham gia.'
+      : 'Không tìm thấy hoặc không thể sử dụng camera/micro trên thiết bị.'
+    return false
+  }
+}
 
 onMounted(async () => {
   if (!inviteToken.value) {
@@ -24,6 +44,7 @@ onMounted(async () => {
 
   try {
     const data = await interviewService.joinByToken(inviteToken.value)
+    if (!data || !data.room_access_token || !data.interview_id) throw new Error('Dữ liệu phòng phỏng vấn không đầy đủ.')
     interviewInfo.value = data
   } catch (error) {
     errorMsg.value = error.message || 'Không thể xác thực link mời phỏng vấn. Link có thể đã hết hạn.'
@@ -32,14 +53,19 @@ onMounted(async () => {
   }
 })
 
-const handleJoin = () => {
-  if (!agreed.value) return
-  // Pass token and details to candidate room
-  router.push({ 
-    path: '/candidate-room', 
-    query: { token: interviewInfo.value.room_access_token },
-    state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value } 
-  })
+const handleJoin = async () => {
+  if (joining.value || !agreed.value || !interviewInfo.value?.room_access_token) return
+  joining.value = true
+  try {
+    if (!deviceReady.value && !(await checkDevices())) return
+    router.push({
+      path: '/candidate-room',
+      query: { token: interviewInfo.value.room_access_token },
+      state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value }
+    })
+  } finally {
+    joining.value = false
+  }
 }
 </script>
 
