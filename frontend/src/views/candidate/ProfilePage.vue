@@ -214,6 +214,37 @@ const closeCvModal = () => {
   selectedCv.value = null
 }
 
+const pdfBlobUrl = ref('')
+const pdfLoading = ref(false)
+
+watch(selectedCv, async (newCv) => {
+  if (!newCv) {
+    pdfBlobUrl.value = ''
+    return
+  }
+  if (newCv.rawFile) {
+    pdfBlobUrl.value = URL.createObjectURL(newCv.rawFile)
+    return
+  }
+  if (newCv.url) {
+    if (newCv.url.startsWith('blob:')) {
+      pdfBlobUrl.value = newCv.url
+      return
+    }
+    pdfLoading.value = true
+    try {
+      const resp = await fetch(newCv.url)
+      const blob = await resp.blob()
+      pdfBlobUrl.value = URL.createObjectURL(blob)
+    } catch (err) {
+      console.error('Failed to fetch PDF blob', err)
+      pdfBlobUrl.value = newCv.url
+    } finally {
+      pdfLoading.value = false
+    }
+  }
+})
+
 // State for Security, Notifications, Privacy Tabs
 const saving = ref(false)
 const toast = ref(null)
@@ -1065,16 +1096,13 @@ const confirmDeleteAccount = async () => {
       <div v-if="selectedCv" class="space-y-6">
         <div class="flex flex-col lg:flex-row gap-6">
           <!-- PDF / File Viewer Preview -->
-          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-3 text-center min-h-[500px] overflow-hidden">
-            <div v-if="selectedCv.url" class="w-full flex flex-col items-center">
-              <div class="w-full flex justify-end mb-2">
-                <a :href="selectedCv.url" target="_blank" class="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-[var(--border)] shadow-sm">
-                  <span>🔗 Mở file xem toàn màn hình</span>
-                </a>
-              </div>
-              <img v-if="selectedCv.url.toLowerCase().includes('.png') || selectedCv.url.toLowerCase().includes('.jpg') || selectedCv.url.toLowerCase().includes('.jpeg')" :src="selectedCv.url" class="max-h-[460px] object-contain rounded-lg shadow-sm" />
-              <iframe v-else :src="selectedCv.url" class="w-full h-[460px] rounded-lg border-0 bg-white shadow-sm"></iframe>
+          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-2 text-center min-h-[520px] overflow-hidden relative">
+            <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-8 text-[var(--primary)] font-semibold gap-2">
+              <Loader2 class="w-8 h-8 animate-spin" />
+              <span>Đang tải xem trước CV...</span>
             </div>
+            <img v-else-if="pdfBlobUrl && (pdfBlobUrl.toLowerCase().includes('.png') || pdfBlobUrl.toLowerCase().includes('.jpg') || pdfBlobUrl.toLowerCase().includes('.jpeg'))" :src="pdfBlobUrl" class="max-h-[500px] object-contain rounded-lg shadow-sm" />
+            <iframe v-else-if="pdfBlobUrl" :src="pdfBlobUrl" class="w-full h-[520px] rounded-lg border-0 bg-white shadow-sm"></iframe>
             <div v-else class="flex flex-col items-center justify-center p-8">
               <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
               <p class="text-[var(--text-secondary)] font-medium">Không có bản xem trước cho tài liệu này</p>
