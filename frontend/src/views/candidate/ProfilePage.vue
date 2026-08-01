@@ -208,10 +208,12 @@ const deleteCv = (id) => {
 }
 
 const viewCv = (cv) => {
-  selectedCv.value = cv
+  selectedCv.value = { ...cv }
 }
 const closeCvModal = () => {
   selectedCv.value = null
+  cvPages.value = []
+  pdfBlobUrl.value = ''
 }
 
 const pdfBlobUrl = ref('')
@@ -710,9 +712,9 @@ const confirmDeleteAccount = async () => {
                     <!-- <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span> -->
                   </div>
 
-                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
-                    <div class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer" @click="cv.status === 'done' && viewCv(cv)">
-                      <div class="pf-cv-icon shrink-0 w-11 h-11 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden" :class="cv.status === 'done' ? '' : 'opacity-60'">
+                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3 cursor-pointer" @click="viewCv(cv)">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                      <div class="pf-cv-icon shrink-0 w-11 h-11 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden">
                         <img v-if="cv.url && (cv.url.toLowerCase().includes('.png') || cv.url.toLowerCase().includes('.jpg') || cv.url.toLowerCase().includes('.jpeg'))" :src="cv.url" class="w-full h-full object-cover" />
                         <div v-else class="flex flex-col items-center justify-center text-[var(--primary)] font-extrabold text-[10px] leading-tight">
                           <FileText :size="18" />
@@ -730,12 +732,12 @@ const confirmDeleteAccount = async () => {
                         <div class="pf-cv-meta flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
                           <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)]" />
                           <Loader2 v-else class="pf-spin text-[var(--primary)]" :size="12" />
-                          {{ cv.status === 'done' ? cv.date + ' • ' + cv.size : 'Đang phân tích...' }}
+                          {{ cv.status === 'done' ? (cv.date || 'Hôm nay') + ' • ' + (cv.size || 'N/A') : 'Đang phân tích...' }}
                         </div>
                       </div>
                     </div>
 
-                    <div v-if="cv.status === 'done'" class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center gap-2 shrink-0">
                       <button 
                         v-if="String(cv.id) !== String(defaultCvId)" 
                         type="button" 
@@ -747,7 +749,6 @@ const confirmDeleteAccount = async () => {
                       <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="16"/></button>
                       <button type="button" @click.stop="deleteCv(cv.id)" class="pf-icon-btn is-danger" title="Xóa"><Trash2 :size="16"/></button>
                     </div>
-                    <div v-else class="pf-analyzing shrink-0 text-xs text-[var(--text-muted)] font-medium">Đang xử lý</div>
                   </div>
                 </div>
 
