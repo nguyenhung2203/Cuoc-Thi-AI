@@ -1083,10 +1083,10 @@ const confirmDeleteAccount = async () => {
 
     <!-- CV Detail Modal -->
     <Modal :isOpen="!!selectedCv" @close="closeCvModal" title="Chi tiết CV & Trích xuất AI" size="xl">
-      <div v-if="selectedCv" class="space-y-6">
-        <div class="flex flex-col lg:flex-row gap-6">
+      <div v-if="selectedCv" class="flex flex-col gap-4">
+        <div class="flex flex-col lg:flex-row gap-5">
           <!-- PDF / File Viewer Preview (Clean PNG Page Images) -->
-          <div class="flex-1 bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start p-4 text-center min-h-[550px] max-h-[680px] overflow-y-auto custom-scrollbar relative">
+          <div class="flex-1 bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start pt-2 px-3 pb-3 text-center min-h-[540px] max-h-[680px] overflow-y-auto custom-scrollbar relative">
             <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-16 text-[var(--primary)] font-semibold gap-3 my-auto">
               <Loader2 class="w-10 h-10 animate-spin" />
               <span class="text-base">Đang chuyển đổi CV sang hình ảnh sắc nét...</span>

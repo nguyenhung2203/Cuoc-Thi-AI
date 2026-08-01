@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"github.com/ledongthuc/pdf"
 	"google.golang.org/genai"
 
+	"backend/internal/models"
 	"backend/internal/repository"
 )
 
@@ -23,6 +25,7 @@ type AIService struct {
 	candidateRepo *repository.CandidateRepository
 	geminiKeys    []string
 	uploadDir     string
+	logSvc        *AILogService
 }
 
 func NewAIService(
@@ -63,12 +66,17 @@ func NewAIService(
 	}
 }
 
+// SetLogService wires the AI log service so CV parse tokens are recorded.
+func (s *AIService) SetLogService(logSvc *AILogService) {
+	s.logSvc = logSvc
+}
+
 // generateGeminiJSON sends a prompt to Gemini (new google.golang.org/genai SDK)
 // requesting a JSON response, rotating through the configured API keys with
-// retry on failure. Returns the cleaned JSON text (markdown fences stripped).
-func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (string, error) {
+// retry on failure. Returns the cleaned JSON text, tokens_in, tokens_out.
+func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (text string, tokensIn, tokensOut int32, err error) {
 	if len(s.geminiKeys) == 0 || s.geminiKeys[0] == "" {
-		return "", fmt.Errorf("GEMINI_API_KEY is not configured")
+		return "", 0, 0, fmt.Errorf("GEMINI_API_KEY is not configured")
 	}
 
 	var lastErr error
@@ -77,42 +85,49 @@ func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (stri
 		idx := (startIndex + i) % len(s.geminiKeys)
 		key := s.geminiKeys[idx]
 
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		client, cerr := genai.NewClient(ctx, &genai.ClientConfig{
 			APIKey:  key,
 			Backend: genai.BackendGeminiAPI,
 		})
-		if err != nil {
-			lastErr = fmt.Errorf("failed to create gemini client: %w", err)
+		if cerr != nil {
+			lastErr = fmt.Errorf("failed to create gemini client: %w", cerr)
 			continue
 		}
 
-		resp, err := client.Models.GenerateContent(ctx, "gemini-2.5-flash",
+		resp, gerr := client.Models.GenerateContent(ctx, "gemini-2.5-flash",
 			genai.Text(prompt),
 			&genai.GenerateContentConfig{ResponseMIMEType: "application/json"},
 		)
-		if err != nil {
-			lastErr = fmt.Errorf("gemini generation failed: %w", err)
-			log.Printf("[WARN] AI Key %d failed, retrying with next key... error: %v", idx, err)
+		if gerr != nil {
+			lastErr = fmt.Errorf("gemini generation failed: %w", gerr)
+			log.Printf("[WARN] AI Key %d failed, retrying with next key... error: %v", idx, gerr)
 			continue
 		}
 
-		text := resp.Text()
-		if text == "" {
+		rawText := resp.Text()
+		if rawText == "" {
 			lastErr = fmt.Errorf("empty response from gemini")
 			continue
 		}
 
-		clean := strings.TrimPrefix(text, "```json\n")
+		// Extract token counts from usage metadata
+		var tIn, tOut int32
+		if resp.UsageMetadata != nil {
+			tIn = resp.UsageMetadata.PromptTokenCount
+			tOut = resp.UsageMetadata.CandidatesTokenCount
+		}
+
+		clean := strings.TrimPrefix(rawText, "```json\n")
 		clean = strings.TrimPrefix(clean, "```json")
 		clean = strings.TrimSuffix(clean, "\n```")
 		clean = strings.TrimSuffix(clean, "```")
-		return strings.TrimSpace(clean), nil
+		return strings.TrimSpace(clean), tIn, tOut, nil
 	}
 
 	if lastErr == nil {
 		lastErr = fmt.Errorf("all api keys failed")
 	}
-	return "", lastErr
+	return "", 0, 0, lastErr
 }
 
 // ExtractTextFromPDF reads a local PDF file and extracts its text.
@@ -150,6 +165,7 @@ type AIExtractionResult struct {
 // extract structured info, and returns the raw JSON plus a short summary.
 // Reusable by both the recruiter candidate flow and the candidate portal.
 func (s *AIService) ExtractAndParseCV(ctx context.Context, storageKey string) (string, string, error) {
+	start := time.Now()
 	filePath := filepath.Join(s.uploadDir, storageKey)
 	text, err := ExtractTextFromPDF(filePath)
 	if err != nil {
@@ -164,9 +180,26 @@ func (s *AIService) ExtractAndParseCV(ctx context.Context, storageKey string) (s
 Resume Text:
 %s`, text)
 
-	cleanJSON, err := s.generateGeminiJSON(ctx, prompt)
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
 	if err != nil {
 		return "", "", err
+	}
+
+	// Log token usage to ai_request_logs (best-effort, non-blocking)
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID:  "system",
+			InputJSON:  models.JSONB(`{"template":"cv_extract"}`),
+			OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs:  sql.NullInt32{Int32: int32(latency), Valid: true},
+			TokensIn:   sql.NullInt32{Int32: tokensIn, Valid: tokensIn > 0},
+			TokensOut:  sql.NullInt32{Int32: tokensOut, Valid: tokensOut > 0},
+			Cost:       sql.NullFloat64{Float64: cost, Valid: cost > 0},
+			Status:     "success",
+			CreatedAt:  time.Now(),
+		})
 	}
 
 	var parsed AIExtractionResult

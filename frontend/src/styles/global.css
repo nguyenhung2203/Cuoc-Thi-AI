@@ -483,8 +483,12 @@ textarea.input-field {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 20px 24px;
   overflow-y: auto;
+}
+
+.modal-xl .modal-body {
+  padding: 16px 20px;
 }
 
 .icon-btn {
