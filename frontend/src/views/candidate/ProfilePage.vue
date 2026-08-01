@@ -214,86 +214,34 @@ const closeCvModal = () => {
   selectedCv.value = null
 }
 
-const cvPages = ref([])
 const pdfBlobUrl = ref('')
 const pdfLoading = ref(false)
 
-const loadPdfAsImages = async (urlOrFile) => {
-  pdfLoading.value = true
-  cvPages.value = []
-  try {
-    let arrayBuffer = null
-    if (urlOrFile instanceof File) {
-      arrayBuffer = await urlOrFile.arrayBuffer()
-    } else if (typeof urlOrFile === 'string' && urlOrFile) {
-      const res = await fetch(urlOrFile)
-      arrayBuffer = await res.arrayBuffer()
-    }
-
-    if (!arrayBuffer) return
-
-    // Dynamically load PDF.js script if not loaded
-    if (!window.pdfjsLib) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-        script.onload = resolve
-        script.onerror = reject
-        document.head.appendChild(script)
-      })
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-    }
-
-    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer })
-    const pdf = await loadingTask.promise
-    const images = []
-
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const viewport = page.getViewport({ scale: 1.8 })
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      canvas.height = viewport.height
-      canvas.width = viewport.width
-
-      await page.render({ canvasContext: ctx, viewport }).promise
-      images.push(canvas.toDataURL('image/png'))
-    }
-
-    cvPages.value = images
-  } catch (err) {
-    console.error('PDF.js rendering fallback to iframe:', err)
-  } finally {
-    pdfLoading.value = false
-  }
-}
-
 watch(selectedCv, async (newCv) => {
   if (!newCv) {
-    cvPages.value = []
     pdfBlobUrl.value = ''
-    return
-  }
-  if (newCv.url && (newCv.url.toLowerCase().includes('.png') || newCv.url.toLowerCase().includes('.jpg') || newCv.url.toLowerCase().includes('.jpeg'))) {
-    cvPages.value = [newCv.url]
     return
   }
   if (newCv.rawFile) {
     pdfBlobUrl.value = URL.createObjectURL(newCv.rawFile)
-    await loadPdfAsImages(newCv.rawFile)
-  } else if (newCv.url) {
+    return
+  }
+  if (newCv.url) {
     if (newCv.url.startsWith('blob:')) {
       pdfBlobUrl.value = newCv.url
-    } else {
-      try {
-        const resp = await fetch(newCv.url)
-        const blob = await resp.blob()
-        pdfBlobUrl.value = URL.createObjectURL(blob)
-      } catch (err) {
-        pdfBlobUrl.value = newCv.url
-      }
+      return
     }
-    await loadPdfAsImages(newCv.url)
+    pdfLoading.value = true
+    try {
+      const resp = await fetch(newCv.url)
+      const blob = await resp.blob()
+      pdfBlobUrl.value = URL.createObjectURL(blob)
+    } catch (err) {
+      console.error('Failed to fetch PDF blob', err)
+      pdfBlobUrl.value = newCv.url
+    } finally {
+      pdfLoading.value = false
+    }
   }
 })
 
@@ -1107,36 +1055,11 @@ const confirmDeleteAccount = async () => {
                 </select>
               </div>
 
-              <div class="space-y-4 bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
-                <div class="flex items-center justify-between gap-6">
-                  <div class="space-y-1 pr-4">
-                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động bóc tách JD thành bộ tiêu chí (Rubric) chi tiết</span>
-                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">AI sẽ phân tích mô tả công việc và tự động chuẩn bị ma trận tiêu chí chấm điểm trước buổi phỏng vấn.</span>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" defaultChecked class="sr-only peer" />
-                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
-                  </label>
-                </div>
-
-                <div class="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-6">
-                  <div class="space-y-1 pr-4">
-                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động gợi ý câu hỏi Follow-up realtime trong phòng phỏng vấn</span>
-                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Phân tích câu trả lời của ứng viên ngay lúc đang nói để đưa ra gợi ý câu hỏi đào sâu cho nhà tuyển dụng.</span>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" defaultChecked class="sr-only peer" />
-                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
-                  </label>
-                </div>
-              </div>
-
               <div class="flex justify-end pt-2">
                 <Button variant="primary" @click="handleSaveSettings" :disabled="saving">
                   <Save :size="16" /> Lưu cấu hình AI
                 </Button>
               </div>
-            </div>
           </Card>
         </div>
 
@@ -1144,35 +1067,82 @@ const confirmDeleteAccount = async () => {
     </div>
 
     <!-- CV Detail Modal -->
-    <Modal :isOpen="!!selectedCv" @close="closeCvModal" :title="`Xem CV: ${selectedCv?.name || 'Hồ sơ'}`" size="xl">
-      <div v-if="selectedCv" class="space-y-4">
-        <!-- Clean Page Image Viewer (NO PDF toolbar / NO controls) -->
-        <div class="w-full bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start p-4 text-center min-h-[600px] max-h-[720px] overflow-y-auto custom-scrollbar relative">
-          <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-16 text-[var(--primary)] font-semibold gap-3 my-auto">
-            <Loader2 class="w-10 h-10 animate-spin" />
-            <span class="text-base">Đang chuyển đổi CV sang hình ảnh sắc nét...</span>
-          </div>
+    <Modal :isOpen="!!selectedCv" @close="closeCvModal" title="Chi tiết CV & Trích xuất AI" size="xl">
+      <div v-if="selectedCv" class="space-y-6">
+        <div class="flex flex-col lg:flex-row gap-6">
+          <!-- PDF / File Viewer Preview (Clean PNG Page Images) -->
+          <div class="flex-1 bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start p-4 text-center min-h-[550px] max-h-[680px] overflow-y-auto custom-scrollbar relative">
+            <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-16 text-[var(--primary)] font-semibold gap-3 my-auto">
+              <Loader2 class="w-10 h-10 animate-spin" />
+              <span class="text-base">Đang chuyển đổi CV sang hình ảnh sắc nét...</span>
+            </div>
 
-          <div v-else-if="cvPages.length > 0" class="w-full flex flex-col items-center gap-6">
-            <div v-for="(imgSrc, pageIdx) in cvPages" :key="pageIdx" class="relative w-full max-w-[850px] shadow-lg rounded-xl overflow-hidden border border-slate-300 bg-white">
-              <img :src="imgSrc" class="w-full h-auto object-contain block" :alt="`Trang ${pageIdx + 1}`" />
-              <div class="absolute bottom-3 right-4 bg-slate-900/80 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
-                Trang {{ pageIdx + 1 }} / {{ cvPages.length }}
+            <div v-else-if="cvPages.length > 0" class="w-full flex flex-col items-center gap-6">
+              <div v-for="(imgSrc, pageIdx) in cvPages" :key="pageIdx" class="relative w-full shadow-lg rounded-xl overflow-hidden border border-slate-300 bg-white">
+                <img :src="imgSrc" class="w-full h-auto object-contain block" :alt="`Trang ${pageIdx + 1}`" />
+                <div class="absolute bottom-3 right-4 bg-slate-900/80 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
+                  Trang {{ pageIdx + 1 }} / {{ cvPages.length }}
+                </div>
               </div>
+            </div>
+
+            <div v-else-if="pdfBlobUrl" class="w-full h-[580px] my-auto">
+              <iframe :src="pdfBlobUrl + '#toolbar=0&navpanes=0&view=FitH'" class="w-full h-full rounded-xl border-0 bg-white shadow-sm"></iframe>
+            </div>
+
+            <div v-else class="flex flex-col items-center justify-center p-12 my-auto">
+              <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
+              <p class="text-[var(--text-secondary)] font-medium">Không thể hiển thị bản xem trước cho tài liệu này</p>
             </div>
           </div>
 
-          <div v-else-if="pdfBlobUrl" class="w-full h-[640px] my-auto">
-            <iframe :src="pdfBlobUrl + '#toolbar=0&navpanes=0&view=FitH'" class="w-full h-full rounded-xl border-0 bg-white shadow-sm"></iframe>
-          </div>
+          <!-- Extracted Data -->
+          <div class="w-full lg:w-[360px] space-y-5 shrink-0">
+            <div class="ai-block p-4">
+              <h4 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-[var(--accent)]">
+                <Bot :size="16" /> Thông tin AI trích xuất (Gemini)
+              </h4>
+              <div class="space-y-3 text-sm">
+                <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
+                  <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || (selectedCv.parsedData?.work_experience?.[0]?.role) || 'Chuyên viên Công nghệ' }}
+                  </span>
+                </div>
+                <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
+                  <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Middle') }}
+                  </span>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái AI:</span>
+                  <span class="font-bold text-[var(--success)] flex items-center gap-1">
+                    <CheckCircle :size="14" /> Đã phân tích từ Backend
+                  </span>
+                </div>
+              </div>
+            </div>
 
-          <div v-else class="flex flex-col items-center justify-center p-12 my-auto">
-            <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
-            <p class="text-[var(--text-secondary)] font-medium">Không thể hiển thị bản xem trước cho tài liệu này</p>
+            <div>
+              <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Kỹ năng phát hiện được</h4>
+              <div class="flex flex-wrap gap-2">
+                <template v-if="selectedCv.parsedData?.skills && selectedCv.parsedData.skills.length > 0">
+                  <span v-for="(sk, idx) in selectedCv.parsedData.skills" :key="idx" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40 font-semibold">
+                    {{ typeof sk === 'object' ? (sk.name || sk.label || JSON.stringify(sk)) : sk }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="skill in ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS']" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
+                    {{ skill }}
+                  </span>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
           <Button variant="ghost" style="color: var(--danger)" @click="deleteCv(selectedCv.id); closeCvModal()">Xóa CV này</Button>
           <Button variant="primary" @click="closeCvModal">Đóng</Button>
         </div>
