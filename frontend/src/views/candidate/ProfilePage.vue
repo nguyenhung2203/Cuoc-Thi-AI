@@ -222,28 +222,16 @@ const cvPages = ref([])
 
 const loadPdfAsImages = async (url) => {
   cvPages.value = []
+  pdfBlobUrl.value = ''
   pdfLoading.value = true
   try {
-    const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
     const resp = await fetch(url)
-    const buffer = await resp.arrayBuffer()
-    const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise
-    const pages = []
-    for (let p = 1; p <= pdfDoc.numPages; p++) {
-      const page = await pdfDoc.getPage(p)
-      const viewport = page.getViewport({ scale: 2.0 })
-      const canvas = document.createElement('canvas')
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      const ctx = canvas.getContext('2d')
-      await page.render({ canvasContext: ctx, viewport }).promise
-      pages.push(canvas.toDataURL('image/png'))
-    }
-    cvPages.value = pages
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const blob = await resp.blob()
+    pdfBlobUrl.value = URL.createObjectURL(blob)
   } catch (err) {
-    console.error('PDF.js render error:', err)
-    cvPages.value = []
+    console.error('Failed to load PDF:', err)
+    pdfBlobUrl.value = url
   } finally {
     pdfLoading.value = false
   }
@@ -269,12 +257,7 @@ watch(selectedCv, async (newCv) => {
     return
   }
 
-  // Try to render PDF pages as images via PDF.js
   await loadPdfAsImages(url)
-  // Fallback: show iframe if cvPages empty
-  if (cvPages.value.length === 0) {
-    pdfBlobUrl.value = url
-  }
 })
 
 // State for Security, Notifications, Privacy Tabs

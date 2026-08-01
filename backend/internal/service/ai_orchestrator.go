@@ -40,6 +40,9 @@ type StandardAIResponse struct {
 	Evidence         string          `json:"evidence"`
 	Confidence       float64         `json:"confidence"`
 	InsufficientData bool            `json:"insufficient_data"`
+	TokensIn         int             `json:"tokens_in"`
+	TokensOut        int             `json:"tokens_out"`
+	Model            string          `json:"model"`
 }
 
 // AIPayload is what we send to the Python ai-service.
@@ -196,6 +199,18 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 
 	logEntry.Status = "success"
 	logEntry.OutputJSON = models.JSONB(responseBody)
+	// Persist real token usage returned by the Python AI service
+	if aiResp.TokensIn > 0 {
+		logEntry.TokensIn = sql.NullInt32{Int32: int32(aiResp.TokensIn), Valid: true}
+	}
+	if aiResp.TokensOut > 0 {
+		logEntry.TokensOut = sql.NullInt32{Int32: int32(aiResp.TokensOut), Valid: true}
+	}
+	// Cost estimation: Gemini 2.5 Flash ~$0.30/1M input, $1.25/1M output
+	cost := float64(aiResp.TokensIn)*0.30/1_000_000 + float64(aiResp.TokensOut)*1.25/1_000_000
+	if cost > 0 {
+		logEntry.Cost = sql.NullFloat64{Float64: cost, Valid: true}
+	}
 	s.logSvc.LogAsync(logEntry)
 
 	if aiResp.InsufficientData {
