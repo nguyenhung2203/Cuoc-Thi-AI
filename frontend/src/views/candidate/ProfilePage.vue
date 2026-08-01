@@ -214,34 +214,86 @@ const closeCvModal = () => {
   selectedCv.value = null
 }
 
+const cvPages = ref([])
 const pdfBlobUrl = ref('')
 const pdfLoading = ref(false)
 
+const loadPdfAsImages = async (urlOrFile) => {
+  pdfLoading.value = true
+  cvPages.value = []
+  try {
+    let arrayBuffer = null
+    if (urlOrFile instanceof File) {
+      arrayBuffer = await urlOrFile.arrayBuffer()
+    } else if (typeof urlOrFile === 'string' && urlOrFile) {
+      const res = await fetch(urlOrFile)
+      arrayBuffer = await res.arrayBuffer()
+    }
+
+    if (!arrayBuffer) return
+
+    // Dynamically load PDF.js script if not loaded
+    if (!window.pdfjsLib) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+        script.onload = resolve
+        script.onerror = reject
+        document.head.appendChild(script)
+      })
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    }
+
+    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer })
+    const pdf = await loadingTask.promise
+    const images = []
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      const viewport = page.getViewport({ scale: 1.8 })
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      canvas.height = viewport.height
+      canvas.width = viewport.width
+
+      await page.render({ canvasContext: ctx, viewport }).promise
+      images.push(canvas.toDataURL('image/png'))
+    }
+
+    cvPages.value = images
+  } catch (err) {
+    console.error('PDF.js rendering fallback to iframe:', err)
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
 watch(selectedCv, async (newCv) => {
   if (!newCv) {
+    cvPages.value = []
     pdfBlobUrl.value = ''
+    return
+  }
+  if (newCv.url && (newCv.url.toLowerCase().includes('.png') || newCv.url.toLowerCase().includes('.jpg') || newCv.url.toLowerCase().includes('.jpeg'))) {
+    cvPages.value = [newCv.url]
     return
   }
   if (newCv.rawFile) {
     pdfBlobUrl.value = URL.createObjectURL(newCv.rawFile)
-    return
-  }
-  if (newCv.url) {
+    await loadPdfAsImages(newCv.rawFile)
+  } else if (newCv.url) {
     if (newCv.url.startsWith('blob:')) {
       pdfBlobUrl.value = newCv.url
-      return
+    } else {
+      try {
+        const resp = await fetch(newCv.url)
+        const blob = await resp.blob()
+        pdfBlobUrl.value = URL.createObjectURL(blob)
+      } catch (err) {
+        pdfBlobUrl.value = newCv.url
+      }
     }
-    pdfLoading.value = true
-    try {
-      const resp = await fetch(newCv.url)
-      const blob = await resp.blob()
-      pdfBlobUrl.value = URL.createObjectURL(blob)
-    } catch (err) {
-      console.error('Failed to fetch PDF blob', err)
-      pdfBlobUrl.value = newCv.url
-    } finally {
-      pdfLoading.value = false
-    }
+    await loadPdfAsImages(newCv.url)
   }
 })
 
@@ -1094,15 +1146,27 @@ const confirmDeleteAccount = async () => {
     <!-- CV Detail Modal -->
     <Modal :isOpen="!!selectedCv" @close="closeCvModal" :title="`Xem CV: ${selectedCv?.name || 'Hồ sơ'}`" size="xl">
       <div v-if="selectedCv" class="space-y-4">
-        <!-- PDF / File Viewer Preview (Full width & expanded height) -->
-        <div class="w-full bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-2 text-center min-h-[640px] overflow-hidden relative">
-          <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-12 text-[var(--primary)] font-semibold gap-3">
+        <!-- Clean Page Image Viewer (NO PDF toolbar / NO controls) -->
+        <div class="w-full bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start p-4 text-center min-h-[600px] max-h-[720px] overflow-y-auto custom-scrollbar relative">
+          <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-16 text-[var(--primary)] font-semibold gap-3 my-auto">
             <Loader2 class="w-10 h-10 animate-spin" />
-            <span class="text-base">Đang tải tài liệu CV...</span>
+            <span class="text-base">Đang chuyển đổi CV sang hình ảnh sắc nét...</span>
           </div>
-          <img v-else-if="pdfBlobUrl && (pdfBlobUrl.toLowerCase().includes('.png') || pdfBlobUrl.toLowerCase().includes('.jpg') || pdfBlobUrl.toLowerCase().includes('.jpeg'))" :src="pdfBlobUrl" class="max-h-[640px] w-auto object-contain rounded-lg shadow-sm" />
-          <iframe v-else-if="pdfBlobUrl" :src="pdfBlobUrl" class="w-full h-[640px] rounded-lg border-0 bg-white shadow-sm"></iframe>
-          <div v-else class="flex flex-col items-center justify-center p-12">
+
+          <div v-else-if="cvPages.length > 0" class="w-full flex flex-col items-center gap-6">
+            <div v-for="(imgSrc, pageIdx) in cvPages" :key="pageIdx" class="relative w-full max-w-[850px] shadow-lg rounded-xl overflow-hidden border border-slate-300 bg-white">
+              <img :src="imgSrc" class="w-full h-auto object-contain block" :alt="`Trang ${pageIdx + 1}`" />
+              <div class="absolute bottom-3 right-4 bg-slate-900/80 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
+                Trang {{ pageIdx + 1 }} / {{ cvPages.length }}
+              </div>
+            </div>
+          </div>
+
+          <div v-else-if="pdfBlobUrl" class="w-full h-[640px] my-auto">
+            <iframe :src="pdfBlobUrl + '#toolbar=0&navpanes=0&view=FitH'" class="w-full h-full rounded-xl border-0 bg-white shadow-sm"></iframe>
+          </div>
+
+          <div v-else class="flex flex-col items-center justify-center p-12 my-auto">
             <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
             <p class="text-[var(--text-secondary)] font-medium">Không thể hiển thị bản xem trước cho tài liệu này</p>
           </div>
