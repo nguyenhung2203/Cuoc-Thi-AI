@@ -225,7 +225,7 @@ const loadPdfAsImages = async (url) => {
   pdfLoading.value = true
   try {
     const pdfjsLib = await import('pdfjs-dist')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`
     const resp = await fetch(url)
     const buffer = await resp.arrayBuffer()
     const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise
