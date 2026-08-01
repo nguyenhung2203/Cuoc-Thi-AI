@@ -1,0 +1,11 @@
+version: "3"
+tunnels:
+  frontend:
+    proto: http
+    addr: 5173
+  api:
+    proto: http
+    addr: 8080
+  realtime:
+    proto: http
+    addr: 8081

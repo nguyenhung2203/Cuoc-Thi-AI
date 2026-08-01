@@ -65,15 +65,20 @@ const getSalaryDisplay = (job) => {
   const max = unwrap(job.salary_max)
   const curr = unwrap(job.currency) || 'VND'
   if (!min && !max) return 'Thỏa thuận'
-  if (min && !max) return `Từ ${min} ${curr}`
-  if (!min && max) return `Đến ${max} ${curr}`
-  return `${min} - ${max} ${curr}`
+  const formatNum = (n) => typeof n === 'number' ? n.toLocaleString('vi-VN') : n
+  if (min && !max) return `Từ ${formatNum(min)} ${curr}`
+  if (!min && max) return `Đến ${formatNum(max)} ${curr}`
+  return `${formatNum(min)} - ${formatNum(max)} ${curr}`
 }
 
 const unwrap = (val) => {
-  if (!val) return ''
-  if (typeof val === 'object' && 'String' in val) {
-    return val.Valid ? val.String : ''
+  if (!val && val !== 0) return ''
+  if (typeof val === 'object') {
+    if ('String' in val) return val.Valid ? val.String : ''
+    if ('Int64' in val) return val.Valid ? val.Int64 : ''
+    if ('Float64' in val) return val.Valid ? val.Float64 : ''
+    if ('Int32' in val) return val.Valid ? val.Int32 : ''
+    if ('Bool' in val) return val.Valid ? val.Bool : ''
   }
   return val
 }
@@ -89,7 +94,7 @@ const fetchJobs = async (page = 1) => {
     
     const res = await apiService.getWithMeta(`/public/all-jobs?${params.toString()}`)
     
-    // Map to unwrap sql.NullString objects
+    // Map to unwrap sql.NullString / sql.NullInt64 objects
     jobs.value = (res.data || []).map(j => ({
       ...j,
       company_name: unwrap(j.company_name),
@@ -97,6 +102,9 @@ const fetchJobs = async (page = 1) => {
       employment_type: unwrap(j.employment_type),
       department: unwrap(j.department),
       level: unwrap(j.level),
+      salary_min: unwrap(j.salary_min),
+      salary_max: unwrap(j.salary_max),
+      currency: unwrap(j.currency),
     }))
     
     if (res.meta) {
@@ -256,7 +264,7 @@ const viewJob = (job) => {
           v-for="loc in locationStats.slice(0, 8)" :key="loc.name"
           @click="quickFilterActive = loc.name; selectedLocation = loc.name; handleSearch()"
           :class="['jb-pill', quickFilterActive === loc.name ? 'active' : '']">
-          {{ loc.name }}
+          {{ loc.name }} ({{ loc.count }})
         </button>
       </div>
     </div>
@@ -312,7 +320,7 @@ const viewJob = (job) => {
               {{ job.title }}
             </h3>
             <div class="jb-company">
-              {{ unwrap(job.company_name) || 'Công ty TNHH WeMake' }}
+              {{ unwrap(job.company_name) || 'Chưa cập nhật' }}
             </div>
             
             <div class="jb-tags">

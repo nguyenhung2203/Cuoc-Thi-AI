@@ -5,7 +5,7 @@ import { authStore } from '../../stores/auth.store'
 import { useNotificationStore } from '../../stores/notification.store'
 import { fileService } from '../../services/file.service'
 import { authService } from '../../services/auth.service'
-import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight, Sun, Moon, Globe, ChevronDown, Check } from 'lucide-vue-next'
+import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, ChevronLeft, ChevronRight, Sun, Moon, Globe, ChevronDown, Check, Menu, X } from 'lucide-vue-next'
 import { langStore } from '../../stores/lang.store'
 import AppLogo from '../common/AppLogo.vue'
 
@@ -15,6 +15,7 @@ const notificationStore = useNotificationStore()
 const showNotifications = ref(false)
 const showLangMenu = ref(false)
 const isCollapsed = ref(false)
+const isMobileOpen = ref(false)
 const uploading = ref(false)
 const currentTheme = ref(localStorage.getItem('app_theme') || 'light')
 const currentLang = computed(() => langStore.lang)
@@ -76,6 +77,7 @@ const handleUploadDocument = async (event) => {
 };
 
 watch(() => route.path, (newPath) => {
+  isMobileOpen.value = false
   if (newPath.includes('/recruiter-room')) {
     isCollapsed.value = true
   } else {
@@ -168,8 +170,11 @@ const currentMenu = computed(() => recruiterMenu)
       </div>
     </div>
 
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div v-if="isMobileOpen" class="rc-sidebar-backdrop" @click="isMobileOpen = false"></div>
+
     <!-- Sidebar -->
-    <aside class="rc-sidebar" :class="{ 'is-collapsed': isCollapsed }">
+    <aside class="rc-sidebar" :class="{ 'is-collapsed': isCollapsed, 'is-mobile-open': isMobileOpen }">
       <div class="rc-brand">
         <div v-if="!isCollapsed" class="cursor-pointer flex items-center overflow-hidden" @click="router.push('/dashboard')">
           <AppLogo size="sm" />
@@ -214,7 +219,12 @@ const currentMenu = computed(() => recruiterMenu)
     
     <!-- Main Content -->
     <main class="rc-main custom-scrollbar">
-      <header v-if="!isRoomView" class="rc-header">
+      <header v-if="!isRoomView && !route.path.includes('/recruiter-room')" class="rc-header">
+        <!-- Mobile Menu Toggle Button -->
+        <button class="mobile-menu-btn" @click.stop="isMobileOpen = !isMobileOpen">
+          <Menu v-if="!isMobileOpen" :size="20" />
+          <X v-else :size="20" />
+        </button>
         <!-- Language Selector Dropdown -->
         <div style="position: relative; cursor: pointer;" @click.stop="showLangMenu = !showLangMenu; showNotifications = false">
           <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background-color: var(--surface-soft); border: 1px solid var(--border); transition: all 0.2s; font-size: 13px; font-weight: 600; color: var(--text-main)" class="hover-border">
@@ -330,12 +340,14 @@ const currentMenu = computed(() => recruiterMenu)
 
 /* Main + header */
 .rc-main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: var(--background); }
-.rc-header { position: sticky; top: 0; height: 68px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 32px; border-bottom: 1px solid var(--border); background: var(--surface); backdrop-filter: blur(8px); z-index: 40; flex-shrink: 0; transition: background 0.3s ease, border-color 0.3s ease; }
+.rc-header { position: sticky; top: 0; height: 68px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); backdrop-filter: blur(8px); z-index: 40; flex-shrink: 0; transition: background 0.3s ease, border-color 0.3s ease; }
+@media (min-width: 768px) { .rc-header { padding: 0 32px; } }
 .icon-btn { display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 50%; color: var(--text-secondary); cursor: pointer; transition: background 0.2s ease; }
 .icon-btn:hover { background: var(--surface-soft); color: var(--text-main); }
-.notif-badge { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; background: var(--danger); color: #fff; border: 2px solid var(--surface); border-radius: var(--radius-full); font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.notif-badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; background: var(--danger); color: #fff; border: 2px solid var(--surface); border-radius: var(--radius-full); font-size: 10px; font-weight: 700; line-height: 1; display: flex; align-items: center; justify-content: center; transform: translate(25%, -25%); pointer-events: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); }
 
-.rc-content { flex: 1; padding: 24px; }
+.rc-content { flex: 1; padding: 16px; }
+@media (min-width: 768px) { .rc-content { padding: 24px; } }
 @media (min-width: 1024px) { .rc-content { padding: 32px; } }
 
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -345,6 +357,71 @@ const currentMenu = computed(() => recruiterMenu)
 .hover-circle:hover { background-color: var(--border) !important; }
 .hover-border:hover { border-color: var(--primary) !important; }
 .hover-bg:hover { background-color: var(--surface-soft) !important; }
+
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: auto;
+  transition: all 0.2s;
+}
+.mobile-menu-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text-main);
+}
+
+/* Backdrop Overlay */
+.rc-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 45;
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Media Queries for Mobile responsiveness */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+  
+  .rc-sidebar-backdrop {
+    display: block;
+  }
+  
+  .rc-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 240px !important;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 50;
+  }
+  
+  .rc-sidebar.is-mobile-open {
+    transform: translateX(0);
+  }
+  
+  .collapse-btn {
+    display: none;
+  }
+}
 </style>
 
 <style scoped>

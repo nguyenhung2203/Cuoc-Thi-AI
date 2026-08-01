@@ -27,7 +27,7 @@ import { langStore } from '../../stores/lang.store'
 import { 
   User, Key, Bell, Shield, Monitor, Upload, FileText, CheckCircle, 
   Save, Trash2, Eye, X, Bot, Loader2, UserRound, Target, Code2, 
-  Info, Lock, AlertCircle, Check, ArrowRight, Smartphone, LogOut, ShieldCheck, Clock, History
+  Info, Lock, AlertCircle, Check, ArrowRight, Smartphone, LogOut, ShieldCheck, Clock, History, Star
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -90,6 +90,16 @@ const fileInput = ref(null)
 const avatarInput = ref(null)
 const selectedCv = ref(null)
 const profileErrors = ref({})
+const defaultCvId = ref(localStorage.getItem('candidate_default_cv_id') || null)
+
+const setDefaultCv = (cv) => {
+  defaultCvId.value = String(cv.id)
+  localStorage.setItem('candidate_default_cv_id', String(cv.id))
+  toast.value = { 
+    type: 'success', 
+    message: `Đã đặt "${cv.name}" làm CV mặc định!` 
+  }
+}
 
 const handleAvatarChange = (e) => {
   const file = e.target.files?.[0]
@@ -127,7 +137,7 @@ const handleFileUpload = async (e) => {
         continue
       }
       profileErrors.value.cv = ''
-      const cvId = Date.now() + i
+      const cvId = String(Date.now() + i)
       const tempUrl = URL.createObjectURL(file)
 
       const cvData = {
@@ -137,11 +147,19 @@ const handleFileUpload = async (e) => {
         date: new Date().toLocaleDateString('vi-VN'),
         status: 'analyzing',
         url: tempUrl,
-        parsedData: null
+        parsedData: null,
+        rawFile: file
       }
       
       if (!uploadedCvs.value.find(cv => cv.name === file.name)) {
         uploadedCvs.value.unshift(cvData)
+
+        // Set first uploaded CV as default automatically if no default exists
+        if (!defaultCvId.value) {
+          defaultCvId.value = cvId
+          localStorage.setItem('candidate_default_cv_id', cvId)
+        }
+
         try {
           const res = await candidatePortalService.uploadCv(file)
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
@@ -166,8 +184,18 @@ const handleFileUpload = async (e) => {
 }
 
 const deleteCv = (id) => {
-  uploadedCvs.value = uploadedCvs.value.filter(cv => cv.id !== id)
+  const strId = String(id)
+  uploadedCvs.value = uploadedCvs.value.filter(cv => String(cv.id) !== strId)
   localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
+  if (String(defaultCvId.value) === strId) {
+    if (uploadedCvs.value.length > 0) {
+      defaultCvId.value = String(uploadedCvs.value[0].id)
+      localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
+    } else {
+      defaultCvId.value = null
+      localStorage.removeItem('candidate_default_cv_id')
+    }
+  }
   if (fileInput.value) fileInput.value.value = ''
 }
 
@@ -309,6 +337,11 @@ onMounted(async () => {
         uploadedCvs.value.push(savedCv)
       }
     })
+  }
+
+  if (uploadedCvs.value.length > 0 && !defaultCvId.value) {
+    defaultCvId.value = String(uploadedCvs.value[0].id)
+    localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
   }
 })
 
@@ -606,25 +639,45 @@ const confirmDeleteAccount = async () => {
                 </div>
 
                 <div v-if="uploadedCvs.length > 0" class="space-y-3 mt-6">
-                  <h4 class="pf-list-title">Danh sách CV đã tải lên</h4>
+                  <div class="flex items-center justify-between">
+                    <h4 class="pf-list-title mb-0">Danh sách CV đã tải lên ({{ uploadedCvs.length }})</h4>
+                    <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span>
+                  </div>
 
-                  <div v-for="cv in uploadedCvs" :key="cv.id" @click="cv.status === 'done' && viewCv(cv)" class="pf-cv-item group" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
-                    <div class="pf-cv-icon" :class="cv.status === 'done' ? '' : 'is-muted'">
-                      <FileText :size="20" />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="pf-cv-name truncate">{{ cv.name }}</div>
-                      <div class="pf-cv-meta" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
-                        <CheckCircle v-if="cv.status === 'done'" :size="12" />
-                        <Loader2 v-else class="pf-spin" :size="12" />
-                        {{ cv.status === 'done' ? cv.date + ' • ' + cv.size : 'Đang phân tích...' }}
+                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
+                    <div class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer" @click="cv.status === 'done' && viewCv(cv)">
+                      <div class="pf-cv-icon shrink-0" :class="cv.status === 'done' ? '' : 'is-muted'">
+                        <FileText :size="20" />
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <div class="pf-cv-name truncate font-semibold text-sm text-[var(--text-main)]">{{ cv.name }}</div>
+                          <!-- Default Badge -->
+                          <span v-if="String(cv.id) === String(defaultCvId)" class="px-2.5 py-0.5 rounded-full bg-[var(--primary-light)] text-[var(--primary)] font-bold text-[11px] flex items-center gap-1 shrink-0 border border-[var(--primary)]/20">
+                            <Star :size="12" fill="currentColor" /> Mặc định
+                          </span>
+                        </div>
+                        <div class="pf-cv-meta flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
+                          <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)]" />
+                          <Loader2 v-else class="pf-spin text-[var(--primary)]" :size="12" />
+                          {{ cv.status === 'done' ? cv.date + ' • ' + cv.size : 'Đang phân tích...' }}
+                        </div>
                       </div>
                     </div>
-                    <div v-if="cv.status === 'done'" class="flex items-center gap-1 shrink-0">
+
+                    <div v-if="cv.status === 'done'" class="flex items-center gap-2 shrink-0">
+                      <button 
+                        v-if="String(cv.id) !== String(defaultCvId)" 
+                        type="button" 
+                        @click.stop="setDefaultCv(cv)" 
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                        title="Đặt làm CV mặc định">
+                        <Star :size="13" /> Chọn mặc định
+                      </button>
                       <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="16"/></button>
                       <button type="button" @click.stop="deleteCv(cv.id)" class="pf-icon-btn is-danger" title="Xóa"><Trash2 :size="16"/></button>
                     </div>
-                    <div v-else class="pf-analyzing shrink-0">Đang xử lý</div>
+                    <div v-else class="pf-analyzing shrink-0 text-xs text-[var(--text-muted)] font-medium">Đang xử lý</div>
                   </div>
                 </div>
 
