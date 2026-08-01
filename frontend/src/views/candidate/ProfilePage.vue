@@ -218,32 +218,62 @@ const closeCvModal = () => {
 
 const pdfBlobUrl = ref('')
 const pdfLoading = ref(false)
+const cvPages = ref([])
+
+const loadPdfAsImages = async (url) => {
+  cvPages.value = []
+  pdfLoading.value = true
+  try {
+    const pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href
+    const resp = await fetch(url)
+    const buffer = await resp.arrayBuffer()
+    const pdfDoc = await pdfjsLib.getDocument({ data: buffer }).promise
+    const pages = []
+    for (let p = 1; p <= pdfDoc.numPages; p++) {
+      const page = await pdfDoc.getPage(p)
+      const viewport = page.getViewport({ scale: 2.0 })
+      const canvas = document.createElement('canvas')
+      canvas.width = viewport.width
+      canvas.height = viewport.height
+      const ctx = canvas.getContext('2d')
+      await page.render({ canvasContext: ctx, viewport }).promise
+      pages.push(canvas.toDataURL('image/png'))
+    }
+    cvPages.value = pages
+  } catch (err) {
+    console.error('PDF.js render error:', err)
+    cvPages.value = []
+  } finally {
+    pdfLoading.value = false
+  }
+}
 
 watch(selectedCv, async (newCv) => {
-  if (!newCv) {
-    pdfBlobUrl.value = ''
-    return
-  }
+  cvPages.value = []
+  pdfBlobUrl.value = ''
+  if (!newCv) return
+
+  let url = ''
   if (newCv.rawFile) {
-    pdfBlobUrl.value = URL.createObjectURL(newCv.rawFile)
+    url = URL.createObjectURL(newCv.rawFile)
+  } else if (newCv.url) {
+    url = newCv.url
+  }
+
+  if (!url) return
+
+  const isImage = /\.(png|jpe?g|webp|gif)$/i.test(url)
+  if (isImage) {
+    pdfBlobUrl.value = url
     return
   }
-  if (newCv.url) {
-    if (newCv.url.startsWith('blob:')) {
-      pdfBlobUrl.value = newCv.url
-      return
-    }
-    pdfLoading.value = true
-    try {
-      const resp = await fetch(newCv.url)
-      const blob = await resp.blob()
-      pdfBlobUrl.value = URL.createObjectURL(blob)
-    } catch (err) {
-      console.error('Failed to fetch PDF blob', err)
-      pdfBlobUrl.value = newCv.url
-    } finally {
-      pdfLoading.value = false
-    }
+
+  // Try to render PDF pages as images via PDF.js
+  await loadPdfAsImages(url)
+  // Fallback: show iframe if cvPages empty
+  if (cvPages.value.length === 0) {
+    pdfBlobUrl.value = url
   }
 })
 
