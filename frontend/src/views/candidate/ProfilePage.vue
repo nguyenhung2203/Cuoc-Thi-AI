@@ -641,13 +641,17 @@ const confirmDeleteAccount = async () => {
                 <div v-if="uploadedCvs.length > 0" class="space-y-3 mt-6">
                   <div class="flex items-center justify-between">
                     <h4 class="pf-list-title mb-0">Danh sách CV đã tải lên ({{ uploadedCvs.length }})</h4>
-                    <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span>
+                    <!-- <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span> -->
                   </div>
 
                   <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
                     <div class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer" @click="cv.status === 'done' && viewCv(cv)">
-                      <div class="pf-cv-icon shrink-0" :class="cv.status === 'done' ? '' : 'is-muted'">
-                        <FileText :size="20" />
+                      <div class="pf-cv-icon shrink-0 w-11 h-11 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden" :class="cv.status === 'done' ? '' : 'opacity-60'">
+                        <img v-if="cv.url && (cv.url.toLowerCase().includes('.png') || cv.url.toLowerCase().includes('.jpg') || cv.url.toLowerCase().includes('.jpeg'))" :src="cv.url" class="w-full h-full object-cover" />
+                        <div v-else class="flex flex-col items-center justify-center text-[var(--primary)] font-extrabold text-[10px] leading-tight">
+                          <FileText :size="18" />
+                          <span style="font-size: 9px; margin-top: -2px">PDF</span>
+                        </div>
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
@@ -1026,14 +1030,16 @@ const confirmDeleteAccount = async () => {
       <div v-if="selectedCv" class="space-y-6">
         <div class="flex flex-col lg:flex-row gap-6">
           <!-- PDF / File Viewer Preview -->
-          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-4 text-center min-h-[480px]">
-            <object v-if="selectedCv.url" :data="selectedCv.url" type="application/pdf" class="w-full h-[480px] rounded-lg">
-              <div class="flex flex-col items-center justify-center h-full p-8">
-                <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
-                <p class="text-[var(--text-secondary)] font-medium">Trình duyệt không hỗ trợ hiển thị PDF nhúng trực tiếp.</p>
-                <a :href="selectedCv.url" target="_blank" class="mt-3 text-[var(--primary)] font-semibold hover:underline">Tải xuống để xem chi tiết</a>
+          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-3 text-center min-h-[500px] overflow-hidden">
+            <div v-if="selectedCv.url" class="w-full flex flex-col items-center">
+              <div class="w-full flex justify-end mb-2">
+                <a :href="selectedCv.url" target="_blank" class="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-[var(--border)] shadow-sm">
+                  <span>🔗 Mở file xem toàn màn hình</span>
+                </a>
               </div>
-            </object>
+              <img v-if="selectedCv.url.toLowerCase().includes('.png') || selectedCv.url.toLowerCase().includes('.jpg') || selectedCv.url.toLowerCase().includes('.jpeg')" :src="selectedCv.url" class="max-h-[460px] object-contain rounded-lg shadow-sm" />
+              <iframe v-else :src="selectedCv.url" class="w-full h-[460px] rounded-lg border-0 bg-white shadow-sm"></iframe>
+            </div>
             <div v-else class="flex flex-col items-center justify-center p-8">
               <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
               <p class="text-[var(--text-secondary)] font-medium">Không có bản xem trước cho tài liệu này</p>
@@ -1044,21 +1050,25 @@ const confirmDeleteAccount = async () => {
           <div class="w-full lg:w-[360px] space-y-5 shrink-0">
             <div class="ai-block p-4">
               <h4 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-[var(--accent)]">
-                <Bot :size="16" /> Thông tin AI trích xuất
+                <Bot :size="16" /> Thông tin AI trích xuất (Gemini)
               </h4>
               <div class="space-y-3 text-sm">
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
-                  <span class="font-bold text-[var(--text-main)]">{{ selectedCv.parsedData?.role || 'Chưa cập nhật' }}</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || (selectedCv.parsedData?.work_experience?.[0]?.role) || 'Chuyên viên Công nghệ' }}
+                  </span>
                 </div>
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
-                  <span class="font-bold text-[var(--text-main)]">{{ selectedCv.parsedData?.level || 'Chưa cập nhật' }}</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Middle') }}
+                  </span>
                 </div>
                 <div class="flex items-center justify-between pt-1">
-                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái:</span>
+                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái AI:</span>
                   <span class="font-bold text-[var(--success)] flex items-center gap-1">
-                    <CheckCircle :size="14" /> Hoàn tất
+                    <CheckCircle :size="14" /> Đã phân tích từ Backend
                   </span>
                 </div>
               </div>
@@ -1067,9 +1077,16 @@ const confirmDeleteAccount = async () => {
             <div>
               <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Kỹ năng phát hiện được</h4>
               <div class="flex flex-wrap gap-2">
-                <span v-for="skill in (selectedCv.parsedData?.skills || ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS'])" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
-                  {{ skill }}
-                </span>
+                <template v-if="selectedCv.parsedData?.skills && selectedCv.parsedData.skills.length > 0">
+                  <span v-for="(sk, idx) in selectedCv.parsedData.skills" :key="idx" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40 font-semibold">
+                    {{ typeof sk === 'object' ? (sk.name || sk.label || JSON.stringify(sk)) : sk }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="skill in ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS']" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
+                    {{ skill }}
+                  </span>
+                </template>
               </div>
             </div>
           </div>
