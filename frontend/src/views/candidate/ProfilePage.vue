@@ -153,6 +153,14 @@ const handleFileUpload = async (e) => {
       
       if (!uploadedCvs.value.find(cv => cv.name === file.name)) {
         uploadedCvs.value.unshift(cvData)
+        
+        securityLogs.value.unshift({
+          id: Date.now(),
+          action: 'Tải CV mới lên hệ thống',
+          details: file.name,
+          time: 'Vừa xong',
+          status: 'info'
+        })
 
         // Set first uploaded CV as default automatically if no default exists
         if (!defaultCvId.value) {
@@ -235,9 +243,32 @@ const toggleTwoFactor = () => {
   }
 }
 
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent || ''
+  let os = 'Windows'
+  if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Linux')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+  let browser = 'Chrome'
+  if (ua.includes('Firefox')) browser = 'Firefox'
+  else if (ua.includes('Edg')) browser = 'Edge'
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari'
+
+  return `${os} • ${browser}`
+}
+
 const activeSessions = ref([
-  { id: 1, device: 'Windows 11 • Google Chrome 126.0', location: 'TP. Hồ Chí Minh, Việt Nam', ip: '14.161.22.105', lastActive: 'Đang hoạt động (Thiết bị này)', isCurrent: true, icon: Monitor },
-  { id: 2, device: 'iPhone 15 Pro Max • Safari iOS 17.5', location: 'Hà Nội, Việt Nam', ip: '113.160.12.88', lastActive: '2 ngày trước', isCurrent: false, icon: Smartphone }
+  { 
+    id: 1, 
+    device: getDeviceInfo(), 
+    location: 'Thiết bị hiện tại', 
+    ip: '127.0.0.1 (Localhost)', 
+    lastActive: 'Đang hoạt động (Thiết bị này)', 
+    isCurrent: true, 
+    icon: Monitor 
+  }
 ])
 
 const revokeOtherSessions = () => {
@@ -246,9 +277,13 @@ const revokeOtherSessions = () => {
 }
 
 const securityLogs = ref([
-  { id: 101, action: 'Đăng nhập thành công vào hệ thống', details: 'Trình duyệt Chrome trên Windows 11', time: 'Vừa xong', status: 'success' },
-  { id: 102, action: 'Cập nhật CV trong hồ sơ cá nhân', details: 'CV_Senior_Software_Engineer.pdf', time: 'Hôm nay, 10:15', status: 'info' },
-  { id: 103, action: 'Đổi mật khẩu tài khoản', details: 'Xác thực qua mã OTP thành công', time: '10/07/2026, 09:30', status: 'warning' }
+  { 
+    id: 101, 
+    action: 'Đăng nhập vào hệ thống', 
+    details: `Đã xác thực thành công trên ${getDeviceInfo()}`, 
+    time: 'Vừa xong', 
+    status: 'success' 
+  }
 ])
 
 const passwordStrength = computed(() => {
