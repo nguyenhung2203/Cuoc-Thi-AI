@@ -1092,70 +1092,23 @@ const confirmDeleteAccount = async () => {
     </div>
 
     <!-- CV Detail Modal -->
-    <Modal :isOpen="!!selectedCv" @close="closeCvModal" title="Chi tiết CV & Trích xuất AI" size="xl">
-      <div v-if="selectedCv" class="space-y-6">
-        <div class="flex flex-col lg:flex-row gap-6">
-          <!-- PDF / File Viewer Preview -->
-          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-2 text-center min-h-[520px] overflow-hidden relative">
-            <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-8 text-[var(--primary)] font-semibold gap-2">
-              <Loader2 class="w-8 h-8 animate-spin" />
-              <span>Đang tải xem trước CV...</span>
-            </div>
-            <img v-else-if="pdfBlobUrl && (pdfBlobUrl.toLowerCase().includes('.png') || pdfBlobUrl.toLowerCase().includes('.jpg') || pdfBlobUrl.toLowerCase().includes('.jpeg'))" :src="pdfBlobUrl" class="max-h-[500px] object-contain rounded-lg shadow-sm" />
-            <iframe v-else-if="pdfBlobUrl" :src="pdfBlobUrl" class="w-full h-[520px] rounded-lg border-0 bg-white shadow-sm"></iframe>
-            <div v-else class="flex flex-col items-center justify-center p-8">
-              <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
-              <p class="text-[var(--text-secondary)] font-medium">Không có bản xem trước cho tài liệu này</p>
-            </div>
+    <Modal :isOpen="!!selectedCv" @close="closeCvModal" :title="`Xem CV: ${selectedCv?.name || 'Hồ sơ'}`" size="xl">
+      <div v-if="selectedCv" class="space-y-4">
+        <!-- PDF / File Viewer Preview (Full width & expanded height) -->
+        <div class="w-full bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-2 text-center min-h-[640px] overflow-hidden relative">
+          <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-12 text-[var(--primary)] font-semibold gap-3">
+            <Loader2 class="w-10 h-10 animate-spin" />
+            <span class="text-base">Đang tải tài liệu CV...</span>
           </div>
-
-          <!-- Extracted Data -->
-          <div class="w-full lg:w-[360px] space-y-5 shrink-0">
-            <div class="ai-block p-4">
-              <h4 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-[var(--accent)]">
-                <Bot :size="16" /> Thông tin AI trích xuất (Gemini)
-              </h4>
-              <div class="space-y-3 text-sm">
-                <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
-                  <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
-                  <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || (selectedCv.parsedData?.work_experience?.[0]?.role) || 'Chuyên viên Công nghệ' }}
-                  </span>
-                </div>
-                <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
-                  <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
-                  <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Middle') }}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between pt-1">
-                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái AI:</span>
-                  <span class="font-bold text-[var(--success)] flex items-center gap-1">
-                    <CheckCircle :size="14" /> Đã phân tích từ Backend
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Kỹ năng phát hiện được</h4>
-              <div class="flex flex-wrap gap-2">
-                <template v-if="selectedCv.parsedData?.skills && selectedCv.parsedData.skills.length > 0">
-                  <span v-for="(sk, idx) in selectedCv.parsedData.skills" :key="idx" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40 font-semibold">
-                    {{ typeof sk === 'object' ? (sk.name || sk.label || JSON.stringify(sk)) : sk }}
-                  </span>
-                </template>
-                <template v-else>
-                  <span v-for="skill in ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS']" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
-                    {{ skill }}
-                  </span>
-                </template>
-              </div>
-            </div>
+          <img v-else-if="pdfBlobUrl && (pdfBlobUrl.toLowerCase().includes('.png') || pdfBlobUrl.toLowerCase().includes('.jpg') || pdfBlobUrl.toLowerCase().includes('.jpeg'))" :src="pdfBlobUrl" class="max-h-[640px] w-auto object-contain rounded-lg shadow-sm" />
+          <iframe v-else-if="pdfBlobUrl" :src="pdfBlobUrl" class="w-full h-[640px] rounded-lg border-0 bg-white shadow-sm"></iframe>
+          <div v-else class="flex flex-col items-center justify-center p-12">
+            <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
+            <p class="text-[var(--text-secondary)] font-medium">Không thể hiển thị bản xem trước cho tài liệu này</p>
           </div>
         </div>
 
-        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+        <div class="flex justify-end gap-3 pt-3 border-t border-[var(--border)]">
           <Button variant="ghost" style="color: var(--danger)" @click="deleteCv(selectedCv.id); closeCvModal()">Xóa CV này</Button>
           <Button variant="primary" @click="closeCvModal">Đóng</Button>
         </div>
