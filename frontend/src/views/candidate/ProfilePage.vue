@@ -1060,6 +1060,7 @@ const confirmDeleteAccount = async () => {
                   <Save :size="16" /> Lưu cấu hình AI
                 </Button>
               </div>
+            </div>
           </Card>
         </div>
 
