@@ -33,7 +33,7 @@ export const roomService = {
    * @param {String} roomId
    */
   getChatHistory: async (roomId) => {
-    const wsBase = import.meta.env.VITE_WS_URL || 'ws://localhost:8081';
+    const wsBase = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
     // VITE_WS_URL có thể kèm path (vd ws://host:8081/ws/interview-room);
     // chỉ giữ lại origin (scheme+host+port) và đổi ws(s):// -> http(s)://
     const httpScheme = wsBase.replace(/^ws(s)?:\/\//, (_, s) => (s ? 'https://' : 'http://'));

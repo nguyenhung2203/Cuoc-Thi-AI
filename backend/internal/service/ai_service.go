@@ -21,48 +21,26 @@ import (
 )
 
 type AIService struct {
-	fileRepo      *repository.FileRepository
-	candidateRepo *repository.CandidateRepository
-	geminiKeys    []string
-	uploadDir     string
-	logSvc        *AILogService
+	fileRepo       *repository.FileRepository
+	candidateRepo  *repository.CandidateRepository
+	configProvider AIRuntimeConfigProvider
+	uploadDir      string
+	logSvc         *AILogService
 }
 
 func NewAIService(
 	fileRepo *repository.FileRepository,
 	candidateRepo *repository.CandidateRepository,
-	geminiKey string,
+	configProvider AIRuntimeConfigProvider,
 	uploadDir string,
 ) *AIService {
 	rand.Seed(time.Now().UnixNano())
-	
-	// Read GEMINI_API_KEYS from env if present, else fallback to geminiKey
-	keysStr := os.Getenv("GEMINI_API_KEYS")
-	if keysStr == "" {
-		keysStr = geminiKey
-	}
-	
-	var keys []string
-	for _, k := range strings.Split(keysStr, ",") {
-		k = strings.TrimSpace(k)
-		if k != "" {
-			keys = append(keys, k)
-		}
-	}
-	
-	if len(keys) == 0 {
-		keys = []string{""} // Fallback to empty string if missing
-	}
-
 	if uploadDir == "" {
 		uploadDir = "uploads"
 	}
-
 	return &AIService{
-		fileRepo:      fileRepo,
-		candidateRepo: candidateRepo,
-		geminiKeys:    keys,
-		uploadDir:     uploadDir,
+		fileRepo: fileRepo, candidateRepo: candidateRepo,
+		configProvider: configProvider, uploadDir: uploadDir,
 	}
 }
 
@@ -75,15 +53,23 @@ func (s *AIService) SetLogService(logSvc *AILogService) {
 // requesting a JSON response, rotating through the configured API keys with
 // retry on failure. Returns the cleaned JSON text, tokens_in, tokens_out.
 func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (text string, tokensIn, tokensOut int32, err error) {
-	if len(s.geminiKeys) == 0 || s.geminiKeys[0] == "" {
+	if s.configProvider == nil {
+		return "", 0, 0, fmt.Errorf("AI runtime configuration is not available")
+	}
+	cfg, err := s.configProvider.GetRuntimeConfig(ctx)
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("load AI runtime configuration: %w", err)
+	}
+	if len(cfg.APIKeys) == 0 {
 		return "", 0, 0, fmt.Errorf("GEMINI_API_KEY is not configured")
 	}
+	model := firstNonEmpty(cfg.TextModel, DefaultTextModel)
 
 	var lastErr error
-	startIndex := rand.Intn(len(s.geminiKeys))
-	for i := 0; i < len(s.geminiKeys); i++ {
-		idx := (startIndex + i) % len(s.geminiKeys)
-		key := s.geminiKeys[idx]
+	startIndex := rand.Intn(len(cfg.APIKeys))
+	for i := 0; i < len(cfg.APIKeys); i++ {
+		idx := (startIndex + i) % len(cfg.APIKeys)
+		key := cfg.APIKeys[idx]
 
 		client, cerr := genai.NewClient(ctx, &genai.ClientConfig{
 			APIKey:  key,
@@ -94,7 +80,7 @@ func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (text
 			continue
 		}
 
-		resp, gerr := client.Models.GenerateContent(ctx, "gemini-2.5-flash",
+		resp, gerr := client.Models.GenerateContent(ctx, model,
 			genai.Text(prompt),
 			&genai.GenerateContentConfig{ResponseMIMEType: "application/json"},
 		)
@@ -136,7 +122,7 @@ func ExtractTextFromPDF(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Trim any leading whitespace or newlines which can break PDF parsers
 	data = bytes.TrimLeft(data, " \t\r\n")
 
@@ -190,15 +176,11 @@ Resume Text:
 		latency := time.Since(start).Milliseconds()
 		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
 		s.logSvc.LogAsync(&models.AIRequestLog{
-			CompanyID:  "system",
-			InputJSON:  models.JSONB(`{"template":"cv_extract"}`),
-			OutputJSON: models.JSONB(cleanJSON),
-			LatencyMs:  sql.NullInt32{Int32: int32(latency), Valid: true},
-			TokensIn:   sql.NullInt32{Int32: tokensIn, Valid: tokensIn > 0},
-			TokensOut:  sql.NullInt32{Int32: tokensOut, Valid: tokensOut > 0},
-			Cost:       sql.NullFloat64{Float64: cost, Valid: cost > 0},
-			Status:     "success",
-			CreatedAt:  time.Now(),
+			CompanyID: "", Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_extract", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_extract"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true},
+			TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true}, TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true},
+			Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
 		})
 	}
 
@@ -213,6 +195,7 @@ Resume Text:
 }
 
 func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) error {
+	start := time.Now()
 	candidate, err := s.candidateRepo.GetByID(ctx, companyID, candidateID)
 	if err != nil || candidate == nil {
 		return fmt.Errorf("candidate not found")
@@ -243,9 +226,19 @@ func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) 
 Resume Text:
 %s`, text)
 
-	cleanJSON, err := s.generateGeminiJSON(ctx, prompt)
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
 	if err != nil {
 		return err
+	}
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: companyID, CandidateID: sql.NullString{String: candidateID, Valid: true}, Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_parse", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_parse"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true}, TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true},
+			TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true}, Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
+		})
 	}
 
 	// Validate JSON
@@ -255,7 +248,7 @@ Resume Text:
 	}
 
 	// AI Summary (Short descriptive text)
-	summary := fmt.Sprintf("Candidate has skills in %s. Experience: %s. Education: %s.", 
+	summary := fmt.Sprintf("Candidate has skills in %s. Experience: %s. Education: %s.",
 		strings.Join(parsed.Skills, ", "), parsed.Experience, parsed.Education)
 
 	// 3. Save back to candidate
@@ -271,4 +264,3 @@ Resume Text:
 
 	return nil
 }
-

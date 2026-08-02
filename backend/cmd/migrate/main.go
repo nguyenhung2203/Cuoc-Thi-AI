@@ -27,10 +27,14 @@ import (
 var fileRe = regexp.MustCompile(`^(\d+)_(.+)\.(up|down)\.sql$`)
 
 type migration struct {
-	version string
-	name    string
-	upPath  string
+	version  string
+	name     string
+	upPath   string
 	downPath string
+}
+
+type migrationTracker struct {
+	legacySingleRow bool
 }
 
 func main() {
@@ -55,11 +59,14 @@ func main() {
 	}
 	defer db.Close()
 
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+	// Keep the application ledger separate from Supabase/migrate's legacy
+	// schema_migrations(version bigint, dirty boolean) table.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS public.app_schema_migrations (
 		version TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
 		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`); err != nil {
-		log.Fatalf("create schema_migrations: %v", err)
+		log.Fatalf("create app_schema_migrations: %v", err)
 	}
 
 	dir := migrationsDir()
@@ -123,7 +130,9 @@ func loadMigrations(dir string) []migration {
 
 func applied(db *sqlx.DB) map[string]bool {
 	rows := []string{}
-	_ = db.Select(&rows, `SELECT version FROM schema_migrations`)
+	if err := db.Select(&rows, `SELECT version FROM public.app_schema_migrations`); err != nil {
+		log.Fatalf("read app migration ledger: %v", err)
+	}
 	set := map[string]bool{}
 	for _, v := range rows {
 		set[v] = true
@@ -132,11 +141,20 @@ func applied(db *sqlx.DB) map[string]bool {
 }
 
 func runUp(db *sqlx.DB, migs []migration) {
+	lock := "SELECT pg_advisory_lock(hashtext('cuocthi_ai_migrations'))"
+	if _, err := db.Exec(lock); err != nil {
+		log.Fatalf("acquire migration lock: %v", err)
+	}
+	defer db.Exec("SELECT pg_advisory_unlock(hashtext('cuocthi_ai_migrations'))")
+
 	done := applied(db)
 	count := 0
 	for _, m := range migs {
 		if done[m.version] {
 			continue
+		}
+		if m.upPath == "" {
+			log.Fatalf("migration %s_%s has no up file", m.version, m.name)
 		}
 		sqlBytes, err := os.ReadFile(m.upPath)
 		if err != nil {
@@ -148,7 +166,10 @@ func runUp(db *sqlx.DB, migs []migration) {
 			_ = tx.Rollback()
 			log.Fatalf("migration %s failed: %v", m.version, err)
 		}
-		tx.MustExec(`INSERT INTO schema_migrations (version) VALUES ($1)`, m.version)
+		if _, err := tx.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2)`, m.version, m.name); err != nil {
+			_ = tx.Rollback()
+			log.Fatalf("record migration %s: %v", m.version, err)
+		}
 		if err := tx.Commit(); err != nil {
 			log.Fatalf("commit %s: %v", m.version, err)
 		}
@@ -158,6 +179,11 @@ func runUp(db *sqlx.DB, migs []migration) {
 }
 
 func runDown(db *sqlx.DB, migs []migration) {
+	if _, err := db.Exec("SELECT pg_advisory_lock(hashtext('cuocthi_ai_migrations'))"); err != nil {
+		log.Fatalf("acquire migration lock: %v", err)
+	}
+	defer db.Exec("SELECT pg_advisory_unlock(hashtext('cuocthi_ai_migrations'))")
+
 	done := applied(db)
 	// Roll back the highest applied version only.
 	for i := len(migs) - 1; i >= 0; i-- {
@@ -178,7 +204,10 @@ func runDown(db *sqlx.DB, migs []migration) {
 			_ = tx.Rollback()
 			log.Fatalf("rollback %s failed: %v", m.version, err)
 		}
-		tx.MustExec(`DELETE FROM schema_migrations WHERE version = $1`, m.version)
+		if _, err := tx.Exec(`DELETE FROM public.app_schema_migrations WHERE version = $1`, m.version); err != nil {
+			_ = tx.Rollback()
+			log.Fatalf("remove migration record %s: %v", m.version, err)
+		}
 		if err := tx.Commit(); err != nil {
 			log.Fatalf("commit rollback %s: %v", m.version, err)
 		}

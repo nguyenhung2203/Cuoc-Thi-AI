@@ -11,6 +11,7 @@ import { useLiveKit } from '../../composables/useLiveKit'
 import { useSpeechToText } from '../../composables/useSpeechToText'
 import { roomService } from '../../services/room.service'
 import { authStore } from '../../stores/auth.store'
+import { rubricService } from '../../services/rubric.service'
 
 // Import Stores
 import { useRoomStore } from '../../stores/room.store'
@@ -26,6 +27,7 @@ const roomStore = useRoomStore()
 const chatStore = useChatStore()
 const transcriptStore = useTranscriptStore()
 const aiStore = useAiStore()
+const rubricCriteria = ref([])
 
 const {
   isConnected: isLiveKitConnected, error: liveKitError, isMicOn, isCameraOn, isScreenSharing,
@@ -81,7 +83,15 @@ const handleSendMessage = () => {
   setTimeout(() => { chatCooldown.value = false }, 500)
 }
 
-const showEndModal = ref(false)
+const requestAIScore = async () => {
+  const criterionIds = rubricCriteria.value.map(item => item.id).filter(Boolean)
+  if (!criterionIds.length) {
+    activeToast.value = { type: 'warning', message: 'Công việc chưa có tiêu chí rubric hợp lệ.' }
+    return
+  }
+  await aiStore.requestScoreUpdate(criterionIds, 'latest_answer', roomStore.roomId, roomStore.interviewId)
+}
+
 const isEnding = ref(false)
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
 const activeToast = ref(null)
@@ -115,7 +125,17 @@ onMounted(async () => {
     window.history.replaceState({ interviewId: history.state.interviewId }, document.title)
   }
 
-  // Khởi tạo Listeners cho các Stores
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    if (companyId) {
+      const data = await rubricService.getRubrics(companyId)
+      const rubrics = Array.isArray(data) ? data : (data?.items || data?.data || [])
+      rubricCriteria.value = rubrics.flatMap(r => r.rubric_criteria || r.criteria || [])
+    }
+  } catch (error) {
+    console.error('Không tải được rubric cho chấm điểm AI', error)
+  }
+
   chatStore.setupListeners()
   transcriptStore.setupListeners()
   aiStore.setupListeners()
@@ -143,7 +163,7 @@ onMounted(async () => {
           setTimeout(() => tryJoinAsRecruiter(), 500)
 
           // Connect LiveKit (hoặc native getUserMedia nếu không có server)
-          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:17880'
+          const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
           await connectToRoom(livekitUrl, token)
         }
       }
@@ -592,6 +612,10 @@ onUnmounted(() => {
           </div>
 
           <div v-if="activeTab === 'rubric'" style="display: flex; flex-direction: column; gap: 16px">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 class="text-body" style="font-weight: 600;">Đánh giá theo rubric</h3>
+              <Button variant="secondary" style="height: 28px; font-size: 12px; padding: 0 10px;" @click="requestAIScore">Chấm điểm bằng AI</Button>
+            </div>
             <div v-if="aiStore.scores.length === 0" class="text-helper text-center text-muted">
               Chưa có điểm đánh giá nào.
             </div>

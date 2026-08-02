@@ -11,10 +11,10 @@ import (
 
 	"backend/internal/dto/response"
 
+	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/utils"
 	"backend/internal/repository"
-	"backend/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -99,9 +99,9 @@ func (s *CandidatePortalService) GetDashboardStats(ctx context.Context, userID s
 	// Note: Proper CV check would require checking candidate rows or user's central CV
 
 	return &response.CandidatePortalDashboardStats{
-		UpcomingInterviews: upcomingCount,
-		CompletedMockTests: mockCount,
-		AverageMockScore:   avgScore,
+		UpcomingInterviews:  upcomingCount,
+		CompletedMockTests:  mockCount,
+		AverageMockScore:    avgScore,
 		ProfileCompleteness: completeness,
 	}, nil
 }
@@ -111,7 +111,7 @@ func (s *CandidatePortalService) GetInterviews(ctx context.Context, userID strin
 	if err != nil {
 		return nil, errors.NewInternal("failed to get interviews")
 	}
-	
+
 	// Inject join link for candidates
 	for i := range interviews {
 		if interviews[i].InviteTokenHash != "" {
@@ -165,23 +165,27 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 	return profile, nil
 }
 
-// UploadCV updates the central CV for the user, then parses it with AI (best-effort).
-// storageKey is the on-disk key of the freshly uploaded file so we can read/parse it.
+// UploadCV updates the central CV for the user, then parses it with AI.
+// A failed parse is returned to the caller so the UI can offer retry; upload
+// metadata remains persisted independently.
 func (s *CandidatePortalService) UploadCV(ctx context.Context, userID, originalName, cvFileID, storageKey string) error {
 	if err := s.repo.UpdateUserCV(ctx, userID, cvFileID, originalName); err != nil {
 		return err
 	}
 
-	// Parse the CV with AI and persist the result. Best-effort: upload still
-	// succeeds even if parsing fails (e.g. AI unavailable or non-PDF content).
+	// Parse the CV with real AI and surface any failure explicitly.
 	if s.aiSvc != nil && storageKey != "" {
+		if err := s.repo.UpdateCVAIStatus(ctx, userID, "processing", nil); err != nil {
+			return fmt.Errorf("mark CV parsing as processing: %w", err)
+		}
 		parsedJSON, summary, perr := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
 		if perr != nil {
-			log.Printf("portal: CV parse failed for user %s: %v", userID, perr)
-			return nil
+			_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", perr)
+			return fmt.Errorf("AI CV parsing failed: %w", perr)
 		}
 		if serr := s.repo.SaveParsedCV(ctx, userID, parsedJSON, summary); serr != nil {
-			log.Printf("portal: failed to save parsed CV for user %s: %v", userID, serr)
+			_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", serr)
+			return fmt.Errorf("save parsed CV: %w", serr)
 		}
 
 		// The CV changed, so every cached/stored fit score for this user is now

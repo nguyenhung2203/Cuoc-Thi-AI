@@ -138,7 +138,7 @@ func (s *Server) writePump(conn *ClientConnection) {
 // onDisconnect handles cleanup when a connection drops.
 func (s *Server) onDisconnect(conn *ClientConnection) {
 	log.Printf("[ws] disconnected connID=%s userID=%s", conn.ID, conn.UserID)
-	
+
 	if s.router != nil && s.router.auditLogger != nil {
 		s.router.auditLogger.LogEvent(
 			"disconnect",

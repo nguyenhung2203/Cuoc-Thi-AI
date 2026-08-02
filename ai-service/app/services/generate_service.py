@@ -27,18 +27,8 @@ class GenerateService:
         try:
             data = self._parser.parse_json(result.text)
         except ValueError as e:
-            # Model returned non-JSON. Surface as insufficient_data rather than
-            # a hard failure so the caller can degrade gracefully.
             logger.warning("LLM returned non-JSON output: %s", e)
-            return GenerateResponse(
-                data=None,
-                evidence="",
-                confidence=0.0,
-                insufficient_data=True,
-                model=result.model,
-                tokens_in=result.tokens_in,
-                tokens_out=result.tokens_out,
-            )
+            raise ValueError("Gemini returned malformed JSON") from e
 
         data, evidence, confidence, insufficient = self._parser.build_envelope(data)
         return GenerateResponse(

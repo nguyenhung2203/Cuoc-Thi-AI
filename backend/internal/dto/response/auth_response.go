@@ -1,5 +1,7 @@
 package response
 
+import "time"
+
 type AuthTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"-"`
@@ -33,6 +35,7 @@ type UserMeResponse struct {
 	Status             string        `json:"status"`
 	AvatarURL          string        `json:"avatar_url,omitempty"`
 	VerificationFileID string        `json:"verification_file_id,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
 	Companies          []CompanyRole `json:"companies,omitempty"`
 }
 

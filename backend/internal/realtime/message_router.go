@@ -64,12 +64,12 @@ func NewMessageRouter(cm *ConnectionManager, rm *RoomManager, db *sqlx.DB, deps 
 }
 
 // RouterDeps bundles the real service dependencies wired in production.
-// All fields may be nil, in which case the router uses in-memory/canned behaviour.
 type RouterDeps struct {
 	InterviewRepo  *repository.InterviewRepository
 	TranscriptRepo *repository.TranscriptRepository
 	SuggestionSvc  *service.SuggestionService
 	ScoreSvc       *service.ScoreService
+	AILogSvc       *service.AILogService
 }
 
 // SetTranscriptPipeline attaches the async transcript pipeline to the router.

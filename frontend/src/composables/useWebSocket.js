@@ -30,28 +30,34 @@ const ws = ref(null)
 const isConnected = ref(false)
 const connectionError = ref(null)
 const emitter = new EventEmitter()
+let reconnectTimer = null
+let reconnectAttempts = 0
+let shouldReconnect = false
+let lastToken = ''
 
 export function useWebSocket() {
   const connect = (token) => {
-    if (ws.value?.readyState === WebSocket.OPEN) return
+    if (ws.value?.readyState === WebSocket.OPEN || ws.value?.readyState === WebSocket.CONNECTING) return
+    shouldReconnect = true
+    lastToken = token
 
     // Resolve the realtime gateway base from env (VITE_WS_URL), e.g.
     // ws://localhost:8081. Falls back to deriving from the current origin so
     // it still works behind a reverse proxy without extra config.
     let base = import.meta.env.VITE_WS_URL
     if (!base) {
-      const host = `${window.location.hostname}:18081`
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      base = `${protocol}//${host}`
+      base = `${protocol}//${window.location.host}`
     }
-    base = base.replace(/\/+$/, '')
-    const url = `${base}/ws/interview-room?token=${token}`
+    base = base.replace(/\/+$/, '').replace(/\/ws\/interview-room$/, '')
+    const url = `${base}/ws/interview-room?token=${encodeURIComponent(token)}`
 
     ws.value = new WebSocket(url)
 
     ws.value.onopen = () => {
       console.log('[WebSocket] Connected')
       isConnected.value = true
+      reconnectAttempts = 0
       connectionError.value = null
     }
 
@@ -73,10 +79,12 @@ export function useWebSocket() {
       isConnected.value = false
       ws.value = null
       
-      // Auto-reconnect could be implemented here
-      if (event.code !== 1000) { // 1000 is normal closure
+      if (event.code !== 1000 && shouldReconnect && reconnectAttempts < 8) {
         connectionError.value = 'Connection lost. Attempting to reconnect...'
-        setTimeout(() => connect(token), 3000)
+        const delay = Math.min(30000, 1000 * (2 ** reconnectAttempts))
+        reconnectAttempts += 1
+        clearTimeout(reconnectTimer)
+        reconnectTimer = setTimeout(() => connect(lastToken), delay)
       }
     }
 
@@ -87,6 +95,10 @@ export function useWebSocket() {
   }
 
   const disconnect = () => {
+    shouldReconnect = false
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    reconnectAttempts = 0
     if (ws.value) {
       ws.value.close(1000, 'User navigating away')
       ws.value = null

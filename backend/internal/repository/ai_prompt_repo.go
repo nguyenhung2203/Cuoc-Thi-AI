@@ -90,14 +90,14 @@ func (r *AIPromptRepository) GetByVersion(ctx context.Context, name, companyID s
 	return &sysTmpl, nil
 }
 
-// CreateNewVersion inserts a new version of a prompt template. 
+// CreateNewVersion inserts a new version of a prompt template.
 // It automatically calculates the next version number.
 func (r *AIPromptRepository) CreateNewVersion(ctx context.Context, t *models.AIPromptTemplate) (*models.AIPromptTemplate, error) {
 	// Determine next version
 	var nextVersion int
 	var qMaxVersion string
 	var args []any
-	
+
 	if t.CompanyID.Valid {
 		qMaxVersion = `SELECT COALESCE(MAX(version), 0) FROM ai_prompt_templates WHERE name = $1 AND company_id = $2::uuid`
 		args = []any{t.Name, t.CompanyID.String}
@@ -125,7 +125,7 @@ func (r *AIPromptRepository) CreateNewVersion(ctx context.Context, t *models.AIP
 		t.CompanyID, t.Name, nextVersion, t.Content, t.VariablesSchema,
 		t.Model, t.Params, t.IsActive, t.CreatedBy,
 	).StructScan(&inserted)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("insert prompt template: %w", err)
 	}

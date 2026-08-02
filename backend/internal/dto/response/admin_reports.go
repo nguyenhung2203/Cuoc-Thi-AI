@@ -19,11 +19,12 @@ type AdminReports struct {
 	TotalTokenUsage    int64              `json:"total_token_usage"`
 	InputTokens        int64              `json:"input_tokens"`
 	OutputTokens       int64              `json:"output_tokens"`
-	SystemUptimeHours  float64            `json:"system_uptime_hours"`
-	CpuUsagePercent    float64            `json:"cpu_usage_percent"`
-	RamUsagePercent    float64            `json:"ram_usage_percent"`
-	RedisMemoryMb      float64            `json:"redis_memory_mb"`
-	ServerLatencyMs    int                `json:"server_latency_ms"`
+	EstimatedAICostUSD float64            `json:"estimated_ai_cost_usd"`
+	SystemUptimeHours  *float64          `json:"system_uptime_hours"`
+	CpuUsagePercent    *float64          `json:"cpu_usage_percent"`
+	RamUsagePercent    *float64          `json:"ram_usage_percent"`
+	RedisMemoryMb      *float64          `json:"redis_memory_mb"`
+	ServerLatencyMs    *int              `json:"server_latency_ms"`
 	TokenUsageByModel  map[string]int64   `json:"token_usage_by_model"`
 	MonthlyTokenUsage  []MonthlyUsageItem `json:"monthly_token_usage"`
 	UserGrowthTrend    []GrowthItem       `json:"user_growth_trend"`

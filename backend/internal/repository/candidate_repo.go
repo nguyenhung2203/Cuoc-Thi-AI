@@ -186,7 +186,8 @@ func (r *CandidateRepository) Update(ctx context.Context, companyID, candidateID
 
 	allowedCols := map[string]bool{
 		"full_name": true, "phone": true, "avatar_url": true, "cv_file_id": true,
-		"parsed_cv_json": true, "ai_cv_summary": true, "source": true,
+		"parsed_cv_json": true, "ai_cv_summary": true, "cv_ai_status": true,
+		"cv_ai_error": true, "cv_ai_attempts": true, "cv_ai_updated_at": true, "source": true,
 		"status": true, "tags": true,
 	}
 

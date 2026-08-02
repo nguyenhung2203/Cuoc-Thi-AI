@@ -51,7 +51,6 @@ const (
 
 	// sendBufferSize is the channel buffer per connection.
 	sendBufferSize = 256
-
 )
 
 var (
