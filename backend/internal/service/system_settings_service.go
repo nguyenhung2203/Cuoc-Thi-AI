@@ -27,6 +27,11 @@ func (s *SystemSettingsService) UpdateSettings(ctx context.Context, settings map
 	if len(settings) == 0 {
 		return errors.NewBadRequest("settings object cannot be empty")
 	}
+	for key := range settings {
+		if key == "gemini_api_key" || key == "gemini_api_key_encrypted" {
+			return errors.NewBadRequest("AI secrets must be updated through the AI settings endpoint")
+		}
+	}
 	if err := s.repo.UpdateSettings(ctx, settings); err != nil {
 		return errors.NewInternal("failed to update system settings")
 	}

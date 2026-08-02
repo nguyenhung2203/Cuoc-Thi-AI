@@ -38,20 +38,20 @@ func (r *SystemSettingsRepository) ensureTableAndDefault() {
 	}
 
 	defaults := map[string]interface{}{
-		"system_name":                    "ViệcLàm AI Platform",
-		"maintenance_mode":               false,
-		"max_upload_size_mb":             20,
-		"default_passing_score":          70,
-		"default_ai_model":               "gemini-2.5-flash",
-		"default_ai_voice_model":         "gemini-2.0-flash-live-001",
-		"jwt_token_expiry_hours":         24,
-		"admin_2fa_required":             false,
-		"notification_ttl_days":          30,
-		"notification_max_per_user":      200,
-		"enable_email_notifications":     true,
-		"notify_on_new_applicant":        true,
-		"notify_on_report_ready":         true,
-		"notify_on_interview_cancelled":  true,
+		"system_name":                   "ViệcLàm AI Platform",
+		"maintenance_mode":              false,
+		"max_upload_size_mb":            20,
+		"default_passing_score":         70,
+		"default_ai_model":              "gemini-3.1-flash-lite",
+		"default_ai_voice_model":        "gemini-2.5-flash-native-audio-latest",
+		"jwt_token_expiry_hours":        24,
+		"admin_2fa_required":            false,
+		"notification_ttl_days":         30,
+		"notification_max_per_user":     200,
+		"enable_email_notifications":    true,
+		"notify_on_new_applicant":       true,
+		"notify_on_report_ready":        true,
+		"notify_on_interview_cancelled": true,
 	}
 	for k, v := range defaults {
 		b, _ := json.Marshal(v)
@@ -93,6 +93,26 @@ func (r *SystemSettingsRepository) GetSettingBool(ctx context.Context, key strin
 		return boolVal
 	}
 	return defaultVal
+}
+
+func (r *SystemSettingsRepository) GetSettingString(ctx context.Context, key, defaultVal string) string {
+	if r == nil || r.db == nil {
+		return defaultVal
+	}
+	var valBytes []byte
+	if err := r.db.GetContext(ctx, &valBytes, "SELECT config_value FROM system_settings WHERE config_key = $1", key); err != nil {
+		return defaultVal
+	}
+	var value string
+	if err := json.Unmarshal(valBytes, &value); err != nil {
+		return defaultVal
+	}
+	return value
+}
+
+func (r *SystemSettingsRepository) DeleteSetting(ctx context.Context, key string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM system_settings WHERE config_key = $1", key)
+	return err
 }
 
 func (r *SystemSettingsRepository) GetAll(ctx context.Context) (map[string]interface{}, error) {

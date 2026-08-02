@@ -1,49 +1,49 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import Card from '../../components/common/AppCard.vue'
 import { apiService } from '../../services/api.service'
 import { fileService } from '../../services/file.service'
 import { Users, Search, CheckCircle2, XCircle, Shield, FileText, Clock, RefreshCw, Filter, UserCheck } from 'lucide-vue-next'
 import { isOneOf, isValidId, maxLength, normalizeText } from '../../utils/validators.js'
 
-const pendingUsers = ref([])
-const allUsers = ref([])
+const users = ref([])
 const loading = ref(false)
 const approving = ref(null)
-const activeTab = ref('pending') // 'pending' | 'all'
+const activeTab = ref('pending')
 const searchQuery = ref('')
 const roleFilter = ref('all')
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const totalPages = ref(0)
+const counts = ref({ pending: 0, all: 0 })
+let searchTimer
 
-const displayedUsers = computed(() => {
-  const source = activeTab.value === 'pending' ? pendingUsers.value : allUsers.value
-  if (!source || !Array.isArray(source)) return []
-  
-  return source.filter(u => {
-    const matchSearch = !searchQuery.value || 
-      (u.full_name && u.full_name.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
-      (u.email && u.email.toLowerCase().includes(searchQuery.value.toLowerCase()))
-    
-    const matchRole = roleFilter.value === 'all' || u.role === roleFilter.value
-    return matchSearch && matchRole
-  })
-})
+const displayedUsers = computed(() => users.value)
 
 const fetchUsers = async () => {
   loading.value = true
   try {
-    const [pendingRes, allRes] = await Promise.all([
-      apiService.get('/admin/users/pending'),
-      apiService.get('/admin/users')
-    ])
-    // apiService.get unwraps { success: true, data: [...] } and directly returns [...]
-    pendingUsers.value = Array.isArray(pendingRes) ? pendingRes : (pendingRes.data || [])
-    allUsers.value = Array.isArray(allRes) ? allRes : (allRes.data || [])
+    const params = new URLSearchParams({ page: String(currentPage.value), page_size: String(pageSize.value) })
+    if (searchQuery.value.trim()) params.set('search', searchQuery.value.trim())
+    if (activeTab.value === 'all' && roleFilter.value !== 'all') params.set('role', roleFilter.value)
+    const endpoint = activeTab.value === 'pending' ? '/admin/users/pending' : '/admin/users'
+    const envelope = await apiService.getWithMeta(`${endpoint}?${params}`)
+    const payload = envelope.data || {}
+    users.value = Array.isArray(payload) ? payload : (payload.users || [])
+    total.value = envelope.meta?.total ?? users.value.length
+    totalPages.value = envelope.meta?.total_pages ?? (total.value ? Math.ceil(total.value / pageSize.value) : 0)
+    if (payload.counts) counts.value = payload.counts
   } catch (error) {
     console.error('Failed to fetch users', error)
-  } finally {
-    loading.value = false
-  }
+    users.value = []
+  } finally { loading.value = false }
 }
+
+const changeTab = (tab) => { activeTab.value = tab; currentPage.value = 1 }
+const changePage = (page) => { if (page >= 1 && page <= totalPages.value) { currentPage.value = page; fetchUsers() } }
+watch([activeTab, roleFilter], () => { currentPage.value = 1; fetchUsers() })
+watch(searchQuery, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { currentPage.value = 1; fetchUsers() }, 300) })
 
 const openingFile = ref(null)
 
@@ -138,26 +138,26 @@ onMounted(() => {
       <!-- Tabs -->
       <div class="flex items-center gap-2 bg-[var(--surface)] p-1.5 rounded-xl border border-[var(--border)]">
         <button 
-          @click="activeTab = 'pending'"
+          @click="changeTab('pending')"
           class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
           :class="activeTab === 'pending' ? 'bg-[var(--background)] text-[var(--primary)] shadow-xs border border-[var(--border)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'"
         >
           <Clock size="16" />
           <span>Chờ duyệt</span>
           <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'pending' ? 'bg-[var(--primary-light)] text-[var(--primary)]' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)]'">
-            {{ pendingUsers.length }}
+            {{ counts.pending }}
           </span>
         </button>
 
         <button 
-          @click="activeTab = 'all'"
+          @click="changeTab('all')"
           class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
           :class="activeTab === 'all' ? 'bg-[var(--background)] text-[var(--primary)] shadow-xs border border-[var(--border)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'"
         >
           <Users size="16" />
           <span>Tất cả thành viên</span>
           <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'all' ? 'bg-[var(--primary-light)] text-[var(--primary)]' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)]'">
-            {{ allUsers.length }}
+            {{ counts.all }}
           </span>
         </button>
       </div>
@@ -323,6 +323,17 @@ onMounted(() => {
         <p class="text-[var(--text-secondary)] text-sm mt-1">
           {{ activeTab === 'pending' ? 'Tất cả các nhà tuyển dụng đăng ký mới đã được xét duyệt xong!' : 'Chưa có tài khoản nào khớp với từ khóa tìm kiếm của bạn.' }}
         </p>
+      </div>
+
+      <div v-if="!loading && total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-[var(--border)]">
+        <span class="text-sm text-[var(--text-secondary)]">Tổng {{ total }} người dùng · Trang {{ currentPage }}/{{ totalPages }}</span>
+        <div class="flex items-center gap-2">
+          <select v-model.number="pageSize" @change="currentPage = 1; fetchUsers()" class="px-3 py-2 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg">
+            <option :value="20">20 / trang</option><option :value="50">50 / trang</option><option :value="100">100 / trang</option>
+          </select>
+          <button @click="changePage(currentPage - 1)" :disabled="currentPage <= 1" class="px-3 py-2 text-sm border border-[var(--border)] rounded-lg disabled:opacity-40">Trước</button>
+          <button @click="changePage(currentPage + 1)" :disabled="currentPage >= totalPages" class="px-3 py-2 text-sm border border-[var(--border)] rounded-lg disabled:opacity-40">Sau</button>
+        </div>
       </div>
     </Card>
   </div>

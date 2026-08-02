@@ -40,21 +40,24 @@ type StandardAIResponse struct {
 	Evidence         string          `json:"evidence"`
 	Confidence       float64         `json:"confidence"`
 	InsufficientData bool            `json:"insufficient_data"`
+	TokensIn         int             `json:"tokens_in"`
+	TokensOut        int             `json:"tokens_out"`
+	Model            string          `json:"model"`
 }
 
 // AIPayload is what we send to the Python ai-service.
 type AIPayload struct {
-	Model       string          `json:"model"`
-	Prompt      string          `json:"prompt"`
-	Temperature float64         `json:"temperature,omitempty"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
+	Model       string  `json:"model"`
+	Prompt      string  `json:"prompt"`
+	Temperature float64 `json:"temperature,omitempty"`
+	MaxTokens   int     `json:"max_tokens,omitempty"`
 }
 
 type AIOrchestratorService struct {
-	promptSvc  *PromptService
-	logSvc     *AILogService
-	httpClient *http.Client
-	breaker    *gobreaker.CircuitBreaker[[]byte]
+	promptSvc    *PromptService
+	logSvc       *AILogService
+	httpClient   *http.Client
+	breaker      *gobreaker.CircuitBreaker[[]byte]
 	aiServiceURL string
 }
 
@@ -84,7 +87,7 @@ func NewAIOrchestratorService(promptSvc *PromptService, logSvc *AILogService, ai
 // CallAIWithFullResponse orchestrates rendering the prompt, calling the Python service, and returns the full StandardAIResponse.
 func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, templateName, companyID string, variables map[string]string) (*StandardAIResponse, error) {
 	startTime := time.Now()
-	
+
 	// 1. Load Prompt Template
 	tmpl, err := s.promptSvc.LoadTemplate(ctx, templateName, companyID, 0)
 	if err != nil {
@@ -99,7 +102,7 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 		Model:  tmpl.Model,
 		Prompt: renderedPrompt,
 	}
-	
+
 	// Extract temp/max_tokens from params if present (simplified logic)
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -108,7 +111,7 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 
 	// 3. Setup Retry and Circuit Breaker
 	var responseBody []byte
-	
+
 	operation := func() ([]byte, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiServiceURL+"/api/v1/generate", bytes.NewReader(payloadBytes))
 		if err != nil {
@@ -154,12 +157,15 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 
 	// Execute with Retry
 	responseBody, err = backoff.RetryWithData(cbOperation, backoff.WithContext(bo, ctx))
-	
+
 	latency := time.Since(startTime).Milliseconds()
 
 	// 4. Log the Request Async
 	logEntry := &models.AIRequestLog{
 		CompanyID:       companyID,
+		Provider:        "gemini",
+		Model:           sql.NullString{String: tmpl.Model, Valid: tmpl.Model != ""},
+		Operation:       sql.NullString{String: templateName, Valid: true},
 		TemplateID:      sql.NullString{String: tmpl.ID, Valid: true},
 		TemplateVersion: sql.NullInt32{Int32: int32(tmpl.Version), Valid: true},
 		InputJSON:       models.JSONB(payloadBytes),
@@ -196,6 +202,18 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 
 	logEntry.Status = "success"
 	logEntry.OutputJSON = models.JSONB(responseBody)
+	// Persist provider-reported usage, including legitimate zero values.
+	logEntry.TokensIn = sql.NullInt32{Int32: int32(aiResp.TokensIn), Valid: true}
+	logEntry.TokensOut = sql.NullInt32{Int32: int32(aiResp.TokensOut), Valid: true}
+	logEntry.TotalTokens = sql.NullInt32{Int32: int32(aiResp.TokensIn + aiResp.TokensOut), Valid: true}
+	if aiResp.Model != "" {
+		logEntry.Model = sql.NullString{String: aiResp.Model, Valid: true}
+	}
+	// Cost estimation: Gemini 2.5 Flash ~$0.30/1M input, $1.25/1M output
+	cost := float64(aiResp.TokensIn)*0.30/1_000_000 + float64(aiResp.TokensOut)*1.25/1_000_000
+	if cost > 0 {
+		logEntry.Cost = sql.NullFloat64{Float64: cost, Valid: true}
+	}
 	s.logSvc.LogAsync(logEntry)
 
 	if aiResp.InsufficientData {

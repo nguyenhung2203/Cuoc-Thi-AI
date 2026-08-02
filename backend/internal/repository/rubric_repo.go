@@ -199,7 +199,7 @@ func (r *rubricRepository) Delete(ctx context.Context, companyID, rubricID strin
 	// We'll use a hard delete here for simplicity, assuming cascade or no references if deleted early.
 	// Wait, we should probably soft delete if DATABASE_DESIGN has deleted_at.
 	// Let's check DATABASE_DESIGN: "Rubrics" has no deleted_at. So hard delete.
-	
+
 	// Wait, we need to delete criteria first? No, CASCADE should handle it if set, otherwise manual.
 	// Let's delete criteria manually just in case.
 	tx, err := r.db.BeginTx(ctx, nil)

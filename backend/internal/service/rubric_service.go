@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"backend/internal/models"
-	"backend/internal/repository"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/repository"
 )
 
 type RubricService struct {

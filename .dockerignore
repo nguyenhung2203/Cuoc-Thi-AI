@@ -1,0 +1,20 @@
+# Production build contexts
+.git
+.github
+.claude
+.env
+.env.*
+!.env.example
+!.env.production.example
+**/node_modules
+**/dist
+**/.vite
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/venv
+**/*.pyc
+backend/tmp
+uploads
+*.log
+coverage

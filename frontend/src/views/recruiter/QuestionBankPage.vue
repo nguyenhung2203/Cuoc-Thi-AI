@@ -8,6 +8,7 @@ import Toast from '../../components/common/AppToast.vue'
 import Input from '../../components/common/AppInput.vue'
 import { Plus, Search, Filter, Layers, Edit, Trash2, Sparkles, RefreshCw } from 'lucide-vue-next'
 import { questionBankService } from '../../services/questionBank.service'
+import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
 import { hasDuplicateNormalized, isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
@@ -17,6 +18,8 @@ const aiGenerating = ref(false)
 const searchKeyword = ref('')
 const filterLevel = ref('')
 const filterType = ref('')
+const jobs = ref([])
+const selectedJobId = ref('')
 
 const columns = [
   { header: 'Câu hỏi', key: 'text' },
@@ -63,7 +66,7 @@ const loadQuestions = async () => {
     const params = {}
     if (searchKeyword.value) params.keyword = searchKeyword.value
     if (filterLevel.value) params.level = filterLevel.value
-    if (filterType.value) params.type = filterType.value
+    if (filterType.value) params.question_type = filterType.value
     const data = await questionBankService.getQuestions(companyId, params)
     questions.value = (Array.isArray(data) ? data : []).map(mapQuestion)
   } catch (err) {
@@ -74,7 +77,18 @@ const loadQuestions = async () => {
   }
 }
 
-onMounted(loadQuestions)
+onMounted(async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  await loadQuestions()
+  if (!companyId) return
+  try {
+    const data = await jobService.getJobs(companyId, { status: 'active', page_size: 100 })
+    jobs.value = Array.isArray(data) ? data : (data?.items || data?.data || [])
+    selectedJobId.value = jobs.value[0]?.id || ''
+  } catch (error) {
+    console.error('Lỗi tải danh sách công việc', error)
+  }
+})
 
 // Open the shared modal in edit mode, prefilled from a row.
 const openEdit = (row) => {
@@ -166,9 +180,13 @@ const handleGenerateAI = async () => {
     toast.value = { type: 'error', message: 'Số câu hỏi AI phải nằm trong khoảng từ 1 đến 20.' }
     return
   }
+  if (!selectedJobId.value) {
+    toast.value = { type: 'error', message: 'Vui lòng chọn công việc để AI dựa vào JD tạo câu hỏi.' }
+    return
+  }
   aiGenerating.value = true
   try {
-    await questionBankService.generateWithAI(companyId, null, { count, level: filterLevel.value || 'middle' })
+    await questionBankService.generateWithAI(companyId, selectedJobId.value, { count, level: filterLevel.value || 'middle' })
     toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
     await loadQuestions()
   } catch (err) {
@@ -204,6 +222,10 @@ const handleGenerateAI = async () => {
             @keyup.enter="loadQuestions"
           />
         </div>
+        <select class="input-field" style="width: 220px" v-model="selectedJobId">
+          <option value="">Chọn công việc cho AI</option>
+          <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title || job.name }}</option>
+        </select>
         <select class="input-field" style="width: 180px" v-model="filterType" @change="loadQuestions">
           <option value="">Tất cả loại</option>
           <option value="technical">Technical</option>

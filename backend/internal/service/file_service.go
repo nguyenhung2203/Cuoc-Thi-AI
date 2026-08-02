@@ -23,9 +23,9 @@ import (
 // allowedMIMEs is the upload whitelist, checked against the DETECTED type
 // (magic bytes), never the client-supplied Content-Type header.
 var allowedMIMEs = map[string]bool{
-	"application/pdf": true,
-	"image/jpeg":      true,
-	"image/png":       true,
+	"application/pdf":    true,
+	"image/jpeg":         true,
+	"image/png":          true,
 	"application/msword": true,
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
 }
@@ -34,9 +34,9 @@ var allowedMIMEs = map[string]bool{
 // Extensions never come from the client filename — that produced keys like
 // "cv.p df" and could smuggle unexpected types.
 var mimeExt = map[string]string{
-	"application/pdf": ".pdf",
-	"image/jpeg":      ".jpg",
-	"image/png":       ".png",
+	"application/pdf":    ".pdf",
+	"image/jpeg":         ".jpg",
+	"image/png":          ".png",
 	"application/msword": ".doc",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }

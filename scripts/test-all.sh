@@ -15,7 +15,7 @@ section "Backend (Go) — build + vet + test"
   go build ./... && go vet ./... && go test ./...
 ) || FAIL=1
 
-section "AI service (Python) — pytest (mock mode)"
+section "AI service (Python) — pytest"
 (
   cd "$ROOT/ai-service" || exit 1
   if [ -x ".venv/Scripts/python.exe" ]; then
@@ -25,7 +25,7 @@ section "AI service (Python) — pytest (mock mode)"
   else
     PY="python"
   fi
-  AI_MOCK=true "$PY" -m pytest -q
+  "$PY" -m pytest -q
 ) || FAIL=1
 
 section "Frontend (Vue) — build"

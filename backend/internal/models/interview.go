@@ -25,6 +25,9 @@ type Interview struct {
 	ConsentRecording bool           `db:"consent_recording" json:"consent_recording"`
 	ConsentAI        bool           `db:"consent_ai" json:"consent_ai"`
 	ReportStatus     string         `db:"report_status" json:"report_status"`
+	ReportError      sql.NullString `db:"report_error" json:"report_error,omitempty"`
+	ReportAttempts   int            `db:"report_attempts" json:"report_attempts"`
+	ReportUpdatedAt  sql.NullTime   `db:"report_updated_at" json:"report_updated_at,omitempty"`
 	RecruiterNotes   string         `db:"recruiter_notes" json:"recruiter_notes"`
 	CreatedBy        sql.NullString `db:"created_by" json:"created_by"`
 	CreatedAt        time.Time      `db:"created_at" json:"created_at"`

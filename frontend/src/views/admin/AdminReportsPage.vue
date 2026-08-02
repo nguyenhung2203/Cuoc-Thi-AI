@@ -8,12 +8,13 @@ const loading = ref(true)
 const reports = ref(null)
 const lastUpdated = ref('')
 
-// Use real data from backend API — not Math.random()
-const cpuLoad = ref(0)
-const ramLoad = ref(0)
-const latency = ref(0)
-const redisMemory = ref(0)
-const uptimeHours = ref(0)
+// Runtime telemetry is not exposed by the backend yet. Keep these values
+// nullable so the UI never presents fabricated zeroes as measurements.
+const cpuLoad = ref(null)
+const ramLoad = ref(null)
+const latency = ref(null)
+const redisMemory = ref(null)
+const uptimeHours = ref(null)
 
 const fetchReports = async () => {
   loading.value = true
@@ -23,11 +24,11 @@ const fetchReports = async () => {
     reports.value = data
 
     // Use actual server-side values returned from backend
-    cpuLoad.value = +(data.cpu_usage_percent || 0).toFixed(1)
-    ramLoad.value = +(data.ram_usage_percent || 0).toFixed(1)
-    latency.value = data.server_latency_ms || 0
-    redisMemory.value = +(data.redis_memory_mb || 0).toFixed(1)
-    uptimeHours.value = +(data.system_uptime_hours || 0).toFixed(1)
+    cpuLoad.value = data.cpu_usage_percent == null ? null : +data.cpu_usage_percent.toFixed(1)
+    ramLoad.value = data.ram_usage_percent == null ? null : +data.ram_usage_percent.toFixed(1)
+    latency.value = data.server_latency_ms == null ? null : data.server_latency_ms
+    redisMemory.value = data.redis_memory_mb == null ? null : +data.redis_memory_mb.toFixed(1)
+    uptimeHours.value = data.system_uptime_hours == null ? null : +data.system_uptime_hours.toFixed(1)
 
     lastUpdated.value = new Date().toLocaleTimeString('vi-VN')
   } catch (error) {
@@ -127,12 +128,8 @@ onMounted(() => {
         </div>
         <div class="mt-4">
           <div class="text-xs font-semibold text-[var(--text-secondary)]">Chi phí tài nguyên AI ước tính</div>
-          <div class="text-2xl font-extrabold text-[var(--text-main)] mt-1">
-            ${{ reports ? (reports.total_token_usage * 0.000002).toFixed(4) : '0.00' }}
-          </div>
-          <p class="text-[11px] text-[var(--text-secondary)] mt-1.5">
-            Áp dụng theo đơn giá Gemini 2.5 Flash API
-          </p>
+          <div class="text-2xl font-extrabold text-[var(--text-main)] mt-1">Chưa khả dụng</div>
+          <p class="text-[11px] text-[var(--text-secondary)] mt-1.5">Chưa cấu hình bảng giá theo model</p>
         </div>
       </div>
 
@@ -166,13 +163,10 @@ onMounted(() => {
         <div class="mt-4">
           <div class="text-xs font-semibold text-[var(--text-secondary)]">Độ trễ trung bình Server</div>
           <div class="text-2xl font-extrabold text-[var(--text-main)] mt-1 flex items-baseline gap-1">
-            <span>{{ latency }}</span><span class="text-base">ms</span>
+            <span>{{ latency == null ? '—' : latency }}</span><span v-if="latency != null" class="text-base">ms</span>
           </div>
-          <p class="text-[11px] text-[var(--text-secondary)] mt-1.5 flex items-center gap-1">
-            <span class="dot-live bg-[var(--success)]"></span> 
-            <span :class="latency < 200 ? 'text-[var(--success)]' : latency < 500 ? 'text-[var(--warning)]' : 'text-[var(--danger)]'">
-              {{ latency < 200 ? 'Tốt (Good)' : latency < 500 ? 'Trung bình' : 'Chậm (Slow)' }}
-            </span>
+          <p class="text-[11px] text-[var(--text-secondary)] mt-1.5">
+            {{ latency == null ? 'Chưa có telemetry độ trễ' : 'Giá trị do backend đo' }}
           </p>
         </div>
       </div>
@@ -251,118 +245,15 @@ onMounted(() => {
       </Card>
     </div>
 
-    <!-- Server load monitoring —— Real data from /admin/reports API -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <!-- Uptime Widget -->
-      <Card class="p-5 rounded-2xl border border-[var(--border)] shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-            <Clock size="15" class="text-[var(--primary)]" />
-            Uptime Máy chủ
-          </h4>
-          <span class="flex items-center gap-1 text-[10px] font-bold text-[var(--success)] bg-[var(--success)]/10 px-2 py-0.5 rounded-full">
-            <span class="dot-live bg-[var(--success)]"></span> ONLINE
-          </span>
-        </div>
-        <div class="text-2xl font-extrabold text-[var(--text-main)]">{{ uptimeHours }}h</div>
-        <p class="text-[11px] text-[var(--text-secondary)] mt-1">Thời gian hoạt động liên tục</p>
-      </Card>
-
-      <!-- CPU Widget -->
-      <Card class="p-5 rounded-2xl border border-[var(--border)] shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-            <Cpu size="15" class="text-[var(--accent)]" />
-            CPU Load
-          </h4>
-          <span class="text-xs font-mono font-bold text-[var(--accent)]">{{ cpuLoad }}%</span>
-        </div>
-        <div class="w-full h-2.5 bg-[var(--surface-soft)] rounded-full overflow-hidden">
-          <div 
-            class="h-full bg-[var(--accent)] transition-all duration-700 rounded-full" 
-            :style="{ width: `${cpuLoad}%` }"
-          ></div>
-        </div>
-        <p class="text-[11px] text-[var(--text-secondary)] mt-2">8 Cores · Bình thường</p>
-      </Card>
-
-      <!-- RAM Widget -->
-      <Card class="p-5 rounded-2xl border border-[var(--border)] shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-            <HardDrive size="15" class="text-[var(--highlight)]" />
-            RAM Usage
-          </h4>
-          <span class="text-xs font-mono font-bold text-[var(--highlight)]">{{ ramLoad }}%</span>
-        </div>
-        <div class="w-full h-2.5 bg-[var(--surface-soft)] rounded-full overflow-hidden">
-          <div 
-            class="h-full bg-[var(--highlight)] transition-all duration-700 rounded-full" 
-            :style="{ width: `${ramLoad}%` }"
-          ></div>
-        </div>
-        <p class="text-[11px] text-[var(--text-secondary)] mt-2">~{{ (16 * ramLoad / 100).toFixed(1) }} GB / 16 GB</p>
-      </Card>
-
-      <!-- Redis Cache widget -->
-      <Card class="p-5 rounded-2xl border border-[var(--border)] shadow-sm">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-sm font-bold text-[var(--text-main)] flex items-center gap-2">
-            <Server size="15" class="text-[var(--success)]" />
-            Redis Cache
-          </h4>
-          <span class="text-xs font-mono font-bold text-[var(--success)]">{{ ((redisMemory / 256) * 100).toFixed(1) }}%</span>
-        </div>
-        <div class="w-full h-2.5 bg-[var(--surface-soft)] rounded-full overflow-hidden">
-          <div 
-            class="h-full bg-[var(--success)] transition-all duration-700 rounded-full" 
-            :style="{ width: `${Math.min((redisMemory / 256) * 100, 100)}%` }"
-          ></div>
-        </div>
-        <p class="text-[11px] text-[var(--text-secondary)] mt-2">{{ redisMemory }} MB / 256 MB</p>
-      </Card>
-    </div>
-
-    <!-- Active Engines Connection status -->
+    <!-- Runtime telemetry -->
     <Card class="p-6 rounded-2xl border border-[var(--border)] shadow-sm">
-      <h3 class="text-base font-bold text-[var(--text-main)] mb-6 flex items-center gap-2">
+      <h3 class="text-base font-bold text-[var(--text-main)] flex items-center gap-2">
         <Server size="18" class="text-[var(--text-secondary)]" />
-        Kết nối và dịch vụ vi mô thời gian thực
+        Trạng thái hạ tầng
       </h3>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] flex items-center justify-between">
-          <div>
-            <h5 class="text-xs font-bold text-[var(--text-main)]">Database (PostgreSQL)</h5>
-            <p class="text-[11px] text-[var(--text-secondary)] mt-0.5">Pool size: 10 connections</p>
-          </div>
-          <span class="px-2 py-0.5 bg-[var(--success)]/10 text-[var(--success)] font-bold text-[10px] rounded-md">CONNECTED</span>
-        </div>
-
-        <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] flex items-center justify-between">
-          <div>
-            <h5 class="text-xs font-bold text-[var(--text-main)]">Realtime WebSocket Gateway</h5>
-            <p class="text-[11px] text-[var(--text-secondary)] mt-0.5">Active rooms: 2 phỏng vấn</p>
-          </div>
-          <span class="px-2 py-0.5 bg-[var(--success)]/10 text-[var(--success)] font-bold text-[10px] rounded-md">ACTIVE</span>
-        </div>
-
-        <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] flex items-center justify-between">
-          <div>
-            <h5 class="text-xs font-bold text-[var(--text-main)]">LiveKit Media Server</h5>
-            <p class="text-[11px] text-[var(--text-secondary)] mt-0.5">SFU WebRTC Engine</p>
-          </div>
-          <span class="px-2 py-0.5 bg-[var(--success)]/10 text-[var(--success)] font-bold text-[10px] rounded-md">ONLINE</span>
-        </div>
-
-        <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] flex items-center justify-between">
-          <div>
-            <h5 class="text-xs font-bold text-[var(--text-main)]">AI Python Evaluator</h5>
-            <p class="text-[11px] text-[var(--text-secondary)] mt-0.5">Score Engine Circuit Breaker</p>
-          </div>
-          <span class="px-2 py-0.5 bg-[var(--primary-light)] text-[var(--primary)] font-bold text-[10px] rounded-md">READY</span>
-        </div>
-      </div>
+      <p class="mt-2 text-sm text-[var(--text-secondary)]">
+        Backend chưa cung cấp telemetry xác thực cho CPU, RAM, Redis, PostgreSQL, LiveKit và AI service. Các số liệu mô phỏng đã được gỡ bỏ.
+      </p>
     </Card>
   </div>
 </template>

@@ -209,4 +209,3 @@ func extractAndValidateRecruiterToken(r *http.Request) (*TokenClaims, error) {
 		DisplayName: displayName,
 	}, nil
 }
-

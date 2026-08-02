@@ -82,7 +82,7 @@ func (r *MessageRouter) handleInterviewStart(conn *ClientConnection, env *events
 	if payload.ConsentAI {
 		log.Printf("[ai-orchestrator] starting AI pipeline for room=%s (interview=%s, consent_recording=%t)",
 			room.ID, room.InterviewID, payload.ConsentRecording)
-		
+
 		// Bắt đầu capture audio stream để gửi cho AI STT
 		r.audioHook.StartHook(room.ID, room.InterviewID)
 	}
