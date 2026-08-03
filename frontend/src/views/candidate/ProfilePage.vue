@@ -81,10 +81,6 @@ const removeSkill = (index) => {
   profile.value.skills = skillsArray.join(', ')
 }
 
-// v2: đổi key để xoá cache URL tĩnh /uploads/ cũ (đã chết sau khi chuyển
-// sang signed URL); URL trong cache cũ không còn mở được.
-const CV_STORAGE_KEY = 'candidate_cvs_v2'
-
 const uploadedCvs = ref([])
 const fileInput = ref(null)
 const avatarInput = ref(null)
@@ -173,16 +169,16 @@ const handleFileUpload = async (e) => {
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
             targetCv.status = 'done'
-            // api.service đã bóc envelope (trả về data.data) nên đọc trực tiếp
-            if (res && res.cv_url) targetCv.url = res.cv_url
-            if (res && res.parsed_data) targetCv.parsedData = res.parsed_data
-            localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
+            if (res?.cv_url) targetCv.url = res.cv_url
+            if (res?.parsed_data) targetCv.parsedData = res.parsed_data
           }
         } catch (error) {
           console.error("Upload failed", error)
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
-            targetCv.status = 'done'
+            targetCv.status = 'failed'
+            URL.revokeObjectURL(tempUrl)
+            targetCv.url = ''
             toast.value = { type: 'error', message: `Lỗi tải lên ${file.name}` }
           }
         }
@@ -194,7 +190,6 @@ const handleFileUpload = async (e) => {
 const deleteCv = (id) => {
   const strId = String(id)
   uploadedCvs.value = uploadedCvs.value.filter(cv => String(cv.id) !== strId)
-  localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
   if (String(defaultCvId.value) === strId) {
     if (uploadedCvs.value.length > 0) {
       defaultCvId.value = String(uploadedCvs.value[0].id)
@@ -409,16 +404,7 @@ onMounted(async () => {
     profile.value.bio = parsed.bio || profile.value.bio
   }
 
-  const savedCvs = localStorage.getItem(CV_STORAGE_KEY)
-  if (savedCvs) {
-    const parsedCvs = JSON.parse(savedCvs)
-    parsedCvs.forEach(savedCv => {
-      // Bản ghi từ DB (đã có URL ký mới) luôn thắng bản cache cùng tên
-      if (!uploadedCvs.value.find(cv => cv.name === savedCv.name)) {
-        uploadedCvs.value.push(savedCv)
-      }
-    })
-  }
+
 
   if (uploadedCvs.value.length > 0 && !defaultCvId.value) {
     defaultCvId.value = String(uploadedCvs.value[0].id)
@@ -1117,17 +1103,17 @@ const confirmDeleteAccount = async () => {
               <h4 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-[var(--accent)]">
                 <Bot :size="16" /> Thông tin AI trích xuất (Gemini)
               </h4>
-              <div class="space-y-3 text-sm">
+              <div v-if="selectedCv.parsedData" class="space-y-3 text-sm">
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
                   <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || (selectedCv.parsedData?.work_experience?.[0]?.role) || 'Chuyên viên Công nghệ' }}
+                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || selectedCv.parsedData?.work_experience?.[0]?.role || 'Chưa có dữ liệu' }}
                   </span>
                 </div>
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
                   <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Middle') }}
+                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Chưa có dữ liệu') }}
                   </span>
                 </div>
                 <div class="flex items-center justify-between pt-1">
@@ -1137,9 +1123,10 @@ const confirmDeleteAccount = async () => {
                   </span>
                 </div>
               </div>
+              <p v-else class="text-sm text-[var(--text-secondary)]">Thông tin trích xuất hiện không khả dụng.</p>
             </div>
 
-            <div>
+            <div v-if="selectedCv.parsedData?.skills?.length">
               <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Kỹ năng phát hiện được</h4>
               <div class="flex flex-wrap gap-2">
                 <template v-if="selectedCv.parsedData?.skills && selectedCv.parsedData.skills.length > 0">
@@ -1148,7 +1135,7 @@ const confirmDeleteAccount = async () => {
                   </span>
                 </template>
                 <template v-else>
-                  <span v-for="skill in ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS']" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
+                  <span v-for="skill in []" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
                     {{ skill }}
                   </span>
                 </template>

@@ -110,7 +110,7 @@ onMounted(() => {
       </div>
       <div class="relative z-10 max-w-3xl space-y-3">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--background)] border border-blue-200/50 text-[var(--primary)] text-xs font-semibold uppercase tracking-wider shadow-xs">
-          <Sparkles size="14" class="text-[var(--accent)]" /> Trung tâm điều khiển WeMake AI
+          <Sparkles size="14" class="text-[var(--accent)]" /> Trung tâm điều khiển ViệcLàmAI
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-main)]">
           Xin chào Admin, chúc một ngày làm việc hiệu quả!

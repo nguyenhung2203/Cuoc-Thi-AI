@@ -5,7 +5,53 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"golang.org/x/time/rate"
 )
+
+func TestAuthRateLimitMiddleware_DefaultLimit(t *testing.T) {
+	mu.Lock()
+	visitors = make(map[string]*rate.Limiter)
+	mu.Unlock()
+
+	handler := AuthRateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for i := 0; i < 11; i++ {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/auth", nil)
+		r.RemoteAddr = "default-client:1234"
+		handler.ServeHTTP(w, r)
+		if i < 10 && w.Code != http.StatusNoContent {
+			t.Fatalf("request %d: expected 204, got %d", i+1, w.Code)
+		}
+		if i == 10 && w.Code != http.StatusTooManyRequests {
+			t.Fatalf("request 11: expected 429, got %d", w.Code)
+		}
+	}
+}
+
+func TestLoginRateLimitMiddleware_AllowsThirty(t *testing.T) {
+	mu.Lock()
+	visitors = make(map[string]*rate.Limiter)
+	mu.Unlock()
+
+	handler := LoginRateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	for i := 0; i < 31; i++ {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/auth/login", nil)
+		r.RemoteAddr = "login-client:1234"
+		handler.ServeHTTP(w, r)
+		if i < 30 && w.Code != http.StatusNoContent {
+			t.Fatalf("request %d: expected 204, got %d", i+1, w.Code)
+		}
+		if i == 30 && w.Code != http.StatusTooManyRequests {
+			t.Fatalf("request 31: expected 429, got %d", w.Code)
+		}
+	}
+}
 
 func TestRequireCandidate_AllowsCandidate(t *testing.T) {
 	handler := RequireCandidate()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

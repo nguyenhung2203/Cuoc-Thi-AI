@@ -72,14 +72,19 @@ func (r *CandidatePortalRepository) GetUserLatestCV(ctx context.Context, userID 
 	return fileID, origName, storageKey, err
 }
 
-// SaveParsedCV stores the AI-extracted CV JSON + summary onto all candidate rows for this user.
-func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, parsedJSON, summary string) error {
-	q := `UPDATE candidates
-	      SET parsed_cv_json = $1, ai_cv_summary = $2, cv_ai_status = 'ready',
-	          cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
-	      WHERE user_id = $3`
-	_, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID)
-	return err
+// SaveParsedCV stores AI output only while the candidate rows still point to
+// the file that was parsed. This prevents a slower, older upload from
+// overwriting the result of a newer upload.
+func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, cvFileID, parsedJSON, summary string) (bool, error) {
+	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, cv_ai_status = 'ready',
+	              cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
+	      WHERE user_id = $3 AND cv_file_id = $4::uuid`
+	result, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID, cvFileID)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	return rows > 0, err
 }
 
 // UpdateCVAIStatus records a retryable CV parsing transition for every candidate
