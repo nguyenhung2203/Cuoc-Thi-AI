@@ -12,6 +12,9 @@ import { interviewService } from '../../services/interview.service'
 import { jobService } from '../../services/job.service'
 import { candidateService } from '../../services/candidate.service'
 import { authStore } from '../../stores/auth.store'
+
+const router = useRouter()
+
 import { normalizeText, minLength, maxLength, requiredTrim, isValidId, isValidDate, isUrl } from '../../utils/validators.js'
 
 const interviews = ref([])
