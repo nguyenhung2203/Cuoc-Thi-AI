@@ -3,10 +3,10 @@ package response
 import "time"
 
 type CandidatePortalDashboardStats struct {
-	UpcomingInterviews int     `json:"upcoming_interviews"`
-	CompletedMockTests int     `json:"completed_mock_tests"`
-	AverageMockScore   float64 `json:"average_mock_score"`
-	ProfileCompleteness int    `json:"profile_completeness"` // percentage 0-100
+	UpcomingInterviews  int     `json:"upcoming_interviews"`
+	CompletedMockTests  int     `json:"completed_mock_tests"`
+	AverageMockScore    float64 `json:"average_mock_score"`
+	ProfileCompleteness int     `json:"profile_completeness"` // percentage 0-100
 }
 
 type CandidatePortalInterview struct {
@@ -33,6 +33,14 @@ type CandidatePortalProfile struct {
 	CVUrl      string      `json:"cv_url"`
 	CVName     string      `json:"cv_name"`
 	ParsedData interface{} `json:"parsed_data,omitempty"`
+}
+
+type CandidatePortalCVUpload struct {
+	Message    string      `json:"message"`
+	FileName   string      `json:"file_name"`
+	CVUrl      string      `json:"cv_url"`
+	CVFileID   string      `json:"cv_file_id"`
+	ParsedData interface{} `json:"parsed_data"`
 }
 
 type CandidatePortalApplication struct {
