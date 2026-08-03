@@ -293,7 +293,7 @@ const viewJob = (job) => {
       <div class="flex items-center justify-between flex-wrap gap-3">
         <h2 class="list-heading text-h1">
           <span v-if="keyword">Kết quả tìm kiếm cho "<span class="text-primary">{{ keyword }}</span>"</span>
-          <span v-else class="flex items-center gap-2">Việc làm tốt nhất <span class="text-muted font-normal">|</span> Đề xuất bởi <Sparkles :size="18" class="text-accent" /> <span class="text-accent font-extrabold tracking-tight">WEMAKE AI</span></span>
+          <span v-else class="flex items-center gap-2">Việc làm tốt nhất <span class="text-muted font-normal">|</span> Đề xuất bởi <Sparkles :size="18" class="text-accent" /> <span class="text-accent font-extrabold tracking-tight">ViệcLàmAI</span></span>
         </h2>
         <span class="page-chip">{{ langStore.t('jobs', 'pageChip') }} {{ currentPage }} / {{ totalPages }}</span>
       </div>

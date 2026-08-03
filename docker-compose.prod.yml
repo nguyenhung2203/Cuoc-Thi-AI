@@ -22,7 +22,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks: [internal]
+    networks: [internal, edge]
     restart: "no"
 
   backend-api:
