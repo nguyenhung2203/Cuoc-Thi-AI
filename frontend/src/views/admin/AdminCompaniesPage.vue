@@ -46,7 +46,7 @@ onMounted(() => {
           Quản lý Doanh nghiệp & Công ty
         </h1>
         <p class="text-[var(--text-secondary)] text-sm mt-1">
-          Theo dõi danh sách các tổ chức, doanh nghiệp tham gia sử dụng nền tảng WeMake AI.
+          Theo dõi danh sách các tổ chức, doanh nghiệp tham gia sử dụng nền tảng ViệcLàmAI.
         </p>
       </div>
       <button 

@@ -210,7 +210,6 @@ func main() {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Use(middleware.AuthRateLimitMiddleware)
 			authHandler.Routes(r)
 		})
 
