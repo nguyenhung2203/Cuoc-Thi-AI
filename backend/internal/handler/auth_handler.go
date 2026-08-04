@@ -131,7 +131,7 @@ func (h *AuthHandler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_queued", "message": "Đã tiếp nhận yêu cầu gửi mã xác nhận"}, nil, "")
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
 }
 
 // ForgotPassword emails a password-reset OTP. Always returns 200 to avoid account enumeration.
@@ -151,7 +151,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_queued", "message": "Đã tiếp nhận yêu cầu gửi mã xác nhận"}, nil, "")
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
 }
 
 // VerifyResetOTP validates a password-reset code without consuming it.

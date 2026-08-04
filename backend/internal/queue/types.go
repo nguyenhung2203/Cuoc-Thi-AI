@@ -1,7 +1,5 @@
 package queue
 
-import "time"
-
 // JobType identifies an async task kind (asynq task type name).
 type JobType string
 
@@ -14,18 +12,9 @@ const (
 	TypeBatchTranscript = "transcript:batch"
 	// TypeRecomputeMatches recomputes all fit scores for a user after a CV change.
 	TypeRecomputeMatches = "match:recompute"
-	// TypeSendOTPEmail sends a registration or password-reset OTP email.
-	TypeSendOTPEmail = "email:send-otp"
 )
 
-type SendOTPEmailPayload struct {
-	To           string    `json:"to"`
-	Purpose      string    `json:"purpose"`
-	GenerationID string    `json:"generation_id"`
-	TemplateType string    `json:"template_type"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
+// GenerateReportPayload is the JSON payload for a report generation job.
 type GenerateReportPayload struct {
 	CompanyID   string `json:"company_id"`
 	InterviewID string `json:"interview_id"`

@@ -142,8 +142,7 @@ func main() {
 	} else {
 		reportSvc.SetEnqueuer(dispatcher.EnqueueGenerateReport)
 		candidatePortalSvc.SetMatchEnqueuer(dispatcher.EnqueueRecomputeMatches)
-		authSvc.WithOTPEnqueuer(dispatcher)
-		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc, candidatePortalSvc, mailer, otpSvc)
+		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc, candidatePortalSvc)
 		go func() {
 			log.Println("queue: async worker started")
 			if werr := worker.Run(); werr != nil {
