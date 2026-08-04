@@ -58,6 +58,8 @@ func main() {
 	scoreRepo := repository.NewScoreRepository(db.DB)
 	aiPromptRepo := repository.NewAIPromptRepository(db)
 	aiLogRepo := repository.NewAILogRepository(db)
+	systemSettingsRepo := repository.NewSystemSettingsRepository(db)
+	aiSettingsSvc := service.NewAISettingsServiceFromEnv(systemSettingsRepo)
 
 	promptSvc := service.NewPromptService(aiPromptRepo)
 	aiLogSvc := service.NewAILogService(aiLogRepo)
@@ -71,6 +73,7 @@ func main() {
 		TranscriptRepo: transcriptRepo,
 		SuggestionSvc:  suggestionSvc,
 		ScoreSvc:       scoreSvc,
+		AILogSvc:       aiLogSvc,
 	}
 
 	port := os.Getenv("REALTIME_PORT")
@@ -80,7 +83,7 @@ func main() {
 	addr := ":" + port
 	fmt.Printf("Starting AI Interview Platform Realtime Gateway on %s...\n", addr)
 
-	srv := realtime.NewServer(addr, db, deps, livekitCfg)
+	srv := realtime.NewServer(addr, db, deps, livekitCfg, aiSettingsSvc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -90,21 +90,21 @@ func (s *CandidateService) Create(
 
 	now := time.Now()
 	candidate := &models.Candidate{
-		ID:           uuid.NewString(),
-		CompanyID:    companyID,
-		FullName:     req.FullName,
-		Email:        req.Email,
-		Phone:        sql.NullString{String: req.Phone, Valid: req.Phone != ""},
-		Source:       sql.NullString{String: req.Source, Valid: req.Source != ""},
-		Status:       models.CandidateStatus("new"),
+		ID:        uuid.NewString(),
+		CompanyID: companyID,
+		FullName:  req.FullName,
+		Email:     req.Email,
+		Phone:     sql.NullString{String: req.Phone, Valid: req.Phone != ""},
+		Source:    sql.NullString{String: req.Source, Valid: req.Source != ""},
+		Status:    models.CandidateStatus("new"),
 
 		CVFileID:     sql.NullString{String: req.CVFileID, Valid: req.CVFileID != ""},
 		ParsedCVJSON: models.JSONB("null"),
 		Tags:         models.JSONB("[]"),
 
-		CreatedBy:    sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		CreatedBy: sql.NullString{String: createdByUserID, Valid: createdByUserID != ""},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	created, err := s.candidateRepo.Create(ctx, candidate)

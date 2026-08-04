@@ -120,7 +120,7 @@ onMounted(async () => {
       setTimeout(() => tryJoinAsCandidate(), 500)
 
       // Connect LiveKit (hoặc native getUserMedia nếu không có server)
-      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:17880'
+      const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
       await connectToRoom(livekitUrl, token)
     } catch (err) {
       console.error('Không thể vào phòng', err)

@@ -203,7 +203,7 @@ const handleVerifyOtp = async () => {
     if (form.role === 'recruiter') {
       router.push({ path: '/dashboard', state: { message: `Xác thực OTP thành công! Chào mừng Nhà tuyển dụng ${form.name}. Vui lòng chuẩn bị giấy phép kinh doanh để xác minh doanh nghiệp.` } })
     } else {
-      router.push({ path: '/', state: { message: `Xác thực OTP thành công! Chào mừng ${form.name} đến với WeMake AI.` } })
+      router.push({ path: '/', state: { message: `Xác thực OTP thành công! Chào mừng ${form.name} đến với ViệcLàmAI.` } })
     }
   } catch (err) {
     if (err.message === 'email already exists') {
@@ -485,7 +485,7 @@ const handleGoogleLogin = async () => {
         <!-- Footer Link -->
         <div class="pt-2 text-center border-t border-slate-100 dark:border-slate-700/60">
           <p class="text-sm text-slate-500 dark:text-slate-400">
-            Đã có tài khoản WeMake AI?
+            Đã có tài khoản ViệcLàmAI?
             <span @click="router.push('/login')" class="text-[var(--primary)] font-bold hover:underline cursor-pointer ml-1">
               Đăng nhập ngay
             </span>

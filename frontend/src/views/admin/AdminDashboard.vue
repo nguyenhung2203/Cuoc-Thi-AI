@@ -7,12 +7,13 @@ import { apiService } from '../../services/api.service'
 
 const router = useRouter()
 const loading = ref(true)
-const cpuLoad = ref(12.4)
-const ramLoad = ref(48.2)
+const cpuLoad = ref(null)
+const ramLoad = ref(null)
 const reports = ref(null)
 const lastUpdated = ref('')
 const calcInterviews = ref(100)
 const recentLogs = ref([])
+const formatMetric = (value, suffix = '') => value === null || value === undefined ? '—' : `${value}${suffix}`
 
 const stats = ref([
   { title: 'Tổng người dùng', value: 0, icon: Users, colorClass: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-800/30', badge: '+Mới' },
@@ -51,8 +52,8 @@ const fetchDashboardData = async () => {
     }
 
     // Use actual server-side values from the /admin/reports API response
-    cpuLoad.value = +(reportsData?.cpu_usage_percent || 0).toFixed(1)
-    ramLoad.value = +(reportsData?.ram_usage_percent || 0).toFixed(1)
+    cpuLoad.value = reportsData?.cpu_usage_percent == null ? null : +reportsData.cpu_usage_percent.toFixed(1)
+    ramLoad.value = reportsData?.ram_usage_percent == null ? null : +reportsData.ram_usage_percent.toFixed(1)
 
     
     const now = new Date()
@@ -109,7 +110,7 @@ onMounted(() => {
       </div>
       <div class="relative z-10 max-w-3xl space-y-3">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--background)] border border-blue-200/50 text-[var(--primary)] text-xs font-semibold uppercase tracking-wider shadow-xs">
-          <Sparkles size="14" class="text-[var(--accent)]" /> Trung tâm điều khiển WeMake AI
+          <Sparkles size="14" class="text-[var(--accent)]" /> Trung tâm điều khiển ViệcLàmAI
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-main)]">
           Xin chào Admin, chúc một ngày làm việc hiệu quả!
@@ -205,33 +206,27 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 6. Cost -->
-      <div class="flex items-center gap-3.5 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-sm hover:border-[var(--accent)]/30 hover:shadow-md transition-all duration-300">
-        <div class="w-10 h-10 rounded-xl bg-[var(--accent-bg)] text-[var(--accent)] flex items-center justify-center shrink-0 shadow-xs">
+      <!-- 6. Token accounting status -->
+      <div class="flex items-center gap-3.5 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-[var(--surface-soft)] text-[var(--text-secondary)] flex items-center justify-center shrink-0 shadow-xs">
           <DollarSign size="18" />
         </div>
         <div>
-          <div class="text-[11px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Chi phí AI ước tính</div>
-          <div class="text-lg font-extrabold text-[var(--text-main)] mt-0.5">
-            <span v-if="loading" class="inline-block w-16 h-5 bg-slate-200 animate-pulse rounded"></span>
-            <span v-else>${{ reports ? (reports.total_token_usage * 0.000002).toFixed(4) : '0.0000' }}</span>
-          </div>
-          <div class="text-[10px] text-[var(--text-secondary)] mt-0.5">Đơn giá Gemini 2.5 Flash API</div>
+          <div class="text-[11px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Chi phí AI</div>
+          <div class="text-lg font-extrabold text-[var(--text-main)] mt-0.5">Chưa khả dụng</div>
+          <div class="text-[10px] text-[var(--text-secondary)] mt-0.5">Cần bảng giá theo từng model thực tế</div>
         </div>
       </div>
 
-      <!-- 7. Server Status & Latency -->
-      <div class="flex items-center gap-3.5 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-sm hover:border-[var(--text-secondary)]/30 hover:shadow-md transition-all duration-300">
+      <!-- 7. Server telemetry -->
+      <div class="flex items-center gap-3.5 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-sm">
         <div class="w-10 h-10 rounded-xl bg-[var(--surface-soft)] text-[var(--text-secondary)] flex items-center justify-center shrink-0 shadow-xs">
           <Activity size="18" />
         </div>
         <div>
-          <div class="text-[11px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Máy chủ & Độ trễ</div>
-          <div class="text-lg font-extrabold text-[var(--text-main)] mt-0.5 flex items-center gap-1.5">
-            <span>{{ latency }}ms</span>
-            <span class="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse"></span>
-          </div>
-          <div class="text-[10px] text-[var(--text-secondary)] mt-0.5">99.98% Uptime (Ổn định)</div>
+          <div class="text-[11px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">Máy chủ</div>
+          <div class="text-lg font-extrabold text-[var(--text-main)] mt-0.5">{{ formatMetric(reports?.server_latency_ms, 'ms') }}</div>
+          <div class="text-[10px] text-[var(--text-secondary)] mt-0.5">{{ reports?.server_latency_ms == null ? 'Chưa có telemetry độ trễ' : 'Độ trễ do backend đo' }}</div>
         </div>
       </div>
     </div>
@@ -312,7 +307,7 @@ onMounted(() => {
             <Cpu size="16" class="text-blue-500" />
             Tải CPU hệ thống
           </h4>
-          <span class="text-xs font-mono font-bold text-blue-600">{{ cpuLoad }}%</span>
+          <span>{{ formatMetric(cpuLoad, '%') }}</span>
         </div>
         <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
           <div 
@@ -321,8 +316,7 @@ onMounted(() => {
           ></div>
         </div>
         <div class="mt-4 flex items-center justify-between text-[11px] text-slate-500">
-          <span>8 Cores CPU Xeon v4</span>
-          <span>Ổn định (Normal)</span>
+          <span>Telemetry CPU chưa khả dụng</span>
         </div>
       </Card>
 
@@ -333,7 +327,7 @@ onMounted(() => {
             <HardDrive size="16" class="text-purple-500" />
             Tiêu hao Bộ nhớ RAM
           </h4>
-          <span class="text-xs font-mono font-bold text-purple-600">{{ ramLoad }}%</span>
+          <span>{{ formatMetric(ramLoad, '%') }}</span>
         </div>
         <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
           <div 
@@ -342,8 +336,7 @@ onMounted(() => {
           ></div>
         </div>
         <div class="mt-4 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Tổng: 16 GB RAM Máy chủ</span>
-          <span>Dùng: ~{{ (16 * ramLoad / 100).toFixed(2) }} GB</span>
+          <span>RAM telemetry chưa khả dụng</span>
         </div>
       </Card>
 
@@ -354,17 +347,16 @@ onMounted(() => {
             <Server size="16" class="text-emerald-500" />
             Bộ nhớ đệm Redis Cache
           </h4>
-          <span class="text-xs font-mono font-bold text-emerald-600">5.5%</span>
+          <span class="text-xs font-mono font-bold text-[var(--text-secondary)]">{{ formatMetric(reports?.redis_memory_mb, ' MB') }}</span>
         </div>
         <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
           <div 
             class="h-full bg-emerald-600 transition-all duration-500 rounded-full" 
-            style="width: 5.5%;"
+            :style="{ width: `${reports?.redis_memory_mb ? 0 : 0}%` }"
           ></div>
         </div>
         <div class="mt-4 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Max Limit: 256 MB RAM Redis</span>
-          <span>Đã dùng: 14.2 MB</span>
+          <span>{{ reports?.redis_memory_mb == null ? 'Redis telemetry chưa khả dụng' : `Đã dùng: ${reports.redis_memory_mb} MB` }}</span>
         </div>
       </Card>
     </div>
@@ -565,7 +557,7 @@ onMounted(() => {
               <Activity size="18" class="text-[var(--accent)] animate-pulse" />
               Trạng thái máy chủ
             </h3>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/30">ONLINE</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white border border-white/30">{{ reports?.system_uptime_hours == null ? 'UNKNOWN' : 'MEASURED' }}</span>
           </div>
 
           <!-- Micro-stats -->
@@ -574,7 +566,7 @@ onMounted(() => {
             <div>
               <div class="flex justify-between items-center mb-1">
                 <span class="flex items-center gap-1.5"><Cpu size="14" class="text-[var(--accent)]" /> Tải CPU</span>
-                <span class="font-mono font-bold">{{ cpuLoad }}%</span>
+          <span>{{ formatMetric(cpuLoad, '%') }}</span>
               </div>
               <div class="w-full h-1.5 bg-blue-950 rounded-full overflow-hidden">
                 <div class="h-full bg-[var(--accent)] rounded-full animate-pulse" :style="{ width: `${cpuLoad}%` }"></div>
@@ -585,7 +577,7 @@ onMounted(() => {
             <div>
               <div class="flex justify-between items-center mb-1">
                 <span class="flex items-center gap-1.5"><HardDrive size="14" class="text-[var(--highlight)]" /> Tiêu hao RAM</span>
-                <span class="font-mono font-bold">{{ ramLoad }}%</span>
+          <span class="font-mono font-bold">{{ formatMetric(ramLoad, '%') }}</span>
               </div>
               <div class="w-full h-1.5 bg-blue-950 rounded-full overflow-hidden">
                 <div class="h-full bg-[var(--highlight)] rounded-full animate-pulse" :style="{ width: `${ramLoad}%` }"></div>
@@ -595,12 +587,8 @@ onMounted(() => {
             <!-- Services Status -->
             <div class="pt-2 border-t border-blue-900 space-y-2 text-[11px]">
               <div class="flex justify-between items-center">
-                <span>Database Connection (Supabase)</span>
-                <span class="font-semibold text-[var(--accent)]">Connected</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Realtime LiveKit Engine</span>
-                <span class="font-semibold text-[var(--accent)]">Active</span>
+                <span>Database / Realtime / LiveKit</span>
+                <span class="font-semibold text-blue-100">Chưa có health telemetry</span>
               </div>
             </div>
             

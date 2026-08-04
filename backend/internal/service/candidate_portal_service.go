@@ -11,10 +11,10 @@ import (
 
 	"backend/internal/dto/response"
 
+	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/utils"
 	"backend/internal/repository"
-	"backend/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -99,9 +99,9 @@ func (s *CandidatePortalService) GetDashboardStats(ctx context.Context, userID s
 	// Note: Proper CV check would require checking candidate rows or user's central CV
 
 	return &response.CandidatePortalDashboardStats{
-		UpcomingInterviews: upcomingCount,
-		CompletedMockTests: mockCount,
-		AverageMockScore:   avgScore,
+		UpcomingInterviews:  upcomingCount,
+		CompletedMockTests:  mockCount,
+		AverageMockScore:    avgScore,
 		ProfileCompleteness: completeness,
 	}, nil
 }
@@ -111,7 +111,7 @@ func (s *CandidatePortalService) GetInterviews(ctx context.Context, userID strin
 	if err != nil {
 		return nil, errors.NewInternal("failed to get interviews")
 	}
-	
+
 	// Inject join link for candidates
 	for i := range interviews {
 		if interviews[i].InviteTokenHash != "" {
@@ -165,46 +165,42 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 	return profile, nil
 }
 
-// UploadCV updates the central CV for the user, then parses it with AI (best-effort).
-// storageKey is the on-disk key of the freshly uploaded file so we can read/parse it.
-func (s *CandidatePortalService) UploadCV(ctx context.Context, userID, originalName, cvFileID, storageKey string) error {
+// UploadCV updates the central CV and requires a successful AI parse.
+func (s *CandidatePortalService) UploadCV(ctx context.Context, userID, originalName, cvFileID, storageKey string) (*response.CandidatePortalCVUpload, error) {
+	if s.aiSvc == nil || storageKey == "" {
+		return nil, errors.NewInternal("CV analysis unavailable")
+	}
 	if err := s.repo.UpdateUserCV(ctx, userID, cvFileID, originalName); err != nil {
-		return err
+		return nil, err
 	}
-
-	// Parse the CV with AI and persist the result. Best-effort: upload still
-	// succeeds even if parsing fails (e.g. AI unavailable or non-PDF content).
-	if s.aiSvc != nil && storageKey != "" {
-		parsedJSON, summary, perr := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
-		if perr != nil {
-			log.Printf("portal: CV parse failed for user %s: %v", userID, perr)
-			return nil
-		}
-		if serr := s.repo.SaveParsedCV(ctx, userID, parsedJSON, summary); serr != nil {
-			log.Printf("portal: failed to save parsed CV for user %s: %v", userID, serr)
-		}
-
-		// The CV changed, so every cached/stored fit score for this user is now
-		// stale. Drop the cache and recompute existing applications' fit scores.
-		if s.matchCache != nil {
-			s.matchCache.InvalidateUser(ctx, userID)
-		}
-		if s.matchEnqueuer != nil {
-			if eerr := s.matchEnqueuer(userID); eerr != nil {
-				log.Printf("portal: failed to enqueue match recompute for user %s: %v", userID, eerr)
-			}
-		} else {
-			// No async queue wired — recompute inline in the background.
-			go func(uid string) {
-				bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-				defer cancel()
-				if rerr := s.RecomputeUserMatches(bgCtx, uid); rerr != nil {
-					log.Printf("portal: inline match recompute failed for user %s: %v", uid, rerr)
-				}
-			}(userID)
-		}
+	if err := s.repo.UpdateCVAIStatus(ctx, userID, "processing", nil); err != nil {
+		return nil, errors.NewInternal("mark CV parsing as processing failed")
 	}
-	return nil
+	parsedJSON, summary, err := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
+	if err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		return nil, errors.NewInternal("CV analysis failed")
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(parsedJSON), &parsed); err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		return nil, errors.NewInternal("CV analysis returned invalid data")
+	}
+	saved, err := s.repo.SaveParsedCV(ctx, userID, cvFileID, parsedJSON, summary)
+	if err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		return nil, errors.NewInternal("save parsed CV failed")
+	}
+	if !saved {
+		return nil, errors.NewConflict("CV was replaced by a newer upload")
+	}
+	if s.matchCache != nil {
+		s.matchCache.InvalidateUser(ctx, userID)
+	}
+	if s.matchEnqueuer != nil {
+		_ = s.matchEnqueuer(userID)
+	}
+	return &response.CandidatePortalCVUpload{Message: "CV uploaded", FileName: originalName, CVFileID: cvFileID, ParsedData: parsed}, nil
 }
 
 func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID, cvFileID, cvOriginalName string) error {

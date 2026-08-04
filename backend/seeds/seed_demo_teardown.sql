@@ -39,14 +39,32 @@ DELETE FROM interviews           WHERE id IN (
   '11111111-0000-0000-0000-000000000002',
   '11111111-0000-0000-0000-000000000003');
 
--- 8) Job-candidates
-DELETE FROM job_candidates       WHERE company_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+-- 8) Job-candidates: chỉ xóa các job/candidate ID của bộ demo, không xóa toàn bộ company
+DELETE FROM job_candidates WHERE id IN (
+  'ffffffff-0000-0000-0000-000000000001',
+  'ffffffff-0000-0000-0000-000000000002',
+  'ffffffff-0000-0000-0000-000000000003',
+  'ffffffff-0000-0000-0000-000000000004',
+  'ffffffff-0000-0000-0000-000000000005',
+  'ffffffff-0000-0000-0000-000000000006');
 
--- 7) Candidates
-DELETE FROM candidates           WHERE company_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+-- 7) Candidates: chỉ xóa các candidate ID của bộ demo
+DELETE FROM candidates WHERE id IN (
+  'dddddddd-0000-0000-0000-000000000001',
+  'dddddddd-0000-0000-0000-000000000002',
+  'dddddddd-0000-0000-0000-000000000003',
+  'dddddddd-0000-0000-0000-000000000004',
+  'dddddddd-0000-0000-0000-000000000005',
+  'dddddddd-0000-0000-0000-000000000006');
 
--- 6) Files
-DELETE FROM files                WHERE company_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+-- 6) Files: chỉ xóa các file ID của bộ demo
+DELETE FROM files WHERE id IN (
+  'eeeeeeee-0000-0000-0000-000000000001',
+  'eeeeeeee-0000-0000-0000-000000000002',
+  'eeeeeeee-0000-0000-0000-000000000003',
+  'eeeeeeee-0000-0000-0000-000000000004',
+  'eeeeeeee-0000-0000-0000-000000000005',
+  'eeeeeeee-0000-0000-0000-000000000006');
 
 -- 5) Rubric criteria + rubric
 DELETE FROM rubric_criteria      WHERE rubric_id = '77777777-0000-0000-0000-000000000001';

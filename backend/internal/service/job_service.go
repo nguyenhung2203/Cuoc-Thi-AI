@@ -179,7 +179,7 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 	if _, err := s.GetByID(ctx, companyID, jobID); err != nil {
 		return err
 	}
-	
+
 	// Check if there are active candidates
 	count, err := s.jobRepo.CountCandidates(ctx, jobID)
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 			TotalWeight: 100,
 			CreatedBy:   job.CreatedBy,
 		}
-		
+
 		for i, c := range result.SuggestedRubric {
 			criteria = append(criteria, models.RubricCriteria{
 				ID:          uuid.NewString(),

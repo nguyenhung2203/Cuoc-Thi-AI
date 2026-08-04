@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 
-	"github.com/jmoiron/sqlx"
 	"backend/internal/models"
+	"github.com/jmoiron/sqlx"
 )
 
 type RefreshTokenRepository interface {

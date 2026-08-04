@@ -211,28 +211,13 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID, fileRecord.StorageKey)
+	upload, err := h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID, fileRecord.StorageKey)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
 	}
-
-	cvUrl, _ := h.fileSvc.SignedURL(fileRecord.StorageKey)
-
-	// Fetch the freshly parsed profile so the client can show real extracted data.
-	profile, _ := h.svc.GetProfile(r.Context(), userID)
-	var parsedData interface{}
-	if profile != nil {
-		parsedData = profile.ParsedData
-	}
-
-	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"message":     "CV uploaded",
-		"file_name":   fileRecord.OriginalName,
-		"cv_url":      cvUrl,
-		"cv_file_id":  fileRecord.ID,
-		"parsed_data": parsedData,
-	}, nil, requestID)
+	upload.CVUrl, _ = h.fileSvc.SignedURL(fileRecord.StorageKey)
+	response.JSON(w, http.StatusOK, upload, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) GetApplications(w http.ResponseWriter, r *http.Request) {
@@ -269,4 +254,3 @@ func (h *CandidatePortalHandler) CancelApplication(w http.ResponseWriter, r *htt
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "withdrawn successfully"}, nil, requestID)
 }
-

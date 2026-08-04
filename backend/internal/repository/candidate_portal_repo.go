@@ -72,10 +72,35 @@ func (r *CandidatePortalRepository) GetUserLatestCV(ctx context.Context, userID 
 	return fileID, origName, storageKey, err
 }
 
-// SaveParsedCV stores the AI-extracted CV JSON + summary onto all candidate rows for this user.
-func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, parsedJSON, summary string) error {
-	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, updated_at = NOW() WHERE user_id = $3`
-	_, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID)
+// SaveParsedCV stores AI output only while the candidate rows still point to
+// the file that was parsed. This prevents a slower, older upload from
+// overwriting the result of a newer upload.
+func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, cvFileID, parsedJSON, summary string) (bool, error) {
+	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, cv_ai_status = 'ready',
+	              cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
+	      WHERE user_id = $3 AND cv_file_id = $4::uuid`
+	result, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID, cvFileID)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	return rows > 0, err
+}
+
+// UpdateCVAIStatus records a retryable CV parsing transition for every candidate
+// row owned by the portal user. Starting a retry clears the previous error.
+func (r *CandidatePortalRepository) UpdateCVAIStatus(ctx context.Context, userID, status string, parseErr error) error {
+	var errorText any
+	if parseErr != nil {
+		errorText = parseErr.Error()
+	}
+	q := `UPDATE candidates
+	      SET cv_ai_status = $1,
+	          cv_ai_error = $2,
+	          cv_ai_attempts = cv_ai_attempts + CASE WHEN $1 = 'processing' THEN 1 ELSE 0 END,
+	          cv_ai_updated_at = NOW(), updated_at = NOW()
+	      WHERE user_id = $3`
+	_, err := r.db.ExecContext(ctx, q, status, errorText, userID)
 	return err
 }
 
@@ -101,7 +126,8 @@ func (r *CandidatePortalRepository) UpdateUserCV(ctx context.Context, userID str
 	// whose storage_key would incorrectly contain the file ID.
 	q := `
 		UPDATE candidates
-		SET cv_file_id = $1::uuid, updated_at = NOW()
+		SET cv_file_id = $1::uuid, parsed_cv_json = NULL, ai_cv_summary = NULL,
+		    cv_ai_status = 'pending', cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
 		WHERE user_id = $2
 	`
 	_, err := r.db.ExecContext(ctx, q, cvFileID, userID)

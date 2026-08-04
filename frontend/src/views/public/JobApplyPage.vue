@@ -201,7 +201,7 @@ const toggleSaveJob = () => {
       id: job.value.id,
       company_id: companyId,
       title: job.value.title,
-      company_name: company.value?.name || 'Công ty TNHH WeMake',
+      company_name: company.value?.name || 'Chưa cập nhật',
       location: job.value.location,
       salary_min: { Valid: job.value.salary_min != null, Int64: job.value.salary_min || 0 },
       salary_max: { Valid: job.value.salary_max != null, Int64: job.value.salary_max || 0 },
@@ -214,6 +214,34 @@ const toggleSaveJob = () => {
   }
   localStorage.setItem('candidate_saved_jobs', JSON.stringify(list))
 }
+
+const showBeginnerGuide = ref(false)
+
+const beginnerSkills = computed(() => {
+  if (!job.value) return []
+  const text = ((job.value.requirements || '') + ' ' + (job.value.description || '')).toLowerCase()
+  const skillMap = [
+    { key: 'javascript', label: 'JavaScript / ES6+', doc: 'Nền tảng lập trình web, xử lý logic phía client' },
+    { key: 'vue', label: 'Vue.js Framework', doc: 'Framework xây dựng giao diện ứng dụng web reactive' },
+    { key: 'react', label: 'React.js', doc: 'Thư viện UI phổ biến xây dựng component-based' },
+    { key: 'node', label: 'Node.js / Express', doc: 'Lập trình Backend bằng JavaScript' },
+    { key: 'go', label: 'Golang (Go)', doc: 'Ngôn ngữ backend hiệu năng cao, microservices' },
+    { key: 'python', label: 'Python / FastAPI / Django', doc: 'Lập trình backend, phân tích dữ liệu & AI' },
+    { key: 'sql', label: 'SQL / PostgreSQL / MySQL', doc: 'Truy vấn và thiết kế cơ sở dữ liệu quan hệ' },
+    { key: 'docker', label: 'Docker & Containerization', doc: 'Đóng gói và triển khai ứng dụng' },
+    { key: 'git', label: 'Git & GitHub/GitLab', doc: 'Quản lý mã nguồn & làm việc nhóm' },
+    { key: 'api', label: 'RESTful API / JSON', doc: 'Giao tiếp dữ liệu giữa Frontend và Backend' },
+    { key: 'css', label: 'CSS3 / Tailwind / Responsive', doc: 'Thiết kế giao diện đẹp và tương thích mobile' },
+  ]
+  const matched = skillMap.filter(item => text.includes(item.key))
+  if (matched.length > 0) return matched
+  // Fallback defaults if no specific keyword found
+  return [
+    { label: 'Kỹ năng chuyên môn ngành ' + (job.value.department || 'IT'), doc: 'Tìm hiểu các khái niệm cơ bản và quy trình làm việc thực tế' },
+    { label: 'Tư duy giải quyết vấn đề (Problem Solving)', doc: 'Cách phân tích bài toán và tìm giải pháp tối ưu' },
+    { label: 'Sử dụng Git & Quy trình làm việc nhóm', doc: 'Quản lý phiên bản mã nguồn và phối hợp làm việc' }
+  ]
+})
 
 const scrollToApply = () => {
   const applySection = document.getElementById('apply-section')
@@ -364,7 +392,48 @@ const scrollToApply = () => {
 
         <!-- JD Content (TopCV Style) -->
         <Card class="jd-content-card animate-rise" style="animation-delay: 0.15s;">
-          <h2 class="section-heading">Chi tiết tin tuyển dụng</h2>
+          <div class="flex items-center justify-between flex-wrap gap-3 mb-6 pb-4 border-b border-[var(--border)]">
+            <h2 class="section-heading mb-0" style="margin-bottom: 0">Chi tiết tin tuyển dụng</h2>
+            
+            <!-- AI Guide Button for Beginners -->
+            <button 
+              @click="showBeginnerGuide = !showBeginnerGuide" 
+              class="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full border transition-all cursor-pointer shadow-sm"
+              :class="showBeginnerGuide ? 'bg-primary text-white border-primary' : 'bg-[var(--accent-bg)] text-[var(--accent)] border-[var(--accent)] hover:opacity-90'">
+              <Sparkles :size="16" />
+              <span>{{ showBeginnerGuide ? 'Ẩn Hướng dẫn AI' : '🤖 Người mới chưa hiểu JD? Bấm AI Giải thích & Gợi ý học' }}</span>
+            </button>
+          </div>
+
+          <!-- AI Beginner Explanation & Roadmap Panel -->
+          <div v-if="showBeginnerGuide" class="p-5 mb-6 rounded-xl border border-[var(--accent)]/30 bg-[var(--surface-soft)] space-y-4 animate-fadeIn">
+            <div class="flex items-center gap-2 font-bold text-[var(--accent)] text-base">
+              <BookOpen :size="20" /> Trợ lý AI: Tóm tắt công việc & Hướng dẫn học tập cho người mới
+            </div>
+            
+            <div class="text-sm leading-relaxed text-[var(--text-secondary)]">
+              <p class="mb-2"><strong>💡 Bạn là người mới bắt đầu?</strong> Đừng lo lắng nếu mô tả công việc chứa nhiều thuật ngữ chuyên môn. AI đã phân tích JD này và đúc kết các kỹ năng trọng tâm bạn cần chuẩn bị:</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div v-for="(item, idx) in beginnerSkills" :key="idx" class="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg flex flex-col justify-between">
+                <div>
+                  <div class="font-bold text-sm text-[var(--text-main)] flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-[var(--primary-light)] text-[var(--primary)] text-xs flex items-center justify-center font-extrabold">{{ idx + 1 }}</span>
+                    {{ item.label }}
+                  </div>
+                  <div class="text-xs text-[var(--text-secondary)] mt-1.5 leading-snug">{{ item.doc }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-[var(--border)] mt-2">
+              <span class="text-xs text-[var(--text-muted)]">🎯 Hãy tự tin luyện phỏng vấn thử với AI để kiểm tra mức độ sẵn sàng!</span>
+              <button @click="router.push('/mock-setup')" class="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1">
+                Luyện phỏng vấn thử ngay <Sparkles :size="14" />
+              </button>
+            </div>
+          </div>
           
           <div class="jd-block">
             <h3 class="jd-block-title">Mô tả công việc</h3>

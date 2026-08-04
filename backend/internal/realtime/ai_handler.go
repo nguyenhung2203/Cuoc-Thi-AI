@@ -207,26 +207,9 @@ func (r *MessageRouter) processAISuggestionWorker(roomID, interviewID, reqID, fo
 		return
 	}
 
-	// Dev fallback: no real services wired.
-	time.Sleep(50 * time.Millisecond)
-	suggestionID := uuid.New().String()
-	suggPayload := events.AISuggestionPayload{
-		SuggestionID:   suggestionID,
-		SuggestionType: events.SuggestionFollowUpQuestion,
-		Content:        "Bạn có thể nói rõ bạn đã đo performance bằng chỉ số nào không?",
-		Reason:         "Ứng viên nói đã tối ưu performance nhưng chưa nêu metric cụ thể.",
-		TargetSkill:    "Performance Optimization",
-		Priority:       "high",
-		Confidence:     0.84,
-	}
-	suggEnv, err := events.NewEnvelope(events.EventAISuggestion, reqID, roomID, interviewID, suggPayload)
-	if err == nil {
-		rawSugg, _ := suggEnv.ToJSON()
-		targetRoom.BroadcastWithVisibility(events.EventAISuggestion, "", rawSugg)
-	}
-	if r.auditLogger != nil {
-		r.auditLogger.LogEvent("ai_suggestion", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "suggestion_id": suggestionID})
-	}
+	// Real AI dependencies are mandatory; never broadcast fabricated suggestions.
+	log.Printf("[ai] suggestion dependencies unavailable for room=%s", roomID)
+	r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityCritical, "Dịch vụ gợi ý AI chưa được cấu hình.", false, 0)
 }
 
 // handleAIRequestScoreUpdate processes "ai:request_score_update" events from recruiters.
@@ -389,41 +372,10 @@ func (r *MessageRouter) processAIScoreWorker(roomID, interviewID, reqID, scope s
 		return
 	}
 
-	// Dev fallback: no real services wired (or no criterion_ids supplied).
-	time.Sleep(50 * time.Millisecond)
-	var rubricScores []events.RubricScore
-	if scope == "brief_check" {
-		rubricScores = append(rubricScores, events.RubricScore{
-			CriterionName: "Technical Depth",
-			Score:         nil,
-			MaxScore:      5,
-			Evidence:      "Câu trả lời quá ngắn, không đủ bằng chứng đánh giá.",
-			Confidence:    0.20,
-			Status:        events.ScoreStatusInsufficientEvidence,
-		})
+	// Missing dependencies or rubric criteria are errors, never synthetic scores.
+	if len(criterionIDs) == 0 {
+		r.sendAIError(targetRoom, reqID, events.AIErrorInvalidInput, events.SeverityDegraded, "Vui lòng chọn ít nhất một tiêu chí rubric để chấm điểm.", false, 0)
 	} else {
-		scoreVal := 4.0
-		rubricScores = append(rubricScores, events.RubricScore{
-			CriterionName: "Technical Knowledge",
-			Score:         &scoreVal,
-			MaxScore:      5,
-			Evidence:      "Ứng viên mô tả được cách tối ưu query và cache.",
-			Confidence:    0.78,
-			Status:        events.ScoreStatusScored,
-		})
-	}
-
-	scoreID := uuid.New().String()
-	updatePayload := events.AIScoreUpdatePayload{
-		Scores: rubricScores,
-	}
-	scoreEnv, err := events.NewEnvelope(events.EventAIScoreUpdate, reqID, roomID, interviewID, updatePayload)
-	if err == nil {
-		rawScore, _ := scoreEnv.ToJSON()
-		targetRoom.BroadcastWithVisibility(events.EventAIScoreUpdate, "", rawScore)
-	}
-
-	if r.auditLogger != nil {
-		r.auditLogger.LogEvent("ai_score_update", "system", "ai", "interview_room", roomID, "", "127.0.0.1", map[string]interface{}{"room_id": roomID, "score_id": scoreID})
+		r.sendAIError(targetRoom, reqID, events.AIErrorServiceUnavail, events.SeverityCritical, "Dịch vụ chấm điểm AI chưa được cấu hình.", false, 0)
 	}
 }

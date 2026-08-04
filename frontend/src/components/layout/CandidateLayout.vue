@@ -6,13 +6,14 @@ import { useNotificationStore } from '../../stores/notification.store'
 import { langStore } from '../../stores/lang.store'
 import AppFooter from './AppFooter.vue'
 import AppLogo from '../common/AppLogo.vue'
-import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe, Sun, Moon, Check, Bookmark } from 'lucide-vue-next'
+import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe, Sun, Moon, Check, Bookmark, Menu, X } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 const showNotifications = ref(false)
 const showProfileMenu = ref(false)
 const showLangMenu = ref(false)
+const isMobileMenuOpen = ref(false)
 const notificationStore = useNotificationStore()
 
 const currentTheme = ref(localStorage.getItem('app_theme') || 'light')
@@ -109,19 +110,26 @@ const handleLogout = async () => {
       <div class="nav-container">
         <!-- Left Side: Logo & Menu -->
         <div class="nav-left">
+          <!-- Mobile Menu Button -->
+          <button class="mobile-nav-toggle" @click.stop="isMobileMenuOpen = !isMobileMenuOpen">
+            <Menu v-if="!isMobileMenuOpen" :size="20" />
+            <X v-else :size="20" />
+          </button>
+
           <!-- Logo -->
           <div class="nav-brand cursor-pointer" @click="router.push('/home')">
             <AppLogo size="md" />
           </div>
 
           <!-- Menu -->
-          <nav class="nav-menu">
+          <nav class="nav-menu" :class="{ 'is-open': isMobileMenuOpen }">
             <router-link 
               v-for="item in candidateMenu" 
               :key="item.path"
               :to="item.path"
               class="nav-link"
               active-class="active"
+              @click="isMobileMenuOpen = false"
             >
               <component :is="item.icon" size="18" />
               {{ item.name }}
@@ -175,11 +183,11 @@ const handleLogout = async () => {
           <template v-if="authStore.isAuthenticated">
             <!-- Notification Bell -->
             <div style="position: relative; cursor: pointer; margin-right: 16px" @click.stop="showNotifications = !showNotifications; showProfileMenu = false; showLangMenu = false">
-              <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s" class="hover-circle">
+              <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s; display: flex; align-items: center; justify-content: center;" class="hover-circle">
                 <Bell size="20" color="var(--text-secondary)" />
-                <div v-if="unreadCount > 0" style="position: absolute; top: 0px; right: 0px; background-color: var(--danger); color: white; border-radius: 50%; border: 2px solid var(--surface); font-size: 10px; font-weight: bold; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;">
-                  {{ unreadCount }}
-                </div>
+              </div>
+              <div v-if="unreadCount > 0" style="position: absolute; top: 2px; right: 2px; background-color: var(--danger); color: white; border-radius: 9999px; border: 2px solid var(--surface); font-size: 10px; font-weight: bold; min-width: 18px; height: 18px; padding: 0 4px; display: flex; align-items: center; justify-content: center; transform: translate(25%, -25%); pointer-events: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);">
+                {{ unreadCount }}
               </div>
               
               <!-- Notifications Dropdown -->
@@ -339,6 +347,61 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* Mobile Menu Toggle button */
+.mobile-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: 8px;
+}
+.mobile-nav-toggle:hover {
+  background-color: var(--surface-soft);
+  color: var(--text-main);
+}
+
+@media (max-width: 992px) {
+  .mobile-nav-toggle {
+    display: flex;
+  }
+  
+  .nav-menu {
+    display: none;
+    position: fixed;
+    top: 72px;
+    left: 0;
+    right: 0;
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
+    box-shadow: var(--shadow-md);
+  }
+  
+  .nav-menu.is-open {
+    display: flex;
+  }
+  
+  .nav-link {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  .nav-left {
+    gap: 16px;
+  }
+  
+  .nav-container {
+    padding: 0 16px;
+  }
 }
 
 .nav-link {

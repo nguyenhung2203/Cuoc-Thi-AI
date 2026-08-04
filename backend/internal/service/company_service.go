@@ -22,7 +22,7 @@ func NewCompanyService(companyRepo *repository.CompanyRepository) *CompanyServic
 
 func (s *CompanyService) CreateCompany(ctx context.Context, userID, name, website, industry, size string) (*models.Company, error) {
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-")) + "-" + uuid.NewString()[:8]
-	
+
 	company := &models.Company{
 		ID:        uuid.NewString(),
 		Name:      name,
@@ -70,7 +70,7 @@ func (s *CompanyService) UpdateCompany(ctx context.Context, id, name, website, i
 	if err != nil {
 		return nil, errors.NewNotFound("company not found")
 	}
-	
+
 	company.Name = name
 	company.Website = sql.NullString{String: website, Valid: website != ""}
 	company.Industry = sql.NullString{String: industry, Valid: industry != ""}

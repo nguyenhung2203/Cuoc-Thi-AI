@@ -102,9 +102,9 @@ func (s *InterviewService) CreateInterview(ctx context.Context, req CreateInterv
 	}
 
 	room := &models.InterviewRoom{
-		ID:          roomID,
-		InterviewID: interviewID,
-		RoomCode:    roomCode,
+		ID:               roomID,
+		InterviewID:      interviewID,
+		RoomCode:         roomCode,
 		Status:           "waiting",
 		Provider:         sql.NullString{String: "livekit", Valid: true},
 		ConnectionConfig: []byte("{}"),

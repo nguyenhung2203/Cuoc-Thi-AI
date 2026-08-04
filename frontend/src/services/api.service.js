@@ -6,7 +6,7 @@
 
 import { normalizeValidationErrors } from '../utils/validators.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 // Lấy Token từ LocalStorage
 const getToken = () => localStorage.getItem('access_token');
@@ -132,7 +132,7 @@ const request = async (endpoint, options = {}) => {
     
     // Xử lý lỗi Network (không kết nối được tới server)
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-      throw { message: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại hệ thống backend.' };
+      throw { message: 'Không thể kết nối đến máy chủ.' };
     }
     
     throw error;

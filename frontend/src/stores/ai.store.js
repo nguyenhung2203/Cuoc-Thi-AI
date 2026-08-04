@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useWebSocket } from '../composables/useWebSocket';
+import { aiService } from '../services/ai.service';
+import { authStore } from './auth.store';
 
 export const useAiStore = defineStore('ai', () => {
   const { sendMessage, on, off } = useWebSocket();
@@ -100,12 +102,39 @@ export const useAiStore = defineStore('ai', () => {
     aiWarning.value = envelope.payload;
   };
 
-  const requestSuggestion = (focus, last_transcript_id, roomId, interviewId) => {
-    sendMessage('ai:request_suggestion', { focus, last_transcript_id }, roomId, interviewId);
+  const requestSuggestion = async (focus, last_transcript_id, roomId, interviewId) => {
+    const sent = sendMessage('ai:request_suggestion', { focus, last_transcript_id }, roomId, interviewId);
+    if (sent) return true;
+    const companyId = authStore.user?.companies?.[0]?.id;
+    if (!companyId || !interviewId) return false;
+    try {
+      const result = await aiService.suggestFollowUp(companyId, interviewId, { focus, last_transcript_id });
+      if (result?.suggestion_id || result?.content) handleAiSuggestion({ payload: result });
+      return true;
+    } catch (error) {
+      aiError.value = { severity: 'degraded', message: 'Không thể kết nối dịch vụ gợi ý AI.' };
+      return false;
+    }
   };
-  
-  const requestScoreUpdate = (criterion_ids, scope = 'latest_answer', roomId, interviewId) => {
-    sendMessage('ai:request_score_update', { criterion_ids, scope }, roomId, interviewId);
+
+  const requestScoreUpdate = async (criterion_ids, scope = 'latest_answer', roomId, interviewId, transcript_ids = []) => {
+    if (!Array.isArray(criterion_ids) || criterion_ids.length === 0) {
+      aiError.value = { severity: 'degraded', message: 'Chưa có tiêu chí rubric để chấm điểm.' };
+      return false;
+    }
+    const sent = sendMessage('ai:request_score_update', { criterion_ids, scope }, roomId, interviewId);
+    if (sent) return true;
+    const companyId = authStore.user?.companies?.[0]?.id;
+    if (!companyId || !interviewId) return false;
+    try {
+      const result = await aiService.scoreAnswer(companyId, interviewId, { criterion_ids, transcript_ids });
+      const payload = result?.scores ? result : { scores: result?.data?.scores || [] };
+      handleAiScoreUpdate({ payload });
+      return true;
+    } catch (error) {
+      aiError.value = { severity: 'degraded', message: 'Không thể kết nối dịch vụ chấm điểm AI.' };
+      return false;
+    }
   };
 
   const clearAllTimers = () => {
