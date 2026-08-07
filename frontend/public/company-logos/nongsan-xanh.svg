@@ -1,0 +1,6 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="24" fill="#2D6A4F"/>
+  <circle cx="64" cy="52" r="22" fill="#95D5B2"/>
+  <path d="M40 88c8-14 40-14 48 0" stroke="#D8F3DC" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <text x="64" y="112" text-anchor="middle" font-family="Segoe UI, Arial" font-size="14" font-weight="700" fill="#D8F3DC">NSX</text>
+</svg>
