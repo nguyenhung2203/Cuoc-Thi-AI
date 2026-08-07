@@ -4,15 +4,15 @@ import "testing"
 
 func TestSanitizeExt(t *testing.T) {
 	cases := map[string]string{
-		".pdf":    ".pdf",
-		".PDF":    ".pdf",
-		".docx":   ".docx",
-		".p df":   "", // client filename garbage — the K-FILE key-poisoning class
-		".php":    ".php", // matches the pattern; safety comes from mimeExt only emitting whitelisted ext
-		"":        "",
-		"pdf":     "", // no leading dot
+		".pdf":      ".pdf",
+		".PDF":      ".pdf",
+		".docx":     ".docx",
+		".p df":     "",     // client filename garbage — the K-FILE key-poisoning class
+		".php":      ".php", // matches the pattern; safety comes from mimeExt only emitting whitelisted ext
+		"":          "",
+		"pdf":       "", // no leading dot
 		".toolong1": "",
-		`..\x`:    "",
+		`..\x`:      "",
 	}
 	for in, want := range cases {
 		if got := sanitizeExt(in); got != want {

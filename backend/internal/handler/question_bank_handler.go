@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -50,6 +51,7 @@ func (h *QuestionBankHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	questions, total, err := h.svc.List(r.Context(), companyID, jobID, questionType, level, keyword, p)
 	if err != nil {
+		log.Printf("question bank list failed company_id=%s: %v", companyID, err)
 		writeServiceError(w, err, requestID)
 		return
 	}

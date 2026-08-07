@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
 	"net"
 	"time"
 
@@ -17,11 +16,17 @@ import (
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/jwt"
+	"backend/internal/queue"
 	"backend/internal/repository"
 )
 
 type Mailer interface {
 	Send(to, subject, body string) error
+	SendHTML(to, subject, textBody, htmlBody string) error
+}
+
+type OTPEmailEnqueuer interface {
+	EnqueueSendOTPEmail(payload queue.SendOTPEmailPayload) error
 }
 
 type AuthService struct {
@@ -30,6 +35,7 @@ type AuthService struct {
 	jwtSecret        string
 	otpSvc           *OTPService
 	mailer           Mailer
+	otpEnqueuer      OTPEmailEnqueuer
 	googleClientID   string
 }
 
@@ -48,7 +54,11 @@ func (s *AuthService) WithOTP(otpSvc *OTPService, mailer Mailer) *AuthService {
 	return s
 }
 
-// WithGoogle wires the Google OAuth client ID used to verify id_tokens.
+func (s *AuthService) WithOTPEnqueuer(enqueuer OTPEmailEnqueuer) *AuthService {
+	s.otpEnqueuer = enqueuer
+	return s
+}
+
 func (s *AuthService) WithGoogle(clientID string) *AuthService {
 	s.googleClientID = clientID
 	return s
@@ -504,22 +514,29 @@ func (s *AuthService) SendRegistrationOTP(ctx context.Context, email string) err
 	if s.otpSvc == nil || !s.otpSvc.Enabled() {
 		return errors.NewInternal("otp service is not configured")
 	}
+	email = NormalizeEmail(email)
 	if email == "" {
 		return errors.NewValidation("email", []string{"email is required"})
 	}
-	// Don't issue an OTP for an email that already has an account.
+	if allowed, err := s.otpSvc.AllowSend(ctx, otpPurposeRegister, email); err != nil {
+		return errors.NewInternal("failed to check otp rate limit")
+	} else if !allowed {
+		return errors.NewValidation("email", []string{"vui lòng chờ trước khi yêu cầu mã mới"})
+	}
 	if _, err := s.userRepo.FindByEmail(ctx, email); err == nil {
 		return errors.NewConflict("email already exists")
 	}
 
-	code, err := s.otpSvc.Generate(ctx, otpPurposeRegister, email)
+	_, generationID, err := s.otpSvc.Generate(ctx, otpPurposeRegister, email)
 	if err != nil {
 		return errors.NewInternal("failed to generate otp")
 	}
-	subject := "Mã xác nhận đăng ký tài khoản"
-	body := fmt.Sprintf("Mã xác nhận đăng ký của bạn là: %s\nMã có hiệu lực trong 10 phút.\nNếu bạn không yêu cầu, hãy bỏ qua email này.", code)
-	if err := s.mailer.Send(email, subject, body); err != nil {
-		return errors.NewInternal("failed to send otp email")
+	if s.otpEnqueuer == nil {
+		return errors.NewInternal("email queue is not configured")
+	}
+	if err := s.otpEnqueuer.EnqueueSendOTPEmail(queue.SendOTPEmailPayload{To: email, Purpose: otpPurposeRegister, GenerationID: generationID, TemplateType: "Xác nhận đăng ký tài khoản", CreatedAt: time.Now()}); err != nil {
+		_ = s.otpSvc.Rollback(ctx, otpPurposeRegister, email, generationID)
+		return errors.NewInternal("failed to queue otp email")
 	}
 	return nil
 }
@@ -530,22 +547,29 @@ func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
 	if s.otpSvc == nil || !s.otpSvc.Enabled() {
 		return errors.NewInternal("otp service is not configured")
 	}
+	email = NormalizeEmail(email)
 	if email == "" {
 		return errors.NewValidation("email", []string{"email is required"})
 	}
-	// Silently no-op if the user doesn't exist (avoid account enumeration).
+	if allowed, err := s.otpSvc.AllowSend(ctx, otpPurposeReset, email); err != nil {
+		return errors.NewInternal("failed to check otp rate limit")
+	} else if !allowed {
+		return nil
+	}
 	if _, err := s.userRepo.FindByEmail(ctx, email); err != nil {
 		return nil
 	}
 
-	code, err := s.otpSvc.Generate(ctx, otpPurposeReset, email)
+	_, generationID, err := s.otpSvc.Generate(ctx, otpPurposeReset, email)
 	if err != nil {
 		return errors.NewInternal("failed to generate otp")
 	}
-	subject := "Mã đặt lại mật khẩu"
-	body := fmt.Sprintf("Mã đặt lại mật khẩu của bạn là: %s\nMã có hiệu lực trong 10 phút.\nNếu bạn không yêu cầu, hãy bỏ qua email này.", code)
-	if err := s.mailer.Send(email, subject, body); err != nil {
-		return errors.NewInternal("failed to send otp email")
+	if s.otpEnqueuer == nil {
+		return errors.NewInternal("email queue is not configured")
+	}
+	if err := s.otpEnqueuer.EnqueueSendOTPEmail(queue.SendOTPEmailPayload{To: email, Purpose: otpPurposeReset, GenerationID: generationID, TemplateType: "Đặt lại mật khẩu tài khoản", CreatedAt: time.Now()}); err != nil {
+		_ = s.otpSvc.Rollback(ctx, otpPurposeReset, email, generationID)
+		return errors.NewInternal("failed to queue otp email")
 	}
 	return nil
 }

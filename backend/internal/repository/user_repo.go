@@ -2,9 +2,12 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
-	"github.com/jmoiron/sqlx"
 	"backend/internal/models"
+	"backend/internal/pkg/pagination"
+	"github.com/jmoiron/sqlx"
 )
 
 type UserRepository struct {
@@ -40,6 +43,51 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 		return nil, err
 	}
 	return &user, nil
+}
+
+type UserListFilter struct {
+	Search string
+	Role   string
+}
+
+func userListQuery(filter UserListFilter, pending bool) (string, []interface{}) {
+	conditions := []string{"deleted_at IS NULL"}
+	args := []interface{}{}
+	if pending {
+		conditions = append(conditions, "status = 'pending'")
+	}
+	if filter.Search != "" {
+		args = append(args, "%"+filter.Search+"%")
+		conditions = append(conditions, fmt.Sprintf("(full_name ILIKE $%d OR email ILIKE $%d)", len(args), len(args)))
+	}
+	if filter.Role != "" && filter.Role != "all" {
+		args = append(args, filter.Role)
+		conditions = append(conditions, fmt.Sprintf("role = $%d", len(args)))
+	}
+	return strings.Join(conditions, " AND "), args
+}
+
+func (r *UserRepository) listUsers(ctx context.Context, p pagination.Params, filter UserListFilter, pending bool) ([]models.User, int, error) {
+	where, args := userListQuery(filter, pending)
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM users WHERE "+where, args...); err != nil {
+		return nil, 0, err
+	}
+	query := "SELECT * FROM users WHERE " + where + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, p.PageSize, p.Offset())
+	users := make([]models.User, 0)
+	if err := r.db.SelectContext(ctx, &users, query, args...); err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+func (r *UserRepository) ListPendingUsersPage(ctx context.Context, p pagination.Params, filter UserListFilter) ([]models.User, int, error) {
+	return r.listUsers(ctx, p, filter, true)
+}
+
+func (r *UserRepository) ListAllUsersPage(ctx context.Context, p pagination.Params, filter UserListFilter) ([]models.User, int, error) {
+	return r.listUsers(ctx, p, filter, false)
 }
 
 // ListPendingUsers returns all users with status = 'pending'.
@@ -142,29 +190,34 @@ func (r *UserRepository) GetDashboardStats(ctx context.Context) (map[string]int,
 	stats := make(map[string]int)
 
 	var totalUsers int
-	if err := r.db.GetContext(ctx, &totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"); err == nil {
-		stats["total_users"] = totalUsers
+	if err := r.db.GetContext(ctx, &totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"); err != nil {
+		return nil, err
 	}
+	stats["total_users"] = totalUsers
 
 	var pendingUsers int
-	if err := r.db.GetContext(ctx, &pendingUsers, "SELECT COUNT(*) FROM users WHERE status = 'pending' AND deleted_at IS NULL"); err == nil {
-		stats["pending_users"] = pendingUsers
+	if err := r.db.GetContext(ctx, &pendingUsers, "SELECT COUNT(*) FROM users WHERE status = 'pending' AND deleted_at IS NULL"); err != nil {
+		return nil, err
 	}
+	stats["pending_users"] = pendingUsers
 
 	var totalCompanies int
-	if err := r.db.GetContext(ctx, &totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"); err == nil {
-		stats["total_companies"] = totalCompanies
+	if err := r.db.GetContext(ctx, &totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"); err != nil {
+		return nil, err
 	}
+	stats["total_companies"] = totalCompanies
 
 	var totalInterviews int
-	if err := r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews WHERE deleted_at IS NULL"); err == nil {
-		stats["total_interviews"] = totalInterviews
+	if err := r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews"); err != nil {
+		return nil, err
 	}
+	stats["total_interviews"] = totalInterviews
 
 	var totalCandidates int
-	if err := r.db.GetContext(ctx, &totalCandidates, "SELECT COUNT(*) FROM candidates WHERE deleted_at IS NULL"); err == nil {
-		stats["total_candidates"] = totalCandidates
+	if err := r.db.GetContext(ctx, &totalCandidates, "SELECT COUNT(*) FROM candidates WHERE deleted_at IS NULL"); err != nil {
+		return nil, err
 	}
+	stats["total_candidates"] = totalCandidates
 
 	return stats, nil
 }
@@ -179,18 +232,56 @@ type GrowthItem struct {
 	Users  int    `db:"users"`
 }
 
+type ModelUsageItem struct {
+	Model string `db:"model"`
+	Usage int64  `db:"usage"`
+}
+
+type CostItem struct {
+	Cost float64 `db:"cost"`
+}
+
+func (r *UserRepository) GetTotalAICost(ctx context.Context) (float64, error) {
+	var item CostItem
+	err := r.db.GetContext(ctx, &item, `SELECT COALESCE(SUM(cost), 0) AS cost FROM ai_request_logs WHERE status = 'success' AND cost IS NOT NULL`)
+	return item.Cost, err
+}
+
+func (r *UserRepository) GetTokenUsageByModel(ctx context.Context) ([]ModelUsageItem, error) {
+	items := []ModelUsageItem{}
+	err := r.db.SelectContext(ctx, &items, `
+		SELECT COALESCE(NULLIF(model, ''), 'unknown') AS model,
+		       COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS usage
+		FROM ai_request_logs
+		WHERE status = 'success'
+		GROUP BY COALESCE(NULLIF(model, ''), 'unknown')
+		ORDER BY usage DESC`)
+	return items, err
+}
+
 func (r *UserRepository) GetReportsData(ctx context.Context) (totalUsers, totalCandidates, totalRecruiters, totalCompanies, totalInterviews int, tokensIn, tokensOut int64, monthlyItems []MonthlyItem, growthItems []GrowthItem, err error) {
-	_ = r.db.GetContext(ctx, &totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL")
-	_ = r.db.GetContext(ctx, &totalCandidates, "SELECT COUNT(*) FROM users WHERE role = 'candidate' AND deleted_at IS NULL")
-	_ = r.db.GetContext(ctx, &totalRecruiters, "SELECT COUNT(*) FROM users WHERE role = 'recruiter' AND deleted_at IS NULL")
-	_ = r.db.GetContext(ctx, &totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL")
-	_ = r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews WHERE deleted_at IS NULL")
-
-	_ = r.db.GetContext(ctx, &tokensIn, "SELECT COALESCE(SUM(tokens_in), 0) FROM ai_request_logs")
-	_ = r.db.GetContext(ctx, &tokensOut, "SELECT COALESCE(SUM(tokens_out), 0) FROM ai_request_logs")
-
-	_ = r.db.SelectContext(ctx, &monthlyItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') as month, COALESCE(SUM(tokens_in + tokens_out), 0) as usage FROM ai_request_logs GROUP BY month ORDER BY month ASC")
-	_ = r.db.SelectContext(ctx, &growthItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') as period, COUNT(*) as users FROM users WHERE deleted_at IS NULL GROUP BY period ORDER BY period ASC")
-
-	return totalUsers, totalCandidates, totalRecruiters, totalCompanies, totalInterviews, tokensIn, tokensOut, monthlyItems, growthItems, nil
+	queries := []struct {
+		dest interface{}
+		sql  string
+	}{
+		{&totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"},
+		{&totalCandidates, "SELECT COUNT(*) FROM users WHERE role = 'candidate' AND deleted_at IS NULL"},
+		{&totalRecruiters, "SELECT COUNT(*) FROM users WHERE role = 'recruiter' AND deleted_at IS NULL"},
+		{&totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"},
+		{&totalInterviews, "SELECT COUNT(*) FROM interviews"},
+		{&tokensIn, "SELECT COALESCE(SUM(tokens_in), 0) FROM ai_request_logs WHERE status = 'success'"},
+		{&tokensOut, "SELECT COALESCE(SUM(tokens_out), 0) FROM ai_request_logs WHERE status = 'success'"},
+	}
+	for _, q := range queries {
+		if err = r.db.GetContext(ctx, q.dest, q.sql); err != nil {
+			return
+		}
+	}
+	if err = r.db.SelectContext(ctx, &monthlyItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS usage FROM ai_request_logs WHERE status = 'success' GROUP BY month ORDER BY month ASC"); err != nil {
+		return
+	}
+	if err = r.db.SelectContext(ctx, &growthItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') AS period, COUNT(*) AS users FROM users WHERE deleted_at IS NULL GROUP BY period ORDER BY period ASC"); err != nil {
+		return
+	}
+	return
 }

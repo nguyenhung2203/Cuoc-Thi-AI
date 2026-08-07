@@ -84,6 +84,17 @@ func (r *InterviewRepository) ListByCompany(ctx context.Context, companyID strin
 	return items, nil
 }
 
+// GetCandidateLevel returns the candidate's declared or CV-inferred level for an interview.
+func (r *InterviewRepository) GetCandidateLevel(ctx context.Context, interviewID string) (string, error) {
+	q := `SELECT COALESCE(NULLIF(c.tags->>'level',''), NULLIF(c.parsed_cv_json->>'level',''), '')
+		FROM interviews i JOIN candidates c ON c.id = i.candidate_id WHERE i.id = $1`
+	var level string
+	if err := r.db.GetContext(ctx, &level, q, interviewID); err != nil {
+		return "", err
+	}
+	return level, nil
+}
+
 func (r *InterviewRepository) GetRoomByInterviewID(ctx context.Context, interviewID string) (*models.InterviewRoom, error) {
 	q := `SELECT * FROM interview_rooms WHERE interview_id = $1`
 	var room models.InterviewRoom
@@ -247,15 +258,26 @@ func (r *InterviewRepository) GetCandidateJoinInfo(ctx context.Context, hash str
 }
 
 func (r *InterviewRepository) UpdateReportStatus(ctx context.Context, id, status string) error {
-	q := `UPDATE interviews SET report_status = $1, updated_at = NOW() WHERE id = $2`
+	q := `UPDATE interviews SET report_status = $1, report_error = NULL,
+	      report_updated_at = NOW(), updated_at = NOW() WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, q, status, id)
+	return err
+}
+
+func (r *InterviewRepository) UpdateReportFailure(ctx context.Context, id string, reportErr error) error {
+	q := `UPDATE interviews SET report_status = 'failed', report_error = $1,
+	      report_updated_at = NOW(), updated_at = NOW() WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, q, reportErr.Error(), id)
 	return err
 }
 
 // UpdateReportStatusIf atomically updates report_status only when current status equals expected.
 // Returns true if a row was updated, false if no row matched the condition.
 func (r *InterviewRepository) UpdateReportStatusIf(ctx context.Context, id, status, expectedCurrentStatus string) (bool, error) {
-	q := `UPDATE interviews SET report_status = $1, updated_at = NOW() WHERE id = $2 AND report_status = $3`
+	q := `UPDATE interviews SET report_status = $1, report_error = NULL,
+	      report_attempts = report_attempts + CASE WHEN $1 = 'generating' THEN 1 ELSE 0 END,
+	      report_updated_at = NOW(), updated_at = NOW()
+	      WHERE id = $2 AND report_status IS NOT DISTINCT FROM NULLIF($3, '')`
 	res, err := r.db.ExecContext(ctx, q, status, id, expectedCurrentStatus)
 	if err != nil {
 		return false, err
@@ -265,15 +287,15 @@ func (r *InterviewRepository) UpdateReportStatusIf(ctx context.Context, id, stat
 }
 
 type CandidateJoinRepoInfo struct {
-	InterviewID     string          `db:"interview_id"`
-	RoomID          string          `db:"room_id"`
-	CandidateID     string          `db:"candidate_id"`
-	UserID          *string         `db:"user_id"`
-	CandidateName   string          `db:"candidate_name"`
-	CompanyName     string          `db:"company_name"`
-	JobTitle        string          `db:"job_title"`
-	ScheduledAt     time.Time       `db:"scheduled_at"`
-	InviteExpiresAt time.Time       `db:"invite_expires_at"`
+	InterviewID     string    `db:"interview_id"`
+	RoomID          string    `db:"room_id"`
+	CandidateID     string    `db:"candidate_id"`
+	UserID          *string   `db:"user_id"`
+	CandidateName   string    `db:"candidate_name"`
+	CompanyName     string    `db:"company_name"`
+	JobTitle        string    `db:"job_title"`
+	ScheduledAt     time.Time `db:"scheduled_at"`
+	InviteExpiresAt time.Time `db:"invite_expires_at"`
 }
 
 func (r *InterviewRepository) GetCandidateJoinInfoByInviteTokenHash(ctx context.Context, hash string) (*CandidateJoinRepoInfo, error) {

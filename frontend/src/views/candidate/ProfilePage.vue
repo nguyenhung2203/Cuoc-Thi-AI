@@ -27,7 +27,7 @@ import { langStore } from '../../stores/lang.store'
 import { 
   User, Key, Bell, Shield, Monitor, Upload, FileText, CheckCircle, 
   Save, Trash2, Eye, X, Bot, Loader2, UserRound, Target, Code2, 
-  Info, Lock, AlertCircle, Check, ArrowRight, Smartphone, LogOut, ShieldCheck, Clock, History
+  Info, Lock, AlertCircle, Check, ArrowRight, Smartphone, LogOut, ShieldCheck, Clock, History, Star
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -62,6 +62,7 @@ const profile = ref({
   skills: '',
   avatar_url: '',
   bio: '',
+  interviewScore: null,
 })
 
 const newSkill = ref('')
@@ -81,15 +82,21 @@ const removeSkill = (index) => {
   profile.value.skills = skillsArray.join(', ')
 }
 
-// v2: đổi key để xoá cache URL tĩnh /uploads/ cũ (đã chết sau khi chuyển
-// sang signed URL); URL trong cache cũ không còn mở được.
-const CV_STORAGE_KEY = 'candidate_cvs_v2'
-
 const uploadedCvs = ref([])
 const fileInput = ref(null)
 const avatarInput = ref(null)
 const selectedCv = ref(null)
 const profileErrors = ref({})
+const defaultCvId = ref(localStorage.getItem('candidate_default_cv_id') || null)
+
+const setDefaultCv = (cv) => {
+  defaultCvId.value = String(cv.id)
+  localStorage.setItem('candidate_default_cv_id', String(cv.id))
+  toast.value = { 
+    type: 'success', 
+    message: `Đã đặt "${cv.name}" làm CV mặc định!` 
+  }
+}
 
 const handleAvatarChange = (e) => {
   const file = e.target.files?.[0]
@@ -127,7 +134,7 @@ const handleFileUpload = async (e) => {
         continue
       }
       profileErrors.value.cv = ''
-      const cvId = Date.now() + i
+      const cvId = String(Date.now() + i)
       const tempUrl = URL.createObjectURL(file)
 
       const cvData = {
@@ -137,26 +144,56 @@ const handleFileUpload = async (e) => {
         date: new Date().toLocaleDateString('vi-VN'),
         status: 'analyzing',
         url: tempUrl,
-        parsedData: null
+        parsedData: null,
+        rawFile: file
       }
       
       if (!uploadedCvs.value.find(cv => cv.name === file.name)) {
         uploadedCvs.value.unshift(cvData)
+        
+        securityLogs.value.unshift({
+          id: Date.now(),
+          action: 'Tải CV mới lên hệ thống',
+          details: file.name,
+          time: 'Vừa xong',
+          status: 'info'
+        })
+
+        // Set first uploaded CV as default automatically if no default exists
+        if (!defaultCvId.value) {
+          defaultCvId.value = cvId
+          localStorage.setItem('candidate_default_cv_id', cvId)
+        }
+
         try {
           const res = await candidatePortalService.uploadCv(file)
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
-            targetCv.status = 'done'
-            // api.service đã bóc envelope (trả về data.data) nên đọc trực tiếp
-            if (res && res.cv_url) targetCv.url = res.cv_url
-            if (res && res.parsed_data) targetCv.parsedData = res.parsed_data
-            localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
+            if (res?.cv_file_id) targetCv.id = res.cv_file_id
+            if (res?.cv_url) targetCv.url = res.cv_url
+            if (res?.parsed_data) targetCv.parsedData = res.parsed_data
+            const parseStatus = res?.parse_status || (res?.parsed_data ? 'ready' : 'failed')
+            if (parseStatus === 'ready' && res?.parsed_data) {
+              targetCv.status = 'done'
+              toast.value = { type: 'success', message: `Đã tải và phân tích CV "${file.name}".` }
+            } else if (parseStatus === 'failed') {
+              targetCv.status = 'uploaded'
+              toast.value = { type: 'warning', message: `Đã lưu CV "${file.name}" nhưng AI chưa phân tích được. Bạn vẫn có thể ứng tuyển.` }
+            } else {
+              targetCv.status = 'analyzing'
+            }
+            if (res?.cv_file_id && String(defaultCvId.value) === cvId) {
+              defaultCvId.value = String(res.cv_file_id)
+              localStorage.setItem('candidate_default_cv_id', String(res.cv_file_id))
+            }
           }
         } catch (error) {
           console.error("Upload failed", error)
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
-            targetCv.status = 'done'
+            targetCv.status = 'failed'
+            URL.revokeObjectURL(tempUrl)
+            targetCv.url = ''
             toast.value = { type: 'error', message: `Lỗi tải lên ${file.name}` }
           }
         }
@@ -165,22 +202,148 @@ const handleFileUpload = async (e) => {
   }
 }
 
+const isPersistedCvId = (id) => {
+  const strId = String(id || '')
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strId)
+}
+
+const deletingCvId = ref(null)
+const showDeleteCvModal = ref(false)
+const cvPendingDelete = ref(null)
+
+const askDeleteCv = (cvOrId) => {
+  const cv = typeof cvOrId === 'object' && cvOrId
+    ? cvOrId
+    : uploadedCvs.value.find((item) => String(item.id) === String(cvOrId))
+  if (!cv) return
+  cvPendingDelete.value = cv
+  showDeleteCvModal.value = true
+}
+
+const confirmDeleteCv = async () => {
+  const cv = cvPendingDelete.value
+  if (!cv) return
+  const strId = String(cv.id)
+
+  deletingCvId.value = strId
+  try {
+    if (isPersistedCvId(strId)) {
+      await candidatePortalService.deleteCv(strId)
+    }
+    uploadedCvs.value = uploadedCvs.value.filter((item) => String(item.id) !== strId)
+    if (String(defaultCvId.value) === strId) {
+      if (uploadedCvs.value.length > 0) {
+        defaultCvId.value = String(uploadedCvs.value[0].id)
+        localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
+      } else {
+        defaultCvId.value = null
+        localStorage.removeItem('candidate_default_cv_id')
+      }
+    }
+    if (selectedCv.value && String(selectedCv.value.id) === strId) {
+      closeCvModal()
+    }
+    if (fileInput.value) fileInput.value.value = ''
+    showDeleteCvModal.value = false
+    cvPendingDelete.value = null
+    toast.value = { type: 'success', message: 'Đã xóa CV khỏi hệ thống.' }
+  } catch (error) {
+    console.error('Delete CV failed', error)
+    toast.value = { type: 'error', message: error?.message || 'Không xóa được CV. Vui lòng thử lại.' }
+  } finally {
+    deletingCvId.value = null
+  }
+}
+
 const deleteCv = (id) => {
-  uploadedCvs.value = uploadedCvs.value.filter(cv => cv.id !== id)
-  localStorage.setItem(CV_STORAGE_KEY, JSON.stringify(uploadedCvs.value))
-  if (fileInput.value) fileInput.value.value = ''
+  askDeleteCv(id)
 }
 
 const viewCv = (cv) => {
-  selectedCv.value = cv
+  selectedCv.value = { ...cv }
 }
 const closeCvModal = () => {
   selectedCv.value = null
+  cvPages.value = []
+  pdfBlobUrl.value = ''
 }
+
+const pdfBlobUrl = ref('')
+const pdfLoading = ref(false)
+const cvPages = ref([])
+
+const loadPdfAsImages = async (url) => {
+  cvPages.value = []
+  pdfBlobUrl.value = ''
+  pdfLoading.value = true
+  try {
+    const resp = await fetch(url)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const blob = await resp.blob()
+    pdfBlobUrl.value = URL.createObjectURL(blob)
+  } catch (err) {
+    console.error('Failed to load PDF:', err)
+    pdfBlobUrl.value = url
+  } finally {
+    pdfLoading.value = false
+  }
+}
+
+watch(selectedCv, async (newCv) => {
+  cvPages.value = []
+  pdfBlobUrl.value = ''
+  if (!newCv) return
+
+  let url = ''
+  if (newCv.rawFile) {
+    url = URL.createObjectURL(newCv.rawFile)
+  } else if (newCv.url) {
+    url = newCv.url
+  }
+
+  if (!url) return
+
+  const isImage = /\.(png|jpe?g|webp|gif)$/i.test(url)
+  if (isImage) {
+    pdfBlobUrl.value = url
+    return
+  }
+
+  await loadPdfAsImages(url)
+})
 
 // State for Security, Notifications, Privacy Tabs
 const saving = ref(false)
 const toast = ref(null)
+const reviewingCv = ref(false)
+const cvReview = ref(null)
+
+const cvStatusLabel = (cv) => {
+  if (cv.status === 'done') return (cv.date || 'Hôm nay') + ' • ' + (cv.size || 'N/A') + ' • Đã phân tích AI'
+  if (cv.status === 'analyzing') return 'Đang phân tích AI...'
+  if (cv.status === 'uploaded') return 'Đã tải lên • Chưa phân tích AI'
+  if (cv.status === 'failed') return 'Tải lên thất bại'
+  return 'Đang xử lý...'
+}
+
+const handleReviewCv = async () => {
+  if (reviewingCv.value) return
+  if (!uploadedCvs.value.length) {
+    toast.value = { type: 'warning', message: 'Vui lòng tải CV lên trước khi yêu cầu góp ý.' }
+    return
+  }
+  reviewingCv.value = true
+  cvReview.value = null
+  try {
+    const res = await candidatePortalService.reviewCv()
+    cvReview.value = res?.data || res
+    toast.value = { type: 'success', message: 'AI đã phân tích và góp ý sửa CV.' }
+  } catch (error) {
+    toast.value = { type: 'error', message: error?.message || 'Không thể phân tích CV lúc này. Thử lại sau.' }
+  } finally {
+    reviewingCv.value = false
+  }
+}
 const changingPassword = ref(false)
 const showDeleteModal = ref(false)
 const passwordForm = ref({ current: '', next: '', confirm: '' })
@@ -207,9 +370,32 @@ const toggleTwoFactor = () => {
   }
 }
 
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent || ''
+  let os = 'Windows'
+  if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'macOS'
+  else if (ua.includes('Linux')) os = 'Linux'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+
+  let browser = 'Chrome'
+  if (ua.includes('Firefox')) browser = 'Firefox'
+  else if (ua.includes('Edg')) browser = 'Edge'
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari'
+
+  return `${os} • ${browser}`
+}
+
 const activeSessions = ref([
-  { id: 1, device: 'Windows 11 • Google Chrome 126.0', location: 'TP. Hồ Chí Minh, Việt Nam', ip: '14.161.22.105', lastActive: 'Đang hoạt động (Thiết bị này)', isCurrent: true, icon: Monitor },
-  { id: 2, device: 'iPhone 15 Pro Max • Safari iOS 17.5', location: 'Hà Nội, Việt Nam', ip: '113.160.12.88', lastActive: '2 ngày trước', isCurrent: false, icon: Smartphone }
+  { 
+    id: 1, 
+    device: getDeviceInfo(), 
+    location: 'Thiết bị hiện tại', 
+    ip: '127.0.0.1 (Localhost)', 
+    lastActive: 'Đang hoạt động (Thiết bị này)', 
+    isCurrent: true, 
+    icon: Monitor 
+  }
 ])
 
 const revokeOtherSessions = () => {
@@ -218,9 +404,13 @@ const revokeOtherSessions = () => {
 }
 
 const securityLogs = ref([
-  { id: 101, action: 'Đăng nhập thành công vào hệ thống', details: 'Trình duyệt Chrome trên Windows 11', time: 'Vừa xong', status: 'success' },
-  { id: 102, action: 'Cập nhật CV trong hồ sơ cá nhân', details: 'CV_Senior_Software_Engineer.pdf', time: 'Hôm nay, 10:15', status: 'info' },
-  { id: 103, action: 'Đổi mật khẩu tài khoản', details: 'Xác thực qua mã OTP thành công', time: '10/07/2026, 09:30', status: 'warning' }
+  { 
+    id: 101, 
+    action: 'Đăng nhập vào hệ thống', 
+    details: `Đã xác thực thành công trên ${getDeviceInfo()}`, 
+    time: 'Vừa xong', 
+    status: 'success' 
+  }
 ])
 
 const passwordStrength = computed(() => {
@@ -251,20 +441,29 @@ onMounted(async () => {
     if (res) {
       if (res.full_name) profile.value.name = res.full_name
       if (res.email) profile.value.email = res.email
+      if (res.interview_score) profile.value.interviewScore = res.interview_score
       if (res.cv_url && res.cv_name) {
-        const hasCv = uploadedCvs.value.find(cv => cv.name === res.cv_name)
+        const parseStatus = res.cv_parse_status || (res.parsed_data ? 'ready' : 'pending')
+        const uiStatus = res.parsed_data || parseStatus === 'ready'
+          ? 'done'
+          : parseStatus === 'failed'
+            ? 'uploaded'
+            : parseStatus === 'processing'
+              ? 'analyzing'
+              : 'uploaded'
+        const hasCv = uploadedCvs.value.find(cv => cv.name === res.cv_name || (res.cv_file_id && String(cv.id) === String(res.cv_file_id)))
         if (hasCv) {
-          // Cập nhật URL đã ký mới nhất thay vì giữ URL cũ đã hết hạn
           hasCv.url = res.cv_url
-          hasCv.status = 'done'
+          hasCv.status = uiStatus
+          if (res.cv_file_id) hasCv.id = res.cv_file_id
           if (res.parsed_data) hasCv.parsedData = res.parsed_data
         } else {
           uploadedCvs.value.push({
-            id: 'db-' + Date.now(),
+            id: res.cv_file_id || ('db-' + Date.now()),
             name: res.cv_name,
             size: 'N/A',
             date: 'Từ hệ thống',
-            status: 'done',
+            status: uiStatus,
             url: res.cv_url,
             parsedData: res.parsed_data || null
           })
@@ -300,15 +499,11 @@ onMounted(async () => {
     profile.value.bio = parsed.bio || profile.value.bio
   }
 
-  const savedCvs = localStorage.getItem(CV_STORAGE_KEY)
-  if (savedCvs) {
-    const parsedCvs = JSON.parse(savedCvs)
-    parsedCvs.forEach(savedCv => {
-      // Bản ghi từ DB (đã có URL ký mới) luôn thắng bản cache cùng tên
-      if (!uploadedCvs.value.find(cv => cv.name === savedCv.name)) {
-        uploadedCvs.value.push(savedCv)
-      }
-    })
+
+
+  if (uploadedCvs.value.length > 0 && !defaultCvId.value) {
+    defaultCvId.value = String(uploadedCvs.value[0].id)
+    localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
   }
 })
 
@@ -345,11 +540,17 @@ const handleSaveProfile = async (e) => {
     localStorage.setItem('candidate_profile', JSON.stringify(profile.value))
     await candidatePortalService.updateProfile({
       full_name: profile.value.name,
-      avatar_url: profile.value.avatar_url || ''
+      avatar_url: profile.value.avatar_url?.startsWith('blob:') ? '' : (profile.value.avatar_url || '')
     })
-    toast.value = { type: 'success', message: 'Hồ sơ cá nhân & kỹ năng đã được lưu thành công! Dữ liệu đã đồng bộ với AI.' }
+    toast.value = {
+      type: 'success',
+      message: 'Đã lưu họ tên trên máy chủ. Số điện thoại, kỹ năng và thông tin bổ sung chỉ lưu trên thiết bị này.'
+    }
   } catch (error) {
-    toast.value = { type: 'success', message: 'Hồ sơ cá nhân & kỹ năng đã được lưu cục bộ thành công!' }
+    toast.value = {
+      type: 'error',
+      message: error?.message || 'Không lưu được hồ sơ lên máy chủ. Thông tin bổ sung vẫn được giữ trên thiết bị này.'
+    }
   } finally {
     saving.value = false
   }
@@ -361,9 +562,9 @@ const handleSaveSettings = async (e) => {
   try {
     localStorage.setItem('candidate_settings', JSON.stringify(settings.value))
     await authService.saveSettings(settings.value)
-    toast.value = { type: 'success', message: 'Cấu hình hệ thống & tùy chọn đã được lưu thành công!' }
+    toast.value = { type: 'success', message: 'Đã lưu tùy chọn thành công.' }
   } catch (error) {
-    toast.value = { type: 'success', message: 'Cấu hình hệ thống & tùy chọn đã được lưu cục bộ thành công!' }
+    toast.value = { type: 'error', message: error?.message || 'Không lưu được tùy chọn lên máy chủ.' }
   } finally {
     saving.value = false
   }
@@ -502,6 +703,21 @@ const confirmDeleteAccount = async () => {
         <div v-if="activeTab === 'profile'" class="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <!-- Left Sub-column: Personal Info Form -->
           <div class="xl:col-span-7 space-y-6">
+            <Card v-if="profile.interviewScore" class="pf-card border-[var(--accent)]/30">
+              <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="pf-sub-title mb-1">Kết quả phỏng vấn AI</h3>
+                    <p class="text-xs text-[var(--text-secondary)]">Điểm tổng hợp từ buổi phỏng vấn gần nhất</p>
+                  </div>
+                  <strong class="text-3xl text-[var(--accent)]">{{ Number(profile.interviewScore.final_score || 0).toFixed(1) }}/10</strong>
+                </div>
+                <p v-if="profile.interviewScore.summary" class="text-sm text-[var(--text-secondary)]">{{ profile.interviewScore.summary }}</p>
+                <div v-if="profile.interviewScore.strengths?.length" class="text-sm"><b>Điểm mạnh:</b> {{ profile.interviewScore.strengths.join(' • ') }}</div>
+                <div v-if="profile.interviewScore.weaknesses?.length" class="text-sm"><b>Cần cải thiện:</b> {{ profile.interviewScore.weaknesses.join(' • ') }}</div>
+                <div v-if="profile.interviewScore.advice?.length" class="text-sm"><b>Gợi ý:</b> {{ profile.interviewScore.advice.join(' • ') }}</div>
+              </div>
+            </Card>
             <Card class="pf-card">
               <div class="p-6">
                 <form @submit.prevent="handleSaveProfile" class="space-y-6">
@@ -606,33 +822,102 @@ const confirmDeleteAccount = async () => {
                 </div>
 
                 <div v-if="uploadedCvs.length > 0" class="space-y-3 mt-6">
-                  <h4 class="pf-list-title">Danh sách CV đã tải lên</h4>
+                  <div class="flex items-center justify-between">
+                    <h4 class="pf-list-title mb-0">Danh sách CV đã tải lên ({{ uploadedCvs.length }})</h4>
+                    <!-- <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span> -->
+                  </div>
 
-                  <div v-for="cv in uploadedCvs" :key="cv.id" @click="cv.status === 'done' && viewCv(cv)" class="pf-cv-item group" :class="cv.status === 'done' ? 'is-done' : 'is-loading'">
-                    <div class="pf-cv-icon" :class="cv.status === 'done' ? '' : 'is-muted'">
-                      <FileText :size="20" />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="pf-cv-name truncate">{{ cv.name }}</div>
-                      <div class="pf-cv-meta" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
-                        <CheckCircle v-if="cv.status === 'done'" :size="12" />
-                        <Loader2 v-else class="pf-spin" :size="12" />
-                        {{ cv.status === 'done' ? cv.date + ' • ' + cv.size : 'Đang phân tích...' }}
+                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3 cursor-pointer" @click="viewCv(cv)">
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                      <div class="pf-cv-icon shrink-0 w-11 h-11 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden">
+                        <img v-if="cv.url && (cv.url.toLowerCase().includes('.png') || cv.url.toLowerCase().includes('.jpg') || cv.url.toLowerCase().includes('.jpeg'))" :src="cv.url" class="w-full h-full object-cover" />
+                        <div v-else class="flex flex-col items-center justify-center text-[var(--primary)] font-extrabold text-[10px] leading-tight">
+                          <FileText :size="18" />
+                          <span style="font-size: 9px; margin-top: -2px">PDF</span>
+                        </div>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <div class="pf-cv-name truncate font-semibold text-sm text-[var(--text-main)]">{{ cv.name }}</div>
+                          <!-- Default Badge -->
+                          <span v-if="String(cv.id) === String(defaultCvId)" class="px-2.5 py-0.5 rounded-full bg-[var(--primary-light)] text-[var(--primary)] font-bold text-[11px] flex items-center gap-1 shrink-0 border border-[var(--primary)]/20">
+                            <Star :size="12" fill="currentColor" /> Mặc định
+                          </span>
+                        </div>
+                        <div class="pf-cv-meta flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
+                          <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)]" />
+                          <AlertCircle v-else-if="cv.status === 'uploaded' || cv.status === 'failed'" :size="12" class="text-[var(--warning)]" />
+                          <Loader2 v-else class="pf-spin text-[var(--primary)]" :size="12" />
+                          {{ cvStatusLabel(cv) }}
+                        </div>
                       </div>
                     </div>
-                    <div v-if="cv.status === 'done'" class="flex items-center gap-1 shrink-0">
+
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button 
+                        v-if="String(cv.id) !== String(defaultCvId)" 
+                        type="button" 
+                        @click.stop="setDefaultCv(cv)" 
+                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                        title="Đặt làm CV mặc định">
+                        <Star :size="13" /> Chọn mặc định
+                      </button>
                       <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="16"/></button>
-                      <button type="button" @click.stop="deleteCv(cv.id)" class="pf-icon-btn is-danger" title="Xóa"><Trash2 :size="16"/></button>
+                      <button type="button" @click.stop="askDeleteCv(cv)" class="pf-icon-btn is-danger" title="Xóa" :disabled="deletingCvId === String(cv.id)">
+                        <Loader2 v-if="deletingCvId === String(cv.id)" class="pf-spin" :size="16"/>
+                        <Trash2 v-else :size="16"/>
+                      </button>
                     </div>
-                    <div v-else class="pf-analyzing shrink-0">Đang xử lý</div>
                   </div>
                 </div>
 
                 <div class="ai-block p-3.5 mt-4 flex items-start gap-3">
                   <Bot :size="18" class="text-[var(--accent)] shrink-0 mt-0.5" />
                   <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
-                    Hệ thống AI tự động phân tích và bóc tách thông tin từ CV của bạn để đối chiếu với yêu cầu công việc.
+                    Hệ thống AI tự động phân tích và bóc tách thông tin từ CV của bạn để đối chiếu với yêu cầu công việc. Upload vẫn thành công kể cả khi phân tích lỗi.
                   </p>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    class="w-full"
+                    :disabled="reviewingCv || uploadedCvs.length === 0"
+                    @click="handleReviewCv"
+                  >
+                    <Loader2 v-if="reviewingCv" class="pf-spin mr-2" :size="16" />
+                    <Bot v-else class="mr-2" :size="16" />
+                    {{ reviewingCv ? 'Đang góp ý sửa CV...' : 'AI góp ý sửa lỗi CV' }}
+                  </Button>
+
+                  <div v-if="cvReview" class="rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 space-y-3 text-sm">
+                    <p class="font-semibold text-[var(--text-main)]">{{ cvReview.summary || 'Đã có góp ý từ AI.' }}</p>
+                    <div v-if="cvReview.issues?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--danger)] mb-1.5">Vấn đề cần sửa</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.issues" :key="'issue-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.suggestions?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--primary)] mb-1.5">Gợi ý cải thiện</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.suggestions" :key="'sug-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.missing_sections?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--warning)] mb-1.5">Thiếu / yếu</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.missing_sections" :key="'miss-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.strengths?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--success)] mb-1.5">Điểm mạnh</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.strengths" :key="'str-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -662,7 +947,7 @@ const confirmDeleteAccount = async () => {
                     />
                   </div>
                 </div>
-                <p class="text-xs text-[var(--text-secondary)] mt-3 flex items-center gap-1.5"><Bot :size="14" class="text-[var(--accent)]"/> AI sẽ đối chiếu các kỹ năng này với JD khi phỏng vấn</p>
+                <p class="text-xs text-[var(--text-secondary)] mt-3 flex items-center gap-1.5"><Info :size="14" class="text-[var(--accent)]"/> Kỹ năng và thông tin bổ sung hiện chỉ lưu trên trình duyệt này (chưa đồng bộ máy chủ).</p>
               </div>
             </Card>
           </div>
@@ -932,30 +1217,6 @@ const confirmDeleteAccount = async () => {
                 </select>
               </div>
 
-              <div class="space-y-4 bg-[var(--surface-soft)] p-6 rounded-2xl border border-[var(--border)] shadow-sm">
-                <div class="flex items-center justify-between gap-6">
-                  <div class="space-y-1 pr-4">
-                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động bóc tách JD thành bộ tiêu chí (Rubric) chi tiết</span>
-                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">AI sẽ phân tích mô tả công việc và tự động chuẩn bị ma trận tiêu chí chấm điểm trước buổi phỏng vấn.</span>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" defaultChecked class="sr-only peer" />
-                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
-                  </label>
-                </div>
-
-                <div class="border-t border-[var(--border)] pt-4 flex items-center justify-between gap-6">
-                  <div class="space-y-1 pr-4">
-                    <span class="text-base font-semibold text-[var(--text-main)] block">Tự động gợi ý câu hỏi Follow-up realtime trong phòng phỏng vấn</span>
-                    <span class="text-sm text-[var(--text-secondary)] block leading-relaxed">Phân tích câu trả lời của ứng viên ngay lúc đang nói để đưa ra gợi ý câu hỏi đào sâu cho nhà tuyển dụng.</span>
-                  </div>
-                  <label class="relative inline-flex items-center cursor-pointer shrink-0">
-                    <input type="checkbox" defaultChecked class="sr-only peer" />
-                    <div class="w-12 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)] shadow-inner"></div>
-                  </label>
-                </div>
-              </div>
-
               <div class="flex justify-end pt-2">
                 <Button variant="primary" @click="handleSaveSettings" :disabled="saving">
                   <Save :size="16" /> Lưu cấu hình AI
@@ -970,20 +1231,31 @@ const confirmDeleteAccount = async () => {
 
     <!-- CV Detail Modal -->
     <Modal :isOpen="!!selectedCv" @close="closeCvModal" title="Chi tiết CV & Trích xuất AI" size="xl">
-      <div v-if="selectedCv" class="space-y-6">
-        <div class="flex flex-col lg:flex-row gap-6">
-          <!-- PDF / File Viewer Preview -->
-          <div class="flex-1 bg-[var(--surface-soft)] border border-[var(--border)] rounded-xl flex flex-col items-center justify-center p-4 text-center min-h-[480px]">
-            <object v-if="selectedCv.url" :data="selectedCv.url" type="application/pdf" class="w-full h-[480px] rounded-lg">
-              <div class="flex flex-col items-center justify-center h-full p-8">
-                <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
-                <p class="text-[var(--text-secondary)] font-medium">Trình duyệt không hỗ trợ hiển thị PDF nhúng trực tiếp.</p>
-                <a :href="selectedCv.url" target="_blank" class="mt-3 text-[var(--primary)] font-semibold hover:underline">Tải xuống để xem chi tiết</a>
+      <div v-if="selectedCv" class="flex flex-col gap-4">
+        <div class="flex flex-col lg:flex-row gap-5">
+          <!-- PDF / File Viewer Preview (Clean PNG Page Images) -->
+          <div class="flex-1 bg-slate-100 border border-[var(--border)] rounded-2xl flex flex-col items-center justify-start pt-2 px-3 pb-3 text-center min-h-[540px] max-h-[680px] overflow-y-auto custom-scrollbar relative">
+            <div v-if="pdfLoading" class="flex flex-col items-center justify-center p-16 text-[var(--primary)] font-semibold gap-3 my-auto">
+              <Loader2 class="w-10 h-10 animate-spin" />
+              <span class="text-base">Đang chuyển đổi CV sang hình ảnh sắc nét...</span>
+            </div>
+
+            <div v-else-if="cvPages.length > 0" class="w-full flex flex-col items-center gap-6">
+              <div v-for="(imgSrc, pageIdx) in cvPages" :key="pageIdx" class="relative w-full shadow-lg rounded-xl overflow-hidden border border-slate-300 bg-white">
+                <img :src="imgSrc" class="w-full h-auto object-contain block" :alt="`Trang ${pageIdx + 1}`" />
+                <div class="absolute bottom-3 right-4 bg-slate-900/80 text-white text-[11px] font-bold px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
+                  Trang {{ pageIdx + 1 }} / {{ cvPages.length }}
+                </div>
               </div>
-            </object>
-            <div v-else class="flex flex-col items-center justify-center p-8">
+            </div>
+
+            <div v-else-if="pdfBlobUrl" class="w-full h-[580px] my-auto">
+              <iframe :src="pdfBlobUrl + '#toolbar=0&navpanes=0&view=FitH'" class="w-full h-full rounded-xl border-0 bg-white shadow-sm"></iframe>
+            </div>
+
+            <div v-else class="flex flex-col items-center justify-center p-12 my-auto">
               <FileText class="w-16 h-16 text-[var(--text-muted)] mb-4" />
-              <p class="text-[var(--text-secondary)] font-medium">Không có bản xem trước cho tài liệu này</p>
+              <p class="text-[var(--text-secondary)] font-medium">Không thể hiển thị bản xem trước cho tài liệu này</p>
             </div>
           </div>
 
@@ -991,40 +1263,79 @@ const confirmDeleteAccount = async () => {
           <div class="w-full lg:w-[360px] space-y-5 shrink-0">
             <div class="ai-block p-4">
               <h4 class="text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-[var(--accent)]">
-                <Bot :size="16" /> Thông tin AI trích xuất
+                <Bot :size="16" /> Thông tin AI trích xuất (Gemini)
               </h4>
-              <div class="space-y-3 text-sm">
+              <div v-if="selectedCv.parsedData" class="space-y-3 text-sm">
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
-                  <span class="font-bold text-[var(--text-main)]">{{ selectedCv.parsedData?.role || 'Chưa cập nhật' }}</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || selectedCv.parsedData?.experience || selectedCv.parsedData?.work_experience?.[0]?.role || 'Chưa có dữ liệu' }}
+                  </span>
                 </div>
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
-                  <span class="font-bold text-[var(--text-main)]">{{ selectedCv.parsedData?.level || 'Chưa cập nhật' }}</span>
+                  <span class="font-bold text-[var(--text-main)]">
+                    {{ selectedCv.parsedData?.level || selectedCv.parsedData?.experience || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Chưa có dữ liệu') }}
+                  </span>
                 </div>
                 <div class="flex items-center justify-between pt-1">
-                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái:</span>
+                  <span class="text-xs text-[var(--text-secondary)]">Trạng thái AI:</span>
                   <span class="font-bold text-[var(--success)] flex items-center gap-1">
-                    <CheckCircle :size="14" /> Hoàn tất
+                    <CheckCircle :size="14" /> Đã phân tích
                   </span>
                 </div>
               </div>
+              <div v-else class="space-y-2 text-sm">
+                <p class="text-[var(--text-secondary)]">
+                  {{ selectedCv.status === 'analyzing' ? 'AI đang phân tích CV...' : 'CV đã lưu nhưng chưa có dữ liệu phân tích AI.' }}
+                </p>
+                <span class="font-bold flex items-center gap-1" :class="selectedCv.status === 'analyzing' ? 'text-[var(--primary)]' : 'text-[var(--warning)]'">
+                  <Loader2 v-if="selectedCv.status === 'analyzing'" class="pf-spin" :size="14" />
+                  <AlertCircle v-else :size="14" />
+                  {{ selectedCv.status === 'analyzing' ? 'Đang phân tích' : 'Chưa phân tích' }}
+                </span>
+              </div>
             </div>
 
-            <div>
+            <div v-if="selectedCv.parsedData?.skills?.length">
               <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3">Kỹ năng phát hiện được</h4>
               <div class="flex flex-wrap gap-2">
-                <span v-for="skill in (selectedCv.parsedData?.skills || ['JavaScript', 'Vue 3', 'REST API', 'TailwindCSS'])" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
-                  {{ skill }}
-                </span>
+                <template v-if="selectedCv.parsedData?.skills && selectedCv.parsedData.skills.length > 0">
+                  <span v-for="(sk, idx) in selectedCv.parsedData.skills" :key="idx" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40 font-semibold">
+                    {{ typeof sk === 'object' ? (sk.name || sk.label || JSON.stringify(sk)) : sk }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span v-for="skill in []" :key="skill" class="skill-tag border-[var(--primary-light)] text-[var(--primary)] bg-[var(--primary-light)]/40">
+                    {{ skill }}
+                  </span>
+                </template>
               </div>
             </div>
           </div>
         </div>
 
         <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-          <Button variant="ghost" style="color: var(--danger)" @click="deleteCv(selectedCv.id); closeCvModal()">Xóa CV này</Button>
+          <Button variant="ghost" style="color: var(--danger)" @click="askDeleteCv(selectedCv)">Xóa CV này</Button>
           <Button variant="primary" @click="closeCvModal">Đóng</Button>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Delete CV Confirmation Modal -->
+    <Modal :isOpen="showDeleteCvModal" @close="showDeleteCvModal = false" title="Xác nhận xóa CV" size="md">
+      <div class="space-y-4">
+        <p class="text-sm text-[var(--text-main)] leading-relaxed">
+          Bạn có chắc muốn xóa CV
+          <strong>{{ cvPendingDelete?.name || '' }}</strong>?
+          File sẽ bị xóa khỏi hệ thống và không thể hoàn tác.
+        </p>
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+          <Button variant="secondary" :disabled="!!deletingCvId" @click="showDeleteCvModal = false">Huỷ</Button>
+          <Button variant="danger" :disabled="!!deletingCvId" @click="confirmDeleteCv">
+            <Loader2 v-if="deletingCvId" class="pf-spin" :size="16" />
+            {{ deletingCvId ? 'Đang xóa...' : 'Xác nhận xóa' }}
+          </Button>
         </div>
       </div>
     </Modal>

@@ -101,7 +101,7 @@ func (r *JobRepository) ListAllOpen(ctx context.Context, keyword string, p pagin
 	}
 
 	listQuery := fmt.Sprintf(
-		`SELECT j.*, c.name as company_name FROM jobs j 
+		`SELECT j.*, c.name as company_name, c.logo_url as company_logo_url FROM jobs j 
 		 LEFT JOIN companies c ON c.id = j.company_id 
 		 %s ORDER BY j.created_at DESC LIMIT $%d OFFSET $%d`,
 		whereClause, argIdx, argIdx+1,
@@ -373,8 +373,9 @@ func (r *JobRepository) SaveAIAnalysisWithTx(
 		qQuery := `
 			INSERT INTO question_bank (
 				company_id, job_id, created_by, question_text, question_type,
-				skill_tags, level, expected_signals, is_ai_generated
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				skill_tags, level, expected_signals, follow_up_prompts, timebox_minutes,
+				evidence_required, generation_mode, prompt_version, ai_metadata, is_ai_generated
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		`
 		stmt, err := tx.PrepareContext(ctx, qQuery)
 		if err != nil {
@@ -384,7 +385,8 @@ func (r *JobRepository) SaveAIAnalysisWithTx(
 		for _, q := range questions {
 			_, err := stmt.ExecContext(ctx,
 				q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
-				q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated,
+				q.SkillTags, q.Level, q.ExpectedSignals, q.FollowUpPrompts, q.TimeboxMinutes,
+				q.EvidenceRequired, q.GenerationMode, q.PromptVersion, q.AIMetadata, q.IsAIGenerated,
 			)
 			if err != nil {
 				stmt.Close()

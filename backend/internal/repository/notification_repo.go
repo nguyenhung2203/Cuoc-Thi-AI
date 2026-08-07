@@ -219,4 +219,3 @@ func (r *NotificationRepository) CountUnreadByUserID(ctx context.Context, userID
 	}
 	return count, nil
 }
-

@@ -3,12 +3,15 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"backend/internal/middleware"
 	"backend/internal/pkg/errors"
+	"backend/internal/pkg/pagination"
 	pkgresponse "backend/internal/pkg/response"
+	"backend/internal/repository"
 	"backend/internal/service"
 )
 
@@ -52,13 +55,25 @@ func (h *UserHandler) GetReports(w http.ResponseWriter, r *http.Request) {
 	pkgresponse.JSON(w, http.StatusOK, reports, nil, "")
 }
 
-func (h *UserHandler) ListPendingUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.userSvc.ListPendingUsers(r.Context())
+func (h *UserHandler) listUsers(w http.ResponseWriter, r *http.Request, pending bool) {
+	p := pagination.FromRequest(r)
+	filter := repository.UserListFilter{Search: strings.TrimSpace(r.URL.Query().Get("search")), Role: strings.TrimSpace(r.URL.Query().Get("role"))}
+	result, err := h.userSvc.ListUsersPage(r.Context(), p, filter, pending)
 	if err != nil {
 		pkgresponse.Error(w, errors.NewInternal("failed to list users"), "")
 		return
 	}
-	pkgresponse.JSON(w, http.StatusOK, users, nil, "")
+	all, pendingTotal, err := h.userSvc.UserCounts(r.Context())
+	if err != nil {
+		pkgresponse.Error(w, errors.NewInternal("failed to count users"), "")
+		return
+	}
+	meta := &pkgresponse.Meta{Page: p.Page, PageSize: p.PageSize, Total: result.Total, TotalPages: pagination.CalcTotalPages(result.Total, p.PageSize)}
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"users": result.Users, "counts": map[string]int{"all": all, "pending": pendingTotal}}, meta, "")
+}
+
+func (h *UserHandler) ListPendingUsers(w http.ResponseWriter, r *http.Request) {
+	h.listUsers(w, r, true)
 }
 
 func (h *UserHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
@@ -138,14 +153,7 @@ func (h *UserHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": req.Status}, nil, "")
 }
 
-func (h *UserHandler) ListAllUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.userSvc.ListAllUsers(r.Context())
-	if err != nil {
-		pkgresponse.Error(w, errors.NewInternal("failed to list all users"), "")
-		return
-	}
-	pkgresponse.JSON(w, http.StatusOK, users, nil, "")
-}
+func (h *UserHandler) ListAllUsers(w http.ResponseWriter, r *http.Request) { h.listUsers(w, r, false) }
 
 func (h *UserHandler) ListAllCompanies(w http.ResponseWriter, r *http.Request) {
 	companies, err := h.companySvc.ListAllCompanies(r.Context())

@@ -11,15 +11,15 @@ import (
 // Participant represents a user inside an interview room.
 // It links the in-memory ClientConnection to the room's presence state.
 type Participant struct {
-	ConnectionID    string
-	UserID          string
-	ParticipantType events.ParticipantType
-	DisplayName     string
-	ConnectionState events.ConnectionState
-	MediaStatus     events.MediaStatusInfo
-	JoinedAt        time.Time
-	LastSeenAt      time.Time
-	Connection      *ClientConnection // nil when the participant is offline/reconnecting
+	ConnectionID     string
+	UserID           string
+	ParticipantType  events.ParticipantType
+	DisplayName      string
+	ConnectionState  events.ConnectionState
+	MediaStatus      events.MediaStatusInfo
+	JoinedAt         time.Time
+	LastSeenAt       time.Time
+	Connection       *ClientConnection // nil when the participant is offline/reconnecting
 	MediaRateLimiter *rate.Limiter
 }
 

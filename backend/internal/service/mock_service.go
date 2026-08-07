@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/ai"
 	"backend/internal/models"
 	apierrors "backend/internal/pkg/errors"
 	"backend/internal/pkg/logger"
@@ -73,11 +74,15 @@ func (s *MockService) Create(ctx context.Context, userID string, req CreateMockR
 	// Auto-generate first AI question in background
 	go func(interviewID, targetRole, targetLevel, cvFileID string) {
 		bgCtx := context.Background()
+		if err := s.mockRepo.UpdateAIState(bgCtx, interviewID, "question", "processing", nil); err != nil {
+			logger.Error("mock: failed to mark question processing", "id", interviewID, "error", err)
+			return
+		}
 		firstQ, err := s.generateNextQuestion(bgCtx, interviewID, targetRole, targetLevel, cvFileID, nil)
 		if err != nil {
+			_ = s.mockRepo.UpdateAIState(bgCtx, interviewID, "question", "failed", err)
 			logger.Error("mock: failed to generate first question", "id", interviewID, "error", err)
-			// Fallback question so interview is not empty
-			firstQ = "Xin chào! Hãy giới thiệu ngắn gọn về bản thân và kinh nghiệm của bạn."
+			return
 		}
 		if err := s.mockRepo.CreateMessage(bgCtx, &models.MockInterviewMessage{
 			ID:              uuid.New().String(),
@@ -85,8 +90,11 @@ func (s *MockService) Create(ctx context.Context, userID string, req CreateMockR
 			SenderType:      "ai",
 			Content:         firstQ,
 		}); err != nil {
+			_ = s.mockRepo.UpdateAIState(bgCtx, interviewID, "question", "failed", err)
 			logger.Error("mock: failed to save first question", "id", interviewID, "error", err)
+			return
 		}
+		_ = s.mockRepo.UpdateAIState(bgCtx, interviewID, "question", "ready", nil)
 	}(m.ID, req.TargetRole, req.TargetLevel, req.CVFileID)
 
 	return m, nil
@@ -147,13 +155,20 @@ func (s *MockService) End(ctx context.Context, id, userID string) error {
 		return err
 	}
 
-	// Score the whole session with AI (synchronous so the report is ready when
-	// the candidate opens the result page). Best-effort: scoring failure does
-	// not fail the End call.
+	// Scoring is part of completing an AI mock interview. Persist its lifecycle
+	// separately so a provider failure remains visible and retryable.
 	scoreCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	if serr := s.scoreSession(scoreCtx, m); serr != nil {
-		logger.Error("mock: session scoring failed", "id", id, "error", serr)
+	if err := s.mockRepo.UpdateAIState(scoreCtx, id, "scoring", "processing", nil); err != nil {
+		return err
+	}
+	if err := s.scoreSession(scoreCtx, m); err != nil {
+		_ = s.mockRepo.UpdateAIState(context.Background(), id, "scoring", "failed", err)
+		logger.Error("mock: session scoring failed", "id", id, "error", err)
+		return fmt.Errorf("failed to score mock interview: %w", err)
+	}
+	if err := s.mockRepo.UpdateAIState(scoreCtx, id, "scoring", "ready", nil); err != nil {
+		return err
 	}
 	return nil
 }
@@ -265,7 +280,7 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 	}
 
 	if scored == 0 {
-		return nil
+		return fmt.Errorf("no interview answers received a valid AI score")
 	}
 
 	finalScore := sql.NullFloat64{Float64: total / float64(scored), Valid: true}
@@ -326,28 +341,22 @@ func (s *MockService) SendMessage(ctx context.Context, id, userID, content strin
 	// Load full history for AI context
 	messages, err := s.mockRepo.ListMessages(ctx, id)
 	if err != nil {
-		// If load fails, fallback: save generic AI question to keep conversation flowing
 		logger.Error("mock: failed to list messages", "id", id, "error", err)
-		aiMsg := &models.MockInterviewMessage{
-			ID:              uuid.New().String(),
-			MockInterviewID: id,
-			SenderType:      "ai",
-			Content:         "Cảm ơn câu trả lời của bạn. Hãy tiếp tục với câu hỏi tiếp theo.",
-		}
-		if err2 := s.mockRepo.CreateMessage(ctx, aiMsg); err2 != nil {
-			return nil, nil, err2
-		}
-		return userMsg, aiMsg, nil
+		return userMsg, nil, fmt.Errorf("failed to load interview history: %w", err)
 	}
 
 	// AI call with timeout context
 	aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
+	if err := s.mockRepo.UpdateAIState(aiCtx, id, "question", "processing", nil); err != nil {
+		return userMsg, nil, err
+	}
 	aiQuestion, err := s.generateNextQuestion(aiCtx, id, m.TargetRole, m.TargetLevel.String, m.CVFileID.String, messages)
 	if err != nil {
+		_ = s.mockRepo.UpdateAIState(context.Background(), id, "question", "failed", err)
 		logger.Error("mock: AI question generation failed", "id", id, "error", err)
-		aiQuestion = "Cảm ơn câu trả lời của bạn. Hãy tiếp tục với câu hỏi tiếp theo."
+		return userMsg, nil, fmt.Errorf("failed to generate AI question: %w", err)
 	}
 
 	aiMsg := &models.MockInterviewMessage{
@@ -357,7 +366,11 @@ func (s *MockService) SendMessage(ctx context.Context, id, userID, content strin
 		Content:         aiQuestion,
 	}
 	if err := s.mockRepo.CreateMessage(ctx, aiMsg); err != nil {
+		_ = s.mockRepo.UpdateAIState(context.Background(), id, "question", "failed", err)
 		return nil, nil, err
+	}
+	if err := s.mockRepo.UpdateAIState(ctx, id, "question", "ready", nil); err != nil {
+		return userMsg, aiMsg, err
 	}
 
 	return userMsg, aiMsg, nil
@@ -406,38 +419,31 @@ func (s *MockService) GetReport(ctx context.Context, id, userID string) (*models
 }
 
 func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRole, targetLevel, cvFileID string, prevMessages []models.MockInterviewMessage) (string, error) {
-	variables := map[string]string{
-		"target_role":       targetRole,
-		"target_level":      targetLevel,
-		"candidate_profile": "",
-	}
-
-	// Build conversation history
-	var history []string
+	previousQuestions := make([]string, 0, len(prevMessages))
+	recentAnswer := ""
 	for _, msg := range prevMessages {
-		history = append(history, fmt.Sprintf("%s: %s", msg.SenderType, msg.Content))
+		if msg.SenderType == "ai" {
+			previousQuestions = append(previousQuestions, utils.TruncateText(msg.Content, 1000))
+		} else if msg.SenderType == "candidate" {
+			recentAnswer = utils.TruncateText(msg.Content, 5000)
+		}
 	}
-	if len(history) > 0 {
-		variables["history"] = strings.Join(history, "\n")
-	} else {
-		variables["history"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
+	level := strings.ToLower(strings.TrimSpace(targetLevel))
+	if level == "mid" {
+		level = "middle"
 	}
-
-	// Use empty string as companyID — mock is user-scoped, not company-scoped.
-	// CallAI falls back to system-wide prompt templates when companyID is empty.
-	data, err := s.orchestrator.CallAI(ctx, "mock_question", "", variables)
+	if level == "" {
+		level = "unknown"
+	}
+	result, err := s.orchestrator.GenerateStructuredQuestions(ctx, "", ai.StructuredQuestionRequest{
+		JobTitle: targetRole, Level: level, Mode: "mock", Language: "vi",
+		QuestionCount: 1, PreviousQuestions: previousQuestions, RecentAnswer: recentAnswer,
+	})
 	if err != nil {
 		return "", err
 	}
-	result := string(data)
-	cleanJSON := utils.CleanJSON(result)
-
-	// Unmarshal to extract question_text
-	var parsed struct {
-		QuestionText string `json:"question_text"`
+	if result == nil || len(result.Questions) == 0 || strings.TrimSpace(result.Questions[0].QuestionText) == "" {
+		return "", fmt.Errorf("AI question response is missing question_text")
 	}
-	if err := json.Unmarshal([]byte(cleanJSON), &parsed); err != nil || parsed.QuestionText == "" {
-		return result, nil
-	}
-	return parsed.QuestionText, nil
+	return result.Questions[0].QuestionText, nil
 }

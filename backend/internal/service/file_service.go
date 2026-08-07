@@ -23,9 +23,9 @@ import (
 // allowedMIMEs is the upload whitelist, checked against the DETECTED type
 // (magic bytes), never the client-supplied Content-Type header.
 var allowedMIMEs = map[string]bool{
-	"application/pdf": true,
-	"image/jpeg":      true,
-	"image/png":       true,
+	"application/pdf":    true,
+	"image/jpeg":         true,
+	"image/png":          true,
 	"application/msword": true,
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
 }
@@ -34,9 +34,9 @@ var allowedMIMEs = map[string]bool{
 // Extensions never come from the client filename — that produced keys like
 // "cv.p df" and could smuggle unexpected types.
 var mimeExt = map[string]string{
-	"application/pdf": ".pdf",
-	"image/jpeg":      ".jpg",
-	"image/png":       ".png",
+	"application/pdf":    ".pdf",
+	"image/jpeg":         ".jpg",
+	"image/png":          ".png",
 	"application/msword": ".doc",
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
 }
@@ -202,4 +202,57 @@ func (s *FileService) GetSignedURL(
 
 	url, expiresAt = s.SignedURL(file.StorageKey)
 	return url, expiresAt, nil
+}
+
+// GetOwnedCV returns a CV file owned by userID, or nil when not found.
+func (s *FileService) GetOwnedCV(ctx context.Context, userID, fileID string) (*models.File, error) {
+	file, err := s.fileRepo.GetByIDAndOwner(ctx, fileID, userID)
+	if err != nil {
+		return nil, errors.NewInternal("failed to load CV file")
+	}
+	if file == nil || file.FileType != "cv" {
+		return nil, nil
+	}
+	return file, nil
+}
+
+// DeleteOwnedCVFile removes an owned CV file from DB and disk after the caller
+// has cleared foreign-key references.
+func (s *FileService) DeleteOwnedCVFile(ctx context.Context, userID, fileID string) error {
+	file, err := s.fileRepo.GetByIDAndOwner(ctx, fileID, userID)
+	if err != nil {
+		return errors.NewInternal("failed to load CV file")
+	}
+	if file == nil || file.FileType != "cv" {
+		return errors.NewNotFound("CV not found")
+	}
+	ok, err := s.fileRepo.DeleteOwnedCV(ctx, fileID, userID)
+	if err != nil {
+		return errors.NewInternal("failed to delete CV")
+	}
+	if !ok {
+		return errors.NewNotFound("CV not found")
+	}
+	_ = s.store.Remove(file.StorageKey)
+	return nil
+}
+
+// PurgeOwnedCVFiles deletes every CV owned by the user (DB + disk). Callers must
+// detach FK references first.
+func (s *FileService) PurgeOwnedCVFiles(ctx context.Context, userID string) error {
+	files, err := s.fileRepo.ListOwnedCVs(ctx, userID)
+	if err != nil {
+		return errors.NewInternal("failed to list CV files")
+	}
+	for i := range files {
+		f := files[i]
+		ok, delErr := s.fileRepo.DeleteOwnedCV(ctx, f.ID, userID)
+		if delErr != nil {
+			return errors.NewInternal("failed to delete CV")
+		}
+		if ok {
+			_ = s.store.Remove(f.StorageKey)
+		}
+	}
+	return nil
 }

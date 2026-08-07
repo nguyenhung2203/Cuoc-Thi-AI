@@ -15,6 +15,7 @@ import (
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
 	"backend/internal/repository"
+	"backend/internal/service"
 )
 
 // Server is the WebSocket realtime gateway.
@@ -28,11 +29,13 @@ type Server struct {
 	transcriptSaver    *TranscriptBatchSaver
 	interviewRepo      *repository.InterviewRepository
 	livekitCfg         LiveKitConfig
+	aiSettings         service.AIRuntimeConfigProvider
+	aiLogSvc           *service.AILogService
 }
 
 // NewServer creates a Server with all dependencies wired up.
 // db may be nil in dev/tests; deps carries the real services used in production.
-func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConfig) *Server {
+func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConfig, aiSettings ...service.AIRuntimeConfigProvider) *Server {
 	cm := NewConnectionManager()
 	rm := NewRoomManager()
 	router := NewMessageRouter(cm, rm, db, deps)
@@ -48,6 +51,7 @@ func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConf
 		transcriptPipeline: tp,
 		transcriptSaver:    router.GetTranscriptSaver(),
 		interviewRepo:      deps.InterviewRepo,
+		aiLogSvc:           deps.AILogSvc,
 		livekitCfg:         livekitCfg,
 		httpServer: &http.Server{
 			Addr:         addr,
@@ -57,6 +61,17 @@ func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConf
 			IdleTimeout:  60 * time.Second,
 		},
 	}
+
+	if len(aiSettings) > 0 {
+		s.aiSettings = aiSettings[0]
+	}
+
+	// Liveness endpoint used by container orchestration.
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+	})
 
 	// WebSocket upgrade endpoint
 	mux.HandleFunc("/ws/interview-room", s.handleUpgrade)
@@ -113,7 +128,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.Shutdown()
 	}
 }
-
 
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
@@ -508,9 +522,8 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 		hash = hex.EncodeToString(sum[:])
 	}
 
-	// Dev fallback: without a DB wired, keep the legacy mock so local flows work.
 	if s.interviewRepo == nil {
-		s.handleCandidateJoinDevFallback(w, inviteToken)
+		writeJSONError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Dịch vụ phỏng vấn chưa kết nối cơ sở dữ liệu")
 		return
 	}
 
@@ -565,67 +578,6 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 			"candidate_name":               candidateName,
 			"job_title":                    info.JobTitle,
 			"scheduled_at":                 info.ScheduledAt.Format(time.RFC3339),
-			"requires_consent_ai":          true,
-			"requires_consent_recording":   false,
-			"room_access_token":            tokenString,
-			"room_access_token_expires_at": tokenExpiresAt.Format(time.RFC3339),
-		},
-	})
-}
-
-// handleCandidateJoinDevFallback preserves the legacy mock invite behaviour for
-// local development when no Postgres is wired. It recognises the well-known test
-// tokens and otherwise derives a deterministic room from the token itself.
-func (s *Server) handleCandidateJoinDevFallback(w http.ResponseWriter, inviteToken string) {
-	switch inviteToken {
-	case "invalid-token", "notfound-token":
-		writeJSONError(w, http.StatusNotFound, "INVITE_NOT_FOUND", "Token không tồn tại")
-		return
-	case "expired-token":
-		writeJSONError(w, http.StatusForbidden, "INVITE_EXPIRED", "Token hết hạn")
-		return
-	case "cancelled-token":
-		writeJSONError(w, http.StatusForbidden, "INTERVIEW_CANCELLED", "Buổi phỏng vấn đã hủy")
-		return
-	}
-
-	interviewID := inviteToken
-	if strings.HasPrefix(inviteToken, "inv-") {
-		interviewID = strings.TrimPrefix(inviteToken, "inv-")
-	}
-	if interviewID == "" || interviewID == "interview-123" {
-		interviewID = "405516b8-8e08-4881-bab3-d9fc1bddc576"
-	}
-	roomID := "room-" + interviewID
-	candidateName := "Trần Văn B"
-
-	tokenString, err := livekit.GenerateToken(
-		s.livekitCfg.APIKey,
-		s.livekitCfg.APISecret,
-		roomID,
-		"candidate-123",
-		candidateName,
-		"candidate",
-		interviewID,
-	)
-	if err != nil {
-		log.Printf("[api] candidate token generation failed: %v", err)
-		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate candidate token")
-		return
-	}
-
-	now := time.Now().UTC()
-	tokenExpiresAt := now.Add(4 * time.Hour)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"data": map[string]interface{}{
-			"interview_id":                 interviewID,
-			"room_id":                      roomID,
-			"candidate_name":               candidateName,
-			"job_title":                    "Frontend Developer",
-			"scheduled_at":                 now.Format(time.RFC3339),
 			"requires_consent_ai":          true,
 			"requires_consent_recording":   false,
 			"room_access_token":            tokenString,

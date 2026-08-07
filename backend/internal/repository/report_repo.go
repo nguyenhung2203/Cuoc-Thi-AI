@@ -48,13 +48,13 @@ func (r *reportRepository) UpsertReport(ctx context.Context, report *models.Inte
 			updated_at = NOW()
 		RETURNING id, generated_at, created_at, updated_at
 	`
-	
+
 	stmt, err := r.db.PrepareNamedContext(ctx, q)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	
+
 	err = stmt.QueryRowContext(ctx, report).Scan(&report.ID, &report.GeneratedAt, &report.CreatedAt, &report.UpdatedAt)
 	return err
 }

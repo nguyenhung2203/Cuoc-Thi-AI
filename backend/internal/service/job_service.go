@@ -179,7 +179,7 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 	if _, err := s.GetByID(ctx, companyID, jobID); err != nil {
 		return err
 	}
-	
+
 	// Check if there are active candidates
 	count, err := s.jobRepo.CountCandidates(ctx, jobID)
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 			TotalWeight: 100,
 			CreatedBy:   job.CreatedBy,
 		}
-		
+
 		for i, c := range result.SuggestedRubric {
 			criteria = append(criteria, models.RubricCriteria{
 				ID:          uuid.NewString(),
@@ -313,18 +313,29 @@ func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID str
 		return nil, err
 	}
 
+	if req.Count <= 0 || req.Count > 20 {
+		return nil, errors.NewValidation("count", []string{"count must be between 1 and 20"})
+	}
 	count := req.Count
-	if count <= 0 {
-		count = 10
-	}
-	questionTypes := "behavioral,technical"
-	if len(req.QuestionTypes) > 0 {
-		questionTypes = strings.Join(req.QuestionTypes, ",")
-	}
-
 	safeDescription := utils.TruncateText(job.Description, 15000)
 
-	result, err := s.qGenerator.GenerateQuestions(ctx, safeDescription, "", "", req.Level, fmt.Sprintf("%d", count), questionTypes, companyID)
+	level := strings.ToLower(strings.TrimSpace(req.Level))
+	if level == "mid" {
+		level = "middle"
+	}
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "" {
+		mode = "real"
+	}
+	result, err := s.qGenerator.GenerateStructuredQuestions(ctx, companyID, ai.StructuredQuestionRequest{
+		JobTitle:       job.Title,
+		JobDescription: safeDescription,
+		Requirements:   []string{job.Requirements.String},
+		Level:          level,
+		Mode:           mode,
+		Language:       "vi",
+		QuestionCount:  count,
+	})
 	if err != nil {
 		if appErr, ok := errors.IsAppError(err); ok {
 			return nil, appErr
@@ -337,19 +348,35 @@ func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID str
 
 	var questions []models.QuestionBank
 	for _, sq := range result.Questions {
-		tagsBytes, _ := json.Marshal([]string{sq.TargetSkill})
+		tags := sq.SkillTags
+		if len(tags) == 0 && sq.TargetSkill != "" {
+			tags = []string{sq.TargetSkill}
+		}
+		tagsBytes, _ := json.Marshal(tags)
 		signalsBytes, _ := json.Marshal(sq.ExpectedSignals)
+		followupBytes, _ := json.Marshal(sq.FollowUpPrompts)
+		metadataBytes, _ := json.Marshal(map[string]any{"warnings": result.Warnings, "coverage": result.Coverage, "confidence": result.Confidence})
+		questionType := sq.Category
+		if questionType == "" {
+			questionType = sq.QuestionType
+		}
 		questions = append(questions, models.QuestionBank{
-			ID:              uuid.NewString(),
-			CompanyID:       sql.NullString{String: companyID, Valid: true},
-			JobID:           sql.NullString{String: jobID, Valid: true},
-			CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
-			QuestionText:    sq.QuestionText,
-			QuestionType:    sq.QuestionType,
-			SkillTags:       models.JSONB(tagsBytes),
-			Level:           sql.NullString{String: sq.Difficulty, Valid: true},
-			ExpectedSignals: models.JSONB(signalsBytes),
-			IsAIGenerated:   true,
+			ID:               uuid.NewString(),
+			CompanyID:        sql.NullString{String: companyID, Valid: true},
+			JobID:            sql.NullString{String: jobID, Valid: true},
+			CreatedBy:        sql.NullString{String: job.CreatedBy, Valid: true},
+			QuestionText:     sq.QuestionText,
+			QuestionType:     questionType,
+			SkillTags:        models.JSONB(tagsBytes),
+			Level:            sql.NullString{String: sq.Difficulty, Valid: true},
+			ExpectedSignals:  models.JSONB(signalsBytes),
+			FollowUpPrompts:  models.JSONB(followupBytes),
+			TimeboxMinutes:   sq.TimeboxMinutes,
+			EvidenceRequired: sq.EvidenceRequired,
+			GenerationMode:   sql.NullString{String: result.Mode, Valid: result.Mode != ""},
+			PromptVersion:    sql.NullString{String: result.PromptVersion, Valid: result.PromptVersion != ""},
+			AIMetadata:       models.JSONB(metadataBytes),
+			IsAIGenerated:    true,
 		})
 	}
 

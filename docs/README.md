@@ -36,15 +36,18 @@
 
 | # | File | Mô tả |
 |---|---|---|
-| 9 | `SYSTEM_ANALYSIS.md` | Phân tích hệ thống tổng hợp ban đầu (tham khảo, không phải source of truth) |
+| 9 | `NGHIEP_VU.md` | Tóm tắt nghiệp vụ dễ đọc — sản phẩm, actor, luồng, module |
+| 10 | `CAU_HOI_GIANG_VIEN.md` | Câu hỏi–đáp gợi ý khi bảo vệ / demo trước giảng viên |
+| 11 | `SYSTEM_ANALYSIS.md` | Phân tích hệ thống tổng hợp ban đầu (tham khảo, không phải source of truth) |
+| 12 | `SOURCE_JOB_DATA_DAKLAK.md` | Nguồn tin tuyển dụng Đắk Lắk (TopCV/CareerViet — copy thủ công) |
 
 ### Tài liệu module riêng
 
 | # | File | Owner |
 |---|---|---|
-| 10 | `Hung/MODULE_HUNG_REALTIME_AI.md` | Hùng — Realtime, Interview Room, WebSocket, Transcript |
-| 11 | `Khoi/MODULE_KHOI_CORE_AI_BACKEND.md` | Khôi — Backend core, DB, AI Engine, Scoring, Report |
-| 12 | `Lai/MODULE_LAI_PRODUCT_UI_BUSINESS.md` | Lai — UI/UX, Dashboard, Portal, Business flow |
+| 12 | `Hung/MODULE_HUNG_REALTIME_AI.md` | Hùng — Realtime, Interview Room, WebSocket, Transcript |
+| 13 | `Khoi/MODULE_KHOI_CORE_AI_BACKEND.md` | Khôi — Backend core, DB, AI Engine, Scoring, Report |
+| 14 | `Lai/MODULE_LAI_PRODUCT_UI_BUSINESS.md` | Lai — UI/UX, Dashboard, Portal, Business flow |
 
 ---
 

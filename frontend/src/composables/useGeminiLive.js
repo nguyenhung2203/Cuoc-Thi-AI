@@ -77,8 +77,7 @@ export function useGeminiLive() {
     let base = import.meta.env.VITE_WS_URL
     if (!base) {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = window.location.hostname === 'localhost' ? 'localhost:8081' : window.location.host
-      base = `${proto}//${host}`
+      base = `${proto}//${window.location.host}`
     }
     return base.replace(/\/$/, '')
   }

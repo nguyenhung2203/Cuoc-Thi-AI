@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"log"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
+
+	"backend/internal/models"
 )
 
 // mock_live.go implements a WebSocket proxy that bridges a candidate's browser
@@ -60,6 +63,17 @@ type mockLiveServerMsg struct {
 // handleMockLive upgrades the connection and proxies it to Gemini Live.
 func (s *Server) handleMockLive(w http.ResponseWriter, r *http.Request) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
+	model := os.Getenv("GEMINI_LIVE_MODEL")
+	if s.aiSettings != nil {
+		if cfg, err := s.aiSettings.GetRuntimeConfig(r.Context()); err == nil {
+			if len(cfg.APIKeys) > 0 {
+				apiKey = cfg.APIKeys[0]
+			}
+			if cfg.LiveModel != "" {
+				model = cfg.LiveModel
+			}
+		}
+	}
 	if apiKey == "" || apiKey == "your-gemini-api-key" {
 		http.Error(w, "AI voice service not configured (missing GEMINI_API_KEY)", http.StatusServiceUnavailable)
 		return
@@ -85,7 +99,6 @@ func (s *Server) handleMockLive(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	model := os.Getenv("GEMINI_LIVE_MODEL")
 	if model == "" {
 		model = mockLiveModel
 	}
@@ -97,6 +110,51 @@ func (s *Server) handleMockLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer session.Close()
+
+	start := time.Now()
+	var usageMu sync.Mutex
+	var promptTokens, responseTokens, totalTokens int32
+	outcome := "success"
+	var outcomeMu sync.Mutex
+	setOutcome := func(status string) {
+		outcomeMu.Lock()
+		if outcome == "success" || status == "failed" {
+			outcome = status
+		}
+		outcomeMu.Unlock()
+	}
+	usageSink := func(usage *genai.UsageMetadata) {
+		if usage == nil {
+			return
+		}
+		usageMu.Lock()
+		promptTokens = usage.PromptTokenCount
+		responseTokens = usage.ResponseTokenCount
+		totalTokens = usage.TotalTokenCount
+		usageMu.Unlock()
+	}
+	defer func() {
+		if s.aiLogSvc == nil {
+			return
+		}
+		usageMu.Lock()
+		in, out, total := promptTokens, responseTokens, totalTokens
+		usageMu.Unlock()
+		if total == 0 {
+			total = in + out
+		}
+		outcomeMu.Lock()
+		status := outcome
+		outcomeMu.Unlock()
+		cost := float64(in)*0.30/1_000_000 + float64(out)*1.25/1_000_000
+		s.aiLogSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: "", Provider: "gemini", Model: sql.NullString{String: model, Valid: true},
+			Operation: sql.NullString{String: "mock_interview_live", Valid: true},
+			InputJSON: models.JSONB(`{"modality":"audio"}`), LatencyMs: sql.NullInt32{Int32: int32(time.Since(start).Milliseconds()), Valid: true},
+			TokensIn: sql.NullInt32{Int32: in, Valid: in > 0}, TokensOut: sql.NullInt32{Int32: out, Valid: out > 0}, TotalTokens: sql.NullInt32{Int32: total, Valid: total > 0},
+			Cost: sql.NullFloat64{Float64: cost, Valid: total > 0}, Status: status, CreatedAt: time.Now(),
+		})
+	}()
 
 	writeMockLiveJSON(conn, mockLiveServerMsg{Type: "ready"})
 
@@ -111,10 +169,10 @@ func (s *Server) handleMockLive(w http.ResponseWriter, r *http.Request) {
 	// We will wait for the client to send a 'start_interview' message to trigger the greeting.
 
 	// Gemini -> browser pump.
-	go pumpGeminiToBrowser(ctx, cancel, session, send)
+	go pumpGeminiToBrowser(ctx, cancel, session, send, usageSink, setOutcome)
 
 	// browser -> Gemini pump (blocks until the socket closes).
-	pumpBrowserToGemini(ctx, cancel, conn, session, send)
+	pumpBrowserToGemini(ctx, cancel, conn, session, send, setOutcome)
 }
 
 // newGeminiLiveSession opens a Live session configured for audio dialog in Vietnamese.
@@ -153,7 +211,7 @@ func newGeminiLiveSession(ctx context.Context, apiKey, model, role, level string
 }
 
 // pumpBrowserToGemini reads client frames and forwards audio/text to Gemini.
-func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, session *genai.Session, send func(mockLiveServerMsg)) {
+func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *websocket.Conn, session *genai.Session, send func(mockLiveServerMsg), setOutcome func(string)) {
 	defer cancel()
 	conn.SetReadLimit(2 << 20) // 2 MiB per frame is ample for audio chunks.
 	for {
@@ -165,6 +223,7 @@ func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *w
 
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
+			setOutcome("partial")
 			return // browser closed
 		}
 
@@ -179,9 +238,12 @@ func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *w
 			if err != nil || len(pcm) == 0 {
 				continue
 			}
-			_ = session.SendRealtimeInput(genai.LiveRealtimeInput{
+			if err := session.SendRealtimeInput(genai.LiveRealtimeInput{
 				Audio: &genai.Blob{Data: pcm, MIMEType: "audio/pcm;rate=16000"},
-			})
+			}); err != nil {
+				setOutcome("failed")
+				send(mockLiveServerMsg{Type: "error", Message: "Không gửi được âm thanh tới AI"})
+			}
 		case "end":
 			// Signal end of the user's audio stream so Gemini responds.
 			_ = session.SendRealtimeInput(genai.LiveRealtimeInput{AudioStreamEnd: true})
@@ -210,7 +272,7 @@ func pumpBrowserToGemini(ctx context.Context, cancel context.CancelFunc, conn *w
 }
 
 // pumpGeminiToBrowser reads server messages from Gemini and forwards them.
-func pumpGeminiToBrowser(ctx context.Context, cancel context.CancelFunc, session *genai.Session, send func(mockLiveServerMsg)) {
+func pumpGeminiToBrowser(ctx context.Context, cancel context.CancelFunc, session *genai.Session, send func(mockLiveServerMsg), usageSink func(*genai.UsageMetadata), setOutcome func(string)) {
 	defer cancel()
 	for {
 		select {
@@ -224,12 +286,19 @@ func pumpGeminiToBrowser(ctx context.Context, cancel context.CancelFunc, session
 			// Surface unexpected Gemini disconnects instead of silently ending the
 			// browser socket after only a partial transcription has arrived.
 			if ctx.Err() == nil {
+				setOutcome("failed")
 				log.Printf("[mock-live] gemini receive failed: %v", err)
 				send(mockLiveServerMsg{Type: "error", Message: "Kết nối AI bị gián đoạn. Vui lòng bắt đầu lại phiên luyện tập."})
 			}
 			return
 		}
-		if resp == nil || resp.ServerContent == nil {
+		if resp == nil {
+			continue
+		}
+		if usageSink != nil && resp.UsageMetadata != nil {
+			usageSink(resp.UsageMetadata)
+		}
+		if resp.ServerContent == nil {
 			continue
 		}
 		sc := resp.ServerContent

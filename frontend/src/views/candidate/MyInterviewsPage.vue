@@ -88,7 +88,7 @@ const formatDate = (dateString) => {
 
         <div class="flex gap-3 w-full md:w-auto shrink-0">
           <Button
-            v-if="iv.mode === 'real' && iv.status !== 'completed' && iv.status !== 'cancelled'"
+            v-if="iv.mode === 'real' && !['completed', 'cancelled', 'expired'].includes(iv.status)"
             variant="primary"
             class="sheen w-full md:w-auto"
             @click="iv.join_link ? router.push(iv.join_link) : null">

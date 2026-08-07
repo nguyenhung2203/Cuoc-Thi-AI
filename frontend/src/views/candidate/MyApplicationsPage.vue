@@ -15,31 +15,45 @@ const router = useRouter()
 const applications = ref([])
 const safeApplications = computed(() => Array.isArray(applications.value) ? applications.value : [])
 const loading = ref(true)
+const loadError = ref('')
 const searchQuery = ref('')
-const currentTab = ref('all') // all, pending, reviewed, interviewing, rejected
+const currentTab = ref('all') // all | screening | interviewing | outcome | rejected
 const toast = ref(null)
 const showCancelModal = ref(false)
 const cancellingApplication = ref(null)
 const cancelLoading = ref(false)
 
-onMounted(async () => {
+const statusBucket = (status) => {
+  const s = String(status || '').toLowerCase()
+  if (['new', 'screening'].includes(s)) return 'screening'
+  if (['invited', 'interviewing'].includes(s)) return 'interviewing'
+  if (['passed', 'completed', 'talent_pool'].includes(s)) return 'outcome'
+  if (s === 'rejected') return 'rejected'
+  return 'screening'
+}
+
+const loadApplications = async () => {
+  loading.value = true
+  loadError.value = ''
   try {
     const data = await candidatePortalService.getApplications()
     applications.value = Array.isArray(data) ? data : []
   } catch (err) {
     console.error('Lỗi tải danh sách ứng tuyển:', err)
+    loadError.value = err?.message || 'Không tải được danh sách đơn ứng tuyển.'
   } finally {
     loading.value = false
   }
-})
+}
 
-// Đếm số lượng theo từng trạng thái
+onMounted(loadApplications)
+
+// Đếm số lượng theo từng nhóm trạng thái pipeline thật
 const tabCounts = computed(() => {
-  const counts = { all: safeApplications.value.length, pending: 0, reviewed: 0, interviewing: 0, rejected: 0 }
+  const counts = { all: safeApplications.value.length, screening: 0, interviewing: 0, outcome: 0, rejected: 0 }
   safeApplications.value.forEach(app => {
-    if (counts[app.status] !== undefined) {
-      counts[app.status]++
-    }
+    const bucket = statusBucket(app.status)
+    if (counts[bucket] !== undefined) counts[bucket]++
   })
   return counts
 })
@@ -47,7 +61,7 @@ const tabCounts = computed(() => {
 const filteredApps = computed(() => {
   const query = searchQuery.value.toLocaleLowerCase('vi')
   return safeApplications.value.filter(app => {
-    const matchesTab = currentTab.value === 'all' || app?.status === currentTab.value
+    const matchesTab = currentTab.value === 'all' || statusBucket(app?.status) === currentTab.value
     const jobTitle = String(app?.job_title || '').toLocaleLowerCase('vi')
     const companyName = String(app?.company_name || '').toLocaleLowerCase('vi')
     const matchesSearch = !query || jobTitle.includes(query) || companyName.includes(query)
@@ -57,12 +71,16 @@ const filteredApps = computed(() => {
 
 const getStatusDetails = (status) => {
   const map = {
-    'pending': { text: 'Đang chờ duyệt', class: 'badge-neutral', icon: Clock, desc: 'Hồ sơ đã được gửi đến bộ phận nhân sự và đang trong quá trình tiếp nhận.' },
-    'reviewed': { text: 'HR đã xem hồ sơ', class: 'badge-info', icon: CheckCircle2, desc: 'Nhà tuyển dụng đã mở xem CV và hồ sơ năng lực của bạn.' },
-    'interviewing': { text: 'Đang phỏng vấn / Test', class: 'badge-primary', icon: Calendar, desc: 'Bạn đã vượt qua vòng hồ sơ và đang tham gia phỏng vấn đánh giá.' },
-    'rejected': { text: 'Chưa phù hợp', class: 'badge-danger', icon: XCircle, desc: 'Nhà tuyển dụng đã phản hồi hồ sơ chưa phù hợp với vị trí lúc này.' }
+    new: { text: 'Mới nộp', class: 'badge-neutral', icon: Clock, desc: 'Hồ sơ vừa được gửi và đang chờ nhà tuyển dụng tiếp nhận.' },
+    screening: { text: 'Đang sàng lọc', class: 'badge-info', icon: CheckCircle2, desc: 'Nhà tuyển dụng đang xem xét hồ sơ của bạn.' },
+    invited: { text: 'Đã mời phỏng vấn', class: 'badge-primary', icon: Calendar, desc: 'Bạn đã nhận lời mời tham gia buổi phỏng vấn.' },
+    interviewing: { text: 'Đang phỏng vấn', class: 'badge-primary', icon: Calendar, desc: 'Bạn đang trong quá trình phỏng vấn đánh giá.' },
+    completed: { text: 'Đã hoàn tất vòng PV', class: 'badge-info', icon: CheckCircle2, desc: 'Buổi phỏng vấn đã kết thúc, chờ quyết định.' },
+    passed: { text: 'Đạt yêu cầu', class: 'badge-success', icon: CheckCircle2, desc: 'Bạn đã vượt qua vòng đánh giá cho vị trí này.' },
+    talent_pool: { text: 'Talent pool', class: 'badge-info', icon: CheckCircle2, desc: 'Hồ sơ được lưu vào kho ứng viên tiềm năng.' },
+    rejected: { text: 'Chưa phù hợp', class: 'badge-danger', icon: XCircle, desc: 'Nhà tuyển dụng phản hồi hồ sơ chưa phù hợp lúc này.' },
   }
-  return map[status] || map['pending']
+  return map[String(status || '').toLowerCase()] || map.new
 }
 
 const formatDate = (dateString) => {
@@ -72,7 +90,11 @@ const formatDate = (dateString) => {
 }
 
 const handleDownloadCv = (app) => {
-  toast.value = { type: 'info', message: `Đang tải xuống CV: ${app.cv_name}...` }
+  if (!app?.cv_url) {
+    toast.value = { type: 'warning', message: 'Không có liên kết CV để tải xuống.' }
+    return
+  }
+  window.open(app.cv_url, '_blank', 'noopener,noreferrer')
 }
 
 const handleCancelApp = (app) => {
@@ -145,17 +167,10 @@ const confirmCancelApp = async () => {
         </button>
 
         <button 
-          @click="currentTab = 'pending'" 
-          :class="['px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'pending' ? 'bg-[var(--primary)] text-white shadow-sm' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)] hover:text-[var(--text-main)]']"
+          @click="currentTab = 'screening'" 
+          :class="['px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'screening' ? 'bg-[var(--primary)] text-white shadow-sm' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)] hover:text-[var(--text-main)]']"
         >
-          <Clock :size="15" /> Đang chờ duyệt <span :class="['px-2 py-0.5 rounded-full text-xs font-bold', currentTab === 'pending' ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-[var(--text-secondary)]']">{{ tabCounts.pending }}</span>
-        </button>
-
-        <button 
-          @click="currentTab = 'reviewed'" 
-          :class="['px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'reviewed' ? 'bg-[var(--primary)] text-white shadow-sm' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)] hover:text-[var(--text-main)]']"
-        >
-          <CheckCircle2 :size="15" /> HR đã xem <span :class="['px-2 py-0.5 rounded-full text-xs font-bold', currentTab === 'reviewed' ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-[var(--text-secondary)]']">{{ tabCounts.reviewed }}</span>
+          <Clock :size="15" /> Đang sàng lọc <span :class="['px-2 py-0.5 rounded-full text-xs font-bold', currentTab === 'screening' ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-[var(--text-secondary)]']">{{ tabCounts.screening }}</span>
         </button>
 
         <button 
@@ -163,6 +178,13 @@ const confirmCancelApp = async () => {
           :class="['px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'interviewing' ? 'bg-[var(--primary)] text-white shadow-sm' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)] hover:text-[var(--text-main)]']"
         >
           <Calendar :size="15" /> Đang phỏng vấn <span :class="['px-2 py-0.5 rounded-full text-xs font-bold', currentTab === 'interviewing' ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-[var(--text-secondary)]']">{{ tabCounts.interviewing }}</span>
+        </button>
+
+        <button 
+          @click="currentTab = 'outcome'" 
+          :class="['px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all whitespace-nowrap', currentTab === 'outcome' ? 'bg-[var(--primary)] text-white shadow-sm' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)] hover:text-[var(--text-main)]']"
+        >
+          <CheckCircle2 :size="15" /> Kết quả / Pool <span :class="['px-2 py-0.5 rounded-full text-xs font-bold', currentTab === 'outcome' ? 'bg-white/20 text-white' : 'bg-slate-200/60 text-[var(--text-secondary)]']">{{ tabCounts.outcome }}</span>
         </button>
 
         <button 
@@ -177,6 +199,15 @@ const confirmCancelApp = async () => {
     <!-- Loading -->
     <div v-if="loading" class="flex justify-center p-12">
       <div class="spinner"></div>
+    </div>
+
+    <div v-else-if="loadError" class="empty-state bg-[var(--surface)] p-12 rounded-2xl border border-dashed border-[var(--border)] text-center max-w-xl mx-auto my-8">
+      <div class="w-16 h-16 rounded-full bg-[var(--surface-soft)] text-[var(--danger)] flex items-center justify-center mx-auto mb-4">
+        <AlertCircle :size="32" />
+      </div>
+      <h3 class="text-base font-bold text-[var(--text-main)]">Không tải được đơn ứng tuyển</h3>
+      <p class="text-sm text-[var(--text-secondary)] mt-1.5 leading-relaxed">{{ loadError }}</p>
+      <Button variant="primary" class="mt-6" @click="loadApplications">Thử lại</Button>
     </div>
 
     <!-- Empty state chuẩn Design System -->
@@ -223,7 +254,12 @@ const confirmCancelApp = async () => {
               <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--surface-soft)] rounded-xl border border-[var(--border)] text-xs font-medium text-[var(--text-main)]">
                 <FileText :size="14" class="text-[var(--primary)]" />
                 CV đã nộp: <strong class="text-[var(--primary)]">{{ app.cv_name }}</strong>
-                <button @click="handleDownloadCv(app)" class="hover:text-[var(--primary)] transition-colors ml-1" title="Tải xuống CV">
+                <button
+                  v-if="app.cv_url"
+                  @click="handleDownloadCv(app)"
+                  class="hover:text-[var(--primary)] transition-colors ml-1"
+                  title="Tải xuống CV"
+                >
                   <Download :size="13" />
                 </button>
               </div>

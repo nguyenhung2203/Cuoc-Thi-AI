@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"backend/internal/dto/response"
+	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/pkg/logger"
+	"backend/internal/pkg/pagination"
 	"backend/internal/repository"
 )
 
@@ -16,6 +18,42 @@ type UserService struct {
 
 func NewUserService(userRepo *repository.UserRepository, refreshTokenRepo repository.RefreshTokenRepository) *UserService {
 	return &UserService{userRepo: userRepo, refreshTokenRepo: refreshTokenRepo}
+}
+
+type UserListResult struct {
+	Users []response.UserMeResponse
+	Total int
+}
+
+func mapAdminUsers(users []models.User) []response.UserMeResponse {
+	res := make([]response.UserMeResponse, 0, len(users))
+	for _, u := range users {
+		res = append(res, response.UserMeResponse{ID: u.ID, Email: u.Email, FullName: u.FullName, Role: string(u.Role), Status: string(u.Status), AvatarURL: u.AvatarURL.String, VerificationFileID: u.VerificationFileID.String, CreatedAt: u.CreatedAt})
+	}
+	return res
+}
+
+func (s *UserService) ListUsersPage(ctx context.Context, p pagination.Params, filter repository.UserListFilter, pending bool) (*UserListResult, error) {
+	var users []models.User
+	var total int
+	var err error
+	if pending {
+		users, total, err = s.userRepo.ListPendingUsersPage(ctx, p, filter)
+	} else {
+		users, total, err = s.userRepo.ListAllUsersPage(ctx, p, filter)
+	}
+	if err != nil {
+		return nil, errors.NewInternal("failed to list users")
+	}
+	return &UserListResult{Users: mapAdminUsers(users), Total: total}, nil
+}
+
+func (s *UserService) UserCounts(ctx context.Context) (all, pending int, err error) {
+	stats, err := s.userRepo.GetDashboardStats(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	return stats["total_users"], stats["pending_users"], nil
 }
 
 func (s *UserService) ListPendingUsers(ctx context.Context) ([]response.UserMeResponse, error) {
@@ -125,6 +163,19 @@ func (s *UserService) GetReports(ctx context.Context) (*response.AdminReports, e
 	if err != nil {
 		return nil, err
 	}
+	totalAICost, err := s.userRepo.GetTotalAICost(ctx)
+	if err != nil {
+		return nil, err
+	}
+	modelItems, err := s.userRepo.GetTokenUsageByModel(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenUsageByModel := make(map[string]int64, len(modelItems))
+	for _, item := range modelItems {
+		tokenUsageByModel[item.Model] = item.Usage
+	}
 
 	var monthlyTokenUsage []response.MonthlyUsageItem
 	for _, m := range monthlyItems {
@@ -142,18 +193,6 @@ func (s *UserService) GetReports(ctx context.Context) (*response.AdminReports, e
 		})
 	}
 
-	// Simulated server stability metrics
-	uptimeHours := 142.5
-	cpuUsage := 12.4
-	ramUsage := 48.2
-	redisMemory := 14.2
-	serverLatency := 124
-
-	tokenUsageByModel := map[string]int64{
-		"gemini-2.5-flash":          tokensIn + tokensOut,
-		"gemini-2.0-flash-live-001": 0,
-	}
-
 	return &response.AdminReports{
 		TotalUsers:         totalUsers,
 		TotalCandidates:    totalCandidates,
@@ -163,11 +202,12 @@ func (s *UserService) GetReports(ctx context.Context) (*response.AdminReports, e
 		TotalTokenUsage:    tokensIn + tokensOut,
 		InputTokens:        tokensIn,
 		OutputTokens:       tokensOut,
-		SystemUptimeHours:  uptimeHours,
-		CpuUsagePercent:    cpuUsage,
-		RamUsagePercent:    ramUsage,
-		RedisMemoryMb:      redisMemory,
-		ServerLatencyMs:    serverLatency,
+		EstimatedAICostUSD: totalAICost,
+		SystemUptimeHours:  nil,
+		CpuUsagePercent:    nil,
+		RamUsagePercent:    nil,
+		RedisMemoryMb:      nil,
+		ServerLatencyMs:    nil,
 		TokenUsageByModel:  tokenUsageByModel,
 		MonthlyTokenUsage:  monthlyTokenUsage,
 		UserGrowthTrend:    userGrowthTrend,

@@ -7,18 +7,18 @@ import (
 )
 
 type AuditLog struct {
-	ID          string         `db:"id" json:"id"`
-	CompanyID   sql.NullString `db:"company_id" json:"-"`
-	ActorUserID sql.NullString `db:"actor_user_id" json:"-"`
-	ActorRole   sql.NullString `db:"actor_role" json:"-"`
-	Action      string         `db:"action" json:"action"`
-	ResourceType string        `db:"resource_type" json:"resource_type"`
-	ResourceID  sql.NullString `db:"resource_id" json:"-"`
-	BeforeJSON  JSONB          `db:"before_json" json:"before_json"`
-	AfterJSON   JSONB          `db:"after_json" json:"after_json"`
-	IPAddress   sql.NullString `db:"ip_address" json:"-"`
-	UserAgent   sql.NullString `db:"user_agent" json:"-"`
-	CreatedAt   time.Time      `db:"created_at" json:"created_at"`
+	ID           string         `db:"id" json:"id"`
+	CompanyID    sql.NullString `db:"company_id" json:"-"`
+	ActorUserID  sql.NullString `db:"actor_user_id" json:"-"`
+	ActorRole    sql.NullString `db:"actor_role" json:"-"`
+	Action       string         `db:"action" json:"action"`
+	ResourceType string         `db:"resource_type" json:"resource_type"`
+	ResourceID   sql.NullString `db:"resource_id" json:"-"`
+	BeforeJSON   JSONB          `db:"before_json" json:"before_json"`
+	AfterJSON    JSONB          `db:"after_json" json:"after_json"`
+	IPAddress    sql.NullString `db:"ip_address" json:"-"`
+	UserAgent    sql.NullString `db:"user_agent" json:"-"`
+	CreatedAt    time.Time      `db:"created_at" json:"created_at"`
 }
 
 func (a AuditLog) MarshalJSON() ([]byte, error) {
@@ -41,4 +41,3 @@ func (a AuditLog) MarshalJSON() ([]byte, error) {
 		UserAgent:   a.UserAgent.String,
 	})
 }
-

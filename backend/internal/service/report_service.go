@@ -197,9 +197,10 @@ func (s *ReportService) SetEnqueuer(fn ReportEnqueuer) { s.enqueuer = fn }
 func (s *ReportService) RunReportGeneration(ctx context.Context, companyID, interviewID, jobID, generatedBy, recruiterID string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "failed")
+			panicErr := fmt.Errorf("report generation panicked: %v", r)
+			_ = s.interviewRepo.UpdateReportFailure(ctx, interviewID, panicErr)
 			s.notifyReportFailed(ctx, interviewID, recruiterID, "panic")
-			err = fmt.Errorf("report generation panicked: %v", r)
+			err = panicErr
 		}
 	}()
 
@@ -208,7 +209,7 @@ func (s *ReportService) RunReportGeneration(ctx context.Context, companyID, inte
 		if strings.Contains(reason, "context deadline exceeded") {
 			reason = "timeout"
 		}
-		_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "failed")
+		_ = s.interviewRepo.UpdateReportFailure(ctx, interviewID, fmt.Errorf("%s", reason))
 		s.notifyReportFailed(ctx, interviewID, recruiterID, reason)
 		return genErr
 	}
@@ -269,7 +270,7 @@ func (s *ReportService) RetryReport(ctx context.Context, companyID, interviewID 
 	// Sync: run immediately, not goroutine
 	err = s.generateReportSync(ctx, companyID, interviewID, interview.JobID.String, requestedBy)
 	if err != nil {
-		_ = s.interviewRepo.UpdateReportStatus(ctx, interviewID, "failed")
+		_ = s.interviewRepo.UpdateReportFailure(ctx, interviewID, err)
 		s.notifyReportFailed(ctx, interviewID, interview.RecruiterID.String, err.Error())
 		return nil, fmt.Errorf("retry failed: %w", err)
 	}

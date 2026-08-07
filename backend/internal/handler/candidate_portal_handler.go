@@ -27,6 +27,9 @@ func (h *CandidatePortalHandler) Routes(r chi.Router) {
 	r.Get("/profile", h.GetProfile)
 	r.Put("/profile", h.UpdateProfile)
 	r.Post("/cv", h.UploadCV)
+	r.Post("/cv/reparse", h.ReparseCV)
+	r.Delete("/cv/{id}", h.DeleteCV)
+	r.Post("/cv/review", h.ReviewCV)
 	r.Post("/jobs/{jobID}/apply", h.ApplyJob)
 	r.Get("/jobs/{jobID}/match", h.GetJobMatch)
 	r.Get("/applications", h.GetApplications)
@@ -211,28 +214,65 @@ func (h *CandidatePortalHandler) UploadCV(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID, fileRecord.StorageKey)
+	upload, err := h.svc.UploadCV(r.Context(), userID, header.Filename, fileRecord.ID, fileRecord.StorageKey)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
 	}
+	upload.CVUrl, _ = h.fileSvc.SignedURL(fileRecord.StorageKey)
+	response.JSON(w, http.StatusOK, upload, nil, requestID)
+}
 
-	cvUrl, _ := h.fileSvc.SignedURL(fileRecord.StorageKey)
-
-	// Fetch the freshly parsed profile so the client can show real extracted data.
-	profile, _ := h.svc.GetProfile(r.Context(), userID)
-	var parsedData interface{}
-	if profile != nil {
-		parsedData = profile.ParsedData
+func (h *CandidatePortalHandler) ReparseCV(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
 	}
 
-	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"message":     "CV uploaded",
-		"file_name":   fileRecord.OriginalName,
-		"cv_url":      cvUrl,
-		"cv_file_id":  fileRecord.ID,
-		"parsed_data": parsedData,
-	}, nil, requestID)
+	upload, err := h.svc.ReparseCV(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, upload, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) ReviewCV(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+
+	review, err := h.svc.ReviewCV(r.Context(), userID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, review, nil, requestID)
+}
+
+func (h *CandidatePortalHandler) DeleteCV(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r)
+	userID, ok := r.Context().Value(middleware.CtxUserID).(string)
+	if !ok || userID == "" {
+		response.Error(w, errors.NewUnauthorized("unauthorized"), requestID)
+		return
+	}
+	fileID := chi.URLParam(r, "id")
+	if fileID == "" {
+		response.Error(w, errors.NewBadRequest("CV id is required"), requestID)
+		return
+	}
+
+	if err := h.svc.DeleteCV(r.Context(), userID, fileID); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"message": "CV deleted"}, nil, requestID)
 }
 
 func (h *CandidatePortalHandler) GetApplications(w http.ResponseWriter, r *http.Request) {
@@ -269,4 +309,3 @@ func (h *CandidatePortalHandler) CancelApplication(w http.ResponseWriter, r *htt
 
 	response.JSON(w, http.StatusOK, map[string]string{"message": "withdrawn successfully"}, nil, requestID)
 }
-

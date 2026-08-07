@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -24,8 +24,33 @@ const fullTranscripts = ref([])
 const loadingTranscripts = ref(false)
 const retryingReport = ref(false)
 
+let reportPollTimer = null
+const loadReport = async () => {
+  const companyId = authStore.user?.companies?.[0]?.id
+  const interviewId = route.params.id
+  const reportData = await reportService.getReport(companyId, interviewId)
+  report.value = reportData
+  if (reportData?.report_json) {
+    const parsed = JSON.parse(reportData.report_json)
+    report.value.overall_score = parsed.final_score || reportData.final_score
+    report.value.ai_recommendation = parsed.recommendation
+    report.value.core_feedback = parsed.summary
+    report.value.strengths = parsed.strengths || []
+    report.value.weaknesses = parsed.weaknesses || []
+    report.value.transcript_highlights = parsed.evidence_json || []
+    report.value.ai_reasoning_summary = parsed.ai_reasoning_summary
+    report.value.improvement_advice = parsed.improvement_advice || []
+    report.value.communication_score = parsed.communication_score
+    report.value.tone_score = parsed.tone_score
+    report.value.personality_score = parsed.personality_score
+    report.value.rubric_scores = parsed.scores || []
+  }
+  return reportData
+}
+
 onMounted(async () => {
   try {
+
     const companyId = authStore.user?.companies?.[0]?.id
     const interviewId = route.params.id
     const resData = await reportService.getReport(companyId, interviewId)
@@ -44,12 +69,30 @@ onMounted(async () => {
       // Use real rubric scores from parsed report if available
       // If the AI has not generated rubric scores yet, show empty state
       report.value.rubric_scores = parsed.scores || []
+
+    const data = await loadReport()
+    if (data?.status === 'generating' || data?.status === 'pending') {
+      reportPollTimer = setInterval(async () => {
+        try {
+          const latest = await loadReport()
+          if (latest?.status === 'ready' || latest?.status === 'failed') {
+            clearInterval(reportPollTimer)
+            reportPollTimer = null
+          }
+        } catch (error) {
+          console.error('Lỗi cập nhật trạng thái báo cáo', error)
+        }
+      }, 3000)
     }
   } catch (error) {
     toast.value = { type: 'error', message: 'Lỗi tải báo cáo' }
   } finally {
     loading.value = false
   }
+})
+
+onUnmounted(() => {
+  if (reportPollTimer) clearInterval(reportPollTimer)
 })
 
 const savingDecision = ref(false)
@@ -125,10 +168,17 @@ const handleRetryReport = async () => {
     const companyId = authStore.user?.companies?.[0]?.id
     const interviewId = route.params.id
     await reportService.retryReport(companyId, interviewId)
-    toast.value = { type: 'success', message: 'Đang gửi yêu cầu tạo lại báo cáo, vui lòng đợi lát...' }
-    setTimeout(() => {
-      window.location.reload()
-    }, 2000)
+    toast.value = { type: 'success', message: 'Đang gửi yêu cầu tạo lại báo cáo...' }
+    report.value = { ...(report.value || {}), status: 'generating' }
+    if (reportPollTimer) clearInterval(reportPollTimer)
+    reportPollTimer = setInterval(async () => {
+      const latest = await loadReport()
+      if (latest?.status === 'ready' || latest?.status === 'failed') {
+        clearInterval(reportPollTimer)
+        reportPollTimer = null
+        retryingReport.value = false
+      }
+    }, 3000)
   } catch (err) {
     toast.value = { type: 'error', message: 'Không thể tạo lại báo cáo.' }
     retryingReport.value = false
@@ -296,7 +346,17 @@ const handleRetryReport = async () => {
             </div>
           </Card>
 
-          <!-- Transcript Highlights -->
+          <Card v-if="report.improvement_advice?.length || report.communication_score != null" class="rounded-2xl shadow-sm p-6 border-t-4 border-t-violet-500">
+            <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Phân tích giao tiếp & Gợi ý cải thiện</h2>
+            <div v-if="report.communication_score != null" class="grid grid-cols-3 gap-3 mb-4 text-center text-sm">
+              <div>Giao tiếp <b class="block text-violet-600">{{ report.communication_score }}/10</b></div>
+              <div>Giọng điệu <b class="block text-violet-600">{{ report.tone_score }}/10</b></div>
+              <div>Tác phong <b class="block text-violet-600">{{ report.personality_score }}/10</b></div>
+            </div>
+            <ul class="space-y-2 text-sm text-slate-700 dark:text-slate-300"><li v-for="(advice, idx) in report.improvement_advice" :key="idx">• {{ advice }}</li></ul>
+          </Card>
+
+
           <Card class="rounded-2xl shadow-sm p-6">
             <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
               <FileText size="18" class="text-blue-500" /> Trích xuất Transcript (Bằng chứng)

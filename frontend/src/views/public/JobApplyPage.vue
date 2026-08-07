@@ -11,6 +11,8 @@ import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Briefcase, MapPin, Clock, ArrowLeft, UploadCloud, Sparkles, Target, AlertCircle, BookOpen, Building2, Globe, Users, AlignLeft, CheckSquare, Gift, DollarSign, ExternalLink, Award } from 'lucide-vue-next'
+import { loadSavedJobIds, toggleSavedJob } from '../../utils/savedJobs'
+import { formatSalaryTrieu, formatExperience } from '../../utils/formatters'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +24,9 @@ const loading = ref(true)
 const submitting = ref(false)
 const cvError = ref('')
 const toast = ref(null)
+
+const salaryLabel = computed(() => formatSalaryTrieu(job.value?.salary_min, job.value?.salary_max))
+const experienceLabel = computed(() => formatExperience(job.value?.level))
 
 const cvFile = ref(null)
 const cvPreviewUrl = ref(null)
@@ -93,7 +98,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  loadSavedJobIds()
+  refreshSavedIds()
   loadMatch()
 })
 
@@ -142,6 +147,11 @@ const submitApplication = async () => {
     return
   }
 
+  if (job.value?.status && job.value.status !== 'open') {
+    toast.value = { type: 'error', message: 'Tin tuyển dụng này đã đóng hoặc tạm dừng, không thể ứng tuyển.' }
+    return
+  }
+
   if (!cvFile.value) {
     toast.value = { type: 'error', message: 'Vui lòng tải lên CV của bạn.' }
     return
@@ -159,61 +169,68 @@ const submitApplication = async () => {
     if (cvPreviewUrl.value) URL.revokeObjectURL(cvPreviewUrl.value)
     cvPreviewUrl.value = null
     setTimeout(() => {
-      router.push(`/careers/${companyId}`)
-    }, 2000)
+      router.push('/my-applications')
+    }, 1500)
   } catch (error) {
-    toast.value = { type: 'error', message: error.message || 'Có lỗi xảy ra khi nộp đơn.' }
+    const msg = String(error?.message || error?.code || '').toLowerCase()
+    if (msg.includes('already applied') || msg.includes('conflict') || error?.code === 'CONFLICT') {
+      toast.value = { type: 'warning', message: 'Bạn đã ứng tuyển vị trí này rồi.' }
+    } else if (msg.includes('not open') || msg.includes('closed')) {
+      toast.value = { type: 'error', message: 'Tin tuyển dụng không còn nhận hồ sơ.' }
+    } else {
+      toast.value = { type: 'error', message: error.message || 'Có lỗi xảy ra khi nộp đơn.' }
+    }
   } finally {
     submitting.value = false
   }
 }
 
 const savedJobIds = ref([])
-const loadSavedJobIds = () => {
-  const list = localStorage.getItem('candidate_saved_jobs')
-  if (list) {
-    try {
-      const parsed = JSON.parse(list)
-      savedJobIds.value = parsed.map(j => j.id)
-    } catch (e) {
-      savedJobIds.value = []
-    }
-  } else {
-    savedJobIds.value = []
-  }
+const refreshSavedIds = () => {
+  savedJobIds.value = loadSavedJobIds()
 }
 
 const toggleSaveJob = () => {
   if (!job.value) return
-  const listStr = localStorage.getItem('candidate_saved_jobs')
-  let list = []
-  if (listStr) {
-    try { list = JSON.parse(listStr) } catch (e) { list = [] }
+  const snapshot = {
+    ...job.value,
+    company_id: companyId,
+    company_name: company.value?.name || job.value.company_name || 'Chưa cập nhật',
   }
-  
-  const isSaved = list.some(item => item.id === job.value.id)
-  if (isSaved) {
-    list = list.filter(item => item.id !== job.value.id)
-    savedJobIds.value = savedJobIds.value.filter(id => id !== job.value.id)
-    toast.value = { type: 'info', message: 'Đã bỏ lưu tin tuyển dụng.' }
-  } else {
-    const newItem = {
-      id: job.value.id,
-      company_id: companyId,
-      title: job.value.title,
-      company_name: company.value?.name || 'Công ty TNHH WeMake',
-      location: job.value.location,
-      salary_min: { Valid: job.value.salary_min != null, Int64: job.value.salary_min || 0 },
-      salary_max: { Valid: job.value.salary_max != null, Int64: job.value.salary_max || 0 },
-      currency: { Valid: true, String: job.value.currency || 'VND' },
-      saved_at: new Date().toISOString()
-    }
-    list.push(newItem)
-    savedJobIds.value.push(job.value.id)
-    toast.value = { type: 'success', message: 'Đã lưu tin tuyển dụng thành công.' }
-  }
-  localStorage.setItem('candidate_saved_jobs', JSON.stringify(list))
+  const { list, saved } = toggleSavedJob(snapshot)
+  savedJobIds.value = list.map((j) => j.id)
+  toast.value = saved
+    ? { type: 'success', message: 'Đã lưu tin tuyển dụng trên thiết bị này.' }
+    : { type: 'info', message: 'Đã bỏ lưu tin tuyển dụng.' }
 }
+
+const showBeginnerGuide = ref(false)
+
+const beginnerSkills = computed(() => {
+  if (!job.value) return []
+  const text = ((job.value.requirements || '') + ' ' + (job.value.description || '')).toLowerCase()
+  const skillMap = [
+    { key: 'javascript', label: 'JavaScript / ES6+', doc: 'Nền tảng lập trình web, xử lý logic phía client' },
+    { key: 'vue', label: 'Vue.js Framework', doc: 'Framework xây dựng giao diện ứng dụng web reactive' },
+    { key: 'react', label: 'React.js', doc: 'Thư viện UI phổ biến xây dựng component-based' },
+    { key: 'node', label: 'Node.js / Express', doc: 'Lập trình Backend bằng JavaScript' },
+    { key: 'go', label: 'Golang (Go)', doc: 'Ngôn ngữ backend hiệu năng cao, microservices' },
+    { key: 'python', label: 'Python / FastAPI / Django', doc: 'Lập trình backend, phân tích dữ liệu & AI' },
+    { key: 'sql', label: 'SQL / PostgreSQL / MySQL', doc: 'Truy vấn và thiết kế cơ sở dữ liệu quan hệ' },
+    { key: 'docker', label: 'Docker & Containerization', doc: 'Đóng gói và triển khai ứng dụng' },
+    { key: 'git', label: 'Git & GitHub/GitLab', doc: 'Quản lý mã nguồn & làm việc nhóm' },
+    { key: 'api', label: 'RESTful API / JSON', doc: 'Giao tiếp dữ liệu giữa Frontend và Backend' },
+    { key: 'css', label: 'CSS3 / Tailwind / Responsive', doc: 'Thiết kế giao diện đẹp và tương thích mobile' },
+  ]
+  const matched = skillMap.filter(item => text.includes(item.key))
+  if (matched.length > 0) return matched
+  // Fallback defaults if no specific keyword found
+  return [
+    { label: 'Kỹ năng chuyên môn ngành ' + (job.value.department || 'IT'), doc: 'Tìm hiểu các khái niệm cơ bản và quy trình làm việc thực tế' },
+    { label: 'Tư duy giải quyết vấn đề (Problem Solving)', doc: 'Cách phân tích bài toán và tìm giải pháp tối ưu' },
+    { label: 'Sử dụng Git & Quy trình làm việc nhóm', doc: 'Quản lý phiên bản mã nguồn và phối hợp làm việc' }
+  ]
+})
 
 const scrollToApply = () => {
   const applySection = document.getElementById('apply-section')
@@ -248,7 +265,7 @@ const scrollToApply = () => {
               <div class="stat-icon text-primary"><DollarSign size="20" /></div>
               <div>
                 <div class="stat-label">Mức lương</div>
-                <div class="stat-value">{{ job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max} ${job.currency}` : 'Thỏa thuận' }}</div>
+                <div class="stat-value text-salary">{{ salaryLabel }}</div>
               </div>
             </div>
             <div class="stat-item">
@@ -261,8 +278,8 @@ const scrollToApply = () => {
             <div class="stat-item">
               <div class="stat-icon text-primary"><Briefcase size="20" /></div>
               <div>
-                <div class="stat-label">Kinh nghiệm / Cấp bậc</div>
-                <div class="stat-value">{{ job.level || 'Nhân viên' }}</div>
+                <div class="stat-label">Kinh nghiệm</div>
+                <div class="stat-value">{{ experienceLabel }}</div>
               </div>
             </div>
           </div>
@@ -364,7 +381,48 @@ const scrollToApply = () => {
 
         <!-- JD Content (TopCV Style) -->
         <Card class="jd-content-card animate-rise" style="animation-delay: 0.15s;">
-          <h2 class="section-heading">Chi tiết tin tuyển dụng</h2>
+          <div class="flex items-center justify-between flex-wrap gap-3 mb-6 pb-4 border-b border-[var(--border)]">
+            <h2 class="section-heading mb-0" style="margin-bottom: 0">Chi tiết tin tuyển dụng</h2>
+            
+            <!-- AI Guide Button for Beginners -->
+            <button 
+              @click="showBeginnerGuide = !showBeginnerGuide" 
+              class="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-full border transition-all cursor-pointer shadow-sm"
+              :class="showBeginnerGuide ? 'bg-primary text-white border-primary' : 'bg-[var(--accent-bg)] text-[var(--accent)] border-[var(--accent)] hover:opacity-90'">
+              <Sparkles :size="16" />
+              <span>{{ showBeginnerGuide ? 'Ẩn Hướng dẫn AI' : '🤖 Người mới chưa hiểu JD? Bấm AI Giải thích & Gợi ý học' }}</span>
+            </button>
+          </div>
+
+          <!-- AI Beginner Explanation & Roadmap Panel -->
+          <div v-if="showBeginnerGuide" class="p-5 mb-6 rounded-xl border border-[var(--accent)]/30 bg-[var(--surface-soft)] space-y-4 animate-fadeIn">
+            <div class="flex items-center gap-2 font-bold text-[var(--accent)] text-base">
+              <BookOpen :size="20" /> Trợ lý AI: Tóm tắt công việc & Hướng dẫn học tập cho người mới
+            </div>
+            
+            <div class="text-sm leading-relaxed text-[var(--text-secondary)]">
+              <p class="mb-2"><strong>💡 Bạn là người mới bắt đầu?</strong> Đừng lo lắng nếu mô tả công việc chứa nhiều thuật ngữ chuyên môn. AI đã phân tích JD này và đúc kết các kỹ năng trọng tâm bạn cần chuẩn bị:</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <div v-for="(item, idx) in beginnerSkills" :key="idx" class="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg flex flex-col justify-between">
+                <div>
+                  <div class="font-bold text-sm text-[var(--text-main)] flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-full bg-[var(--primary-light)] text-[var(--primary)] text-xs flex items-center justify-center font-extrabold">{{ idx + 1 }}</span>
+                    {{ item.label }}
+                  </div>
+                  <div class="text-xs text-[var(--text-secondary)] mt-1.5 leading-snug">{{ item.doc }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-[var(--border)] mt-2">
+              <span class="text-xs text-[var(--text-muted)]">🎯 Hãy tự tin luyện phỏng vấn thử với AI để kiểm tra mức độ sẵn sàng!</span>
+              <button @click="router.push('/mock-setup')" class="text-xs font-bold text-[var(--primary)] hover:underline flex items-center gap-1">
+                Luyện phỏng vấn thử ngay <Sparkles :size="14" />
+              </button>
+            </div>
+          </div>
           
           <div class="jd-block">
             <h3 class="jd-block-title">Mô tả công việc</h3>
@@ -435,8 +493,8 @@ const scrollToApply = () => {
             <div class="gen-info-item">
               <div class="gen-icon"><Award size="18" /></div>
               <div>
-                <div class="gen-label">Cấp bậc</div>
-                <div class="gen-val">{{ job.level || 'Nhân viên' }}</div>
+                <div class="gen-label">Kinh nghiệm</div>
+                <div class="gen-val">{{ experienceLabel }}</div>
               </div>
             </div>
             <div class="gen-info-item">
@@ -598,6 +656,9 @@ const scrollToApply = () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-main);
+}
+.stat-value.text-salary {
+  color: #e11d48;
 }
 .action-buttons {
   display: flex;

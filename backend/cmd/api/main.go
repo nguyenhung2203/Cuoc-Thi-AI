@@ -86,6 +86,7 @@ func main() {
 	interviewRepo := repository.NewInterviewRepository(db)
 	transcriptRepo := repository.NewTranscriptRepository(db)
 	systemSettingsRepo := repository.NewSystemSettingsRepository(db)
+	aiSettingsSvc := service.NewAISettingsServiceFromEnv(systemSettingsRepo)
 	notificationRepo := repository.NewNotificationRepository(redisClient, systemSettingsRepo)
 	reportRepo := repository.NewReportRepository(db)
 	mockRepo := repository.NewMockRepository(db)
@@ -127,7 +128,8 @@ func main() {
 		WithMailer(candidateRepo, mailer, cfg.FrontendURL)
 	suggestionSvc := service.NewSuggestionService(aiOrchestrator, transcriptRepo, interviewRepo, jobRepo)
 	mockSvc := service.NewMockService(mockRepo, aiOrchestrator, promptSvc)
-	aiSvc := service.NewAIService(fileRepo, candidateRepo, cfg.GeminiAPIKey, cfg.UploadDir)
+	aiSvc := service.NewAIService(fileRepo, candidateRepo, aiSettingsSvc, cfg.UploadDir)
+	aiSvc.SetLogService(aiLogSvc)
 	matchCache := service.NewMatchCacheService(redisClient)
 
 	candidatePortalSvc := service.NewCandidatePortalService(candidatePortalRepo, userRepo, candidateRepo, jobRepo, aiSvc, aiOrchestrator, matchCache, notificationRepo, fileSvc)
@@ -140,7 +142,8 @@ func main() {
 	} else {
 		reportSvc.SetEnqueuer(dispatcher.EnqueueGenerateReport)
 		candidatePortalSvc.SetMatchEnqueuer(dispatcher.EnqueueRecomputeMatches)
-		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc, candidatePortalSvc)
+		authSvc.WithOTPEnqueuer(dispatcher)
+		worker := queue.NewWorker(cfg.RedisAddr(), cfg.RedisPassword, redisDB, 10, reportSvc, aiSvc, candidatePortalSvc, mailer, otpSvc)
 		go func() {
 			log.Println("queue: async worker started")
 			if werr := worker.Run(); werr != nil {
@@ -150,7 +153,7 @@ func main() {
 	}
 
 	// 5. Handlers
-	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
+	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc, cfg.CookieSecure)
 	userHandler := handler.NewUserHandler(userSvc, companySvc, auditSvc, cfg.JWTSecret)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)
@@ -176,6 +179,7 @@ func main() {
 
 	systemSettingsSvc := service.NewSystemSettingsService(systemSettingsRepo)
 	systemSettingsHandler := handler.NewSystemSettingsHandler(systemSettingsSvc, auditSvc)
+	aiSettingsHandler := handler.NewAISettingsHandler(aiSettingsSvc, auditSvc, os.Getenv("AI_INTERNAL_SERVICE_TOKEN"))
 
 	// 6. Router
 	r := chi.NewRouter()
@@ -200,9 +204,12 @@ func main() {
 	r.Method(http.MethodGet, "/uploads/*", downloadHandler)
 	r.Method(http.MethodHead, "/uploads/*", downloadHandler)
 
+	// Internal runtime settings are protected by a service token and intentionally
+	// live outside the browser-facing /api/v1 contract.
+	r.Get("/internal/ai-runtime-settings", aiSettingsHandler.GetRuntime)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
-			r.Use(middleware.AuthRateLimitMiddleware)
 			authHandler.Routes(r)
 		})
 
@@ -244,6 +251,8 @@ func main() {
 				r.Get("/logs", auditHandler.ListAllGlobalLogs)
 				r.Get("/settings", systemSettingsHandler.GetSettings)
 				r.Put("/settings", systemSettingsHandler.UpdateSettings)
+				r.Get("/ai-settings", aiSettingsHandler.Get)
+				r.Put("/ai-settings", aiSettingsHandler.Update)
 			})
 			userHandler.Routes(r)
 

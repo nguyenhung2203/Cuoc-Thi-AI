@@ -25,8 +25,8 @@ const settings = reactive({
   maintenance_mode: false,
   max_upload_size_mb: 20,
   default_passing_score: 70,
-  default_ai_model: 'gemini-2.5-flash',
-  default_ai_voice_model: 'gemini-2.0-flash-live-001',
+  default_ai_model: 'gemini-3.1-flash-lite',
+  default_ai_voice_model: 'gemini-2.5-flash-native-audio-latest',
   jwt_token_expiry_hours: 24,
   admin_2fa_required: false,
   notification_ttl_days: 30,
@@ -40,10 +40,18 @@ const settings = reactive({
 // AI Prompt Templates State
 const promptTemplates = ref([])
 const loadingPrompts = ref(false)
+const aiSettings = reactive({
+  text_model: 'gemini-3.1-flash-lite',
+  voice_model: 'gemini-2.5-flash-native-audio-latest',
+  api_key: '',
+  api_key_configured: false,
+  api_key_masked: ''
+})
+const removingApiKey = ref(false)
 const showPromptModal = ref(false)
 const editingPrompt = reactive({
   name: '',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.1-flash-lite',
   content: ''
 })
 
@@ -127,12 +135,67 @@ const saveSettings = async () => {
   }
 }
 
+const fetchAISettings = async () => {
+  try {
+    const res = await apiService.get('/admin/ai-settings')
+    const data = res.data || res || {}
+    aiSettings.text_model = data.text_model || 'gemini-3.1-flash-lite'
+    aiSettings.voice_model = data.voice_model || 'gemini-2.5-flash-native-audio-latest'
+    aiSettings.api_key_configured = Boolean(data.api_key_configured)
+    aiSettings.api_key_masked = data.api_key_masked || ''
+    aiSettings.api_key = ''
+  } catch (err) {
+    console.error('Failed to load AI settings:', err)
+  }
+}
+
+const saveAISettings = async () => {
+  if (saving.value) return
+  const validationError = isOneOf(aiSettings.text_model, ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'], 'Mô hình AI text không hợp lệ.')
+    || isOneOf(aiSettings.voice_model, ['gemini-2.5-flash-native-audio-latest'], 'Mô hình AI voice không hợp lệ.')
+  if (validationError) { errorMessage.value = validationError; return }
+  saving.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const payload = { text_model: aiSettings.text_model, voice_model: aiSettings.voice_model }
+    if (aiSettings.api_key.trim()) payload.api_key = aiSettings.api_key.trim()
+    const res = await apiService.put('/admin/ai-settings', payload)
+    const data = res.data || res || {}
+    aiSettings.api_key = ''
+    aiSettings.api_key_configured = Boolean(data.api_key_configured)
+    aiSettings.api_key_masked = data.api_key_masked || ''
+    settings.default_ai_model = aiSettings.text_model
+    settings.default_ai_voice_model = aiSettings.voice_model
+    successMessage.value = 'Đã lưu cấu hình Gemini an toàn.'
+  } catch (err) {
+    errorMessage.value = 'Lỗi khi lưu cấu hình AI: ' + (err.response?.data?.message || err.message)
+  } finally { saving.value = false }
+}
+
+const removeApiKey = async () => {
+  if (!window.confirm('Xóa Gemini API key đã lưu? Các chức năng AI sẽ ngừng hoạt động nếu không có key từ môi trường.')) return
+  removingApiKey.value = true
+  try {
+    const res = await apiService.put('/admin/ai-settings', { text_model: aiSettings.text_model, voice_model: aiSettings.voice_model, clear_api_key: true })
+    const data = res.data || res || {}
+    aiSettings.api_key_configured = Boolean(data.api_key_configured)
+    aiSettings.api_key_masked = data.api_key_masked || ''
+    aiSettings.api_key = ''
+    successMessage.value = 'Đã xóa Gemini API key.'
+  } catch (err) {
+    errorMessage.value = 'Không thể xóa API key: ' + (err.response?.data?.message || err.message)
+  } finally { removingApiKey.value = false }
+}
+
 const fetchPromptTemplates = async () => {
   loadingPrompts.value = true
   try {
     const res = await apiService.get('/admin/ai-prompts')
-    promptTemplates.value = Array.isArray(res) ? res : (res.data || [])
+    const data = res && typeof res === 'object' ? (res.data ?? res) : []
+    promptTemplates.value = Array.isArray(data) ? data : []
   } catch (err) {
+    promptTemplates.value = []
     console.error('Failed to load AI prompts:', err)
   } finally {
     loadingPrompts.value = false
@@ -141,14 +204,14 @@ const fetchPromptTemplates = async () => {
 
 const openNewPromptModal = () => {
   editingPrompt.name = 'RUBRIC_EVALUATION_V2'
-  editingPrompt.model = settings.default_ai_model || 'gemini-2.5-flash'
+  editingPrompt.model = aiSettings.text_model || 'gemini-3.1-flash-lite'
   editingPrompt.content = 'Bạn là chuyên gia nhân sự AI. Hãy đánh giá câu trả lời sau dựa trên tiêu chí...'
   showPromptModal.value = true
 }
 
 const openEditPromptModal = (tmpl) => {
   editingPrompt.name = tmpl.name
-  editingPrompt.model = tmpl.model || 'gemini-2.5-flash'
+  editingPrompt.model = tmpl.model || aiSettings.text_model || 'gemini-3.1-flash-lite'
   editingPrompt.content = tmpl.content || ''
   showPromptModal.value = true
 }
@@ -161,7 +224,7 @@ const savePromptTemplate = async () => {
     || maxLength(editingPrompt.name, 255, 'Tên prompt không được vượt quá 255 ký tự.')
     || requiredTrim(editingPrompt.content, 'Vui lòng nhập nội dung prompt.')
     || maxLength(editingPrompt.content, 50000, 'Nội dung prompt không được vượt quá 50.000 ký tự.')
-    || isOneOf(editingPrompt.model, ['gemini-2.5-flash', 'gemini-2.0-flash-live-001'], 'Mô hình AI không hợp lệ.')
+    || isOneOf(editingPrompt.model, ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash'], 'Mô hình AI không hợp lệ.')
   if (promptError) {
     errorMessage.value = promptError
     setTimeout(() => { errorMessage.value = '' }, 3000)
@@ -190,6 +253,7 @@ const savePromptTemplate = async () => {
 
 onMounted(() => {
   fetchSettings()
+  fetchAISettings()
   fetchPromptTemplates()
 })
 </script>
@@ -430,18 +494,27 @@ onMounted(() => {
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="md:col-span-2 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)]">
+            <label class="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Key size="14" class="text-[var(--primary)]" /> Gemini API key
+            </label>
+            <input v-model="aiSettings.api_key" type="password" autocomplete="new-password" placeholder="Để trống để giữ key hiện tại" class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" />
+            <p class="text-[11px] text-[var(--text-secondary)] mt-2" v-if="aiSettings.api_key_configured">Đã cấu hình: {{ aiSettings.api_key_masked }}. Key không được hiển thị lại.</p>
+            <p class="text-[11px] text-[var(--text-secondary)] mt-2" v-else>Key được lưu phía máy chủ và không gửi lại trình duyệt.</p>
+            <button v-if="aiSettings.api_key_configured" @click="removeApiKey" :disabled="removingApiKey" type="button" class="mt-3 px-3 py-1.5 text-xs font-bold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50">{{ removingApiKey ? 'Đang xóa...' : 'Xóa API key' }}</button>
+          </div>
           <!-- Text AI Model -->
           <div>
             <label class="block text-xs font-bold text-[var(--text-main)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <FileText size="14" class="text-[var(--primary)]" /> Mô hình AI Phỏng vấn dạng Text
             </label>
             <select 
-              v-model="settings.default_ai_model"
+              v-model="aiSettings.text_model"
               class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm font-semibold text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-all"
             >
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Khuyên dùng - Nhanh, thông minh)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Cao cấp - Lập luận phức tạp)</option>
-              <option value="gpt-4o">OpenAI GPT-4o (Dự phòng)</option>
+              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Khuyên dùng - quota 500 lượt/ngày)</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Dự phòng tiết kiệm)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Chất lượng cao hơn, quota thấp)</option>
             </select>
             <span class="text-[11px] text-[var(--text-secondary)] mt-1.5 block">Sử dụng cho phỏng vấn trực tiếp bằng chữ & chat.</span>
           </div>
@@ -452,12 +525,10 @@ onMounted(() => {
               <Bot size="14" class="text-[var(--primary)]" /> Mô hình AI Phỏng vấn dạng Voice / Live
             </label>
             <select 
-              v-model="settings.default_ai_voice_model"
+              v-model="aiSettings.voice_model"
               class="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm font-semibold text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-all"
             >
-              <option value="gemini-2.0-flash-live-001">Gemini 2.0 Flash Live (Mặc định Real-time Voice)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Thoại chất lượng cao)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Thoại chuyên sâu)</option>
+              <option value="gemini-2.5-flash-native-audio-latest">Gemini 2.5 Flash Native Audio (Khuyên dùng - Live Voice)</option>
             </select>
             <span class="text-[11px] text-[var(--text-secondary)] mt-1.5 block">Sử dụng cho phòng phỏng vấn thử giọng nói real-time (Gemini Live WebSocket).</span>
           </div>
@@ -465,7 +536,7 @@ onMounted(() => {
 
         <div class="flex justify-end pt-2">
           <button 
-            @click="saveSettings" 
+            @click="saveAISettings"
             :disabled="saving"
             class="px-5 py-2.5 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold text-sm rounded-xl shadow-xs transition-all disabled:opacity-50 flex items-center gap-2"
           >
@@ -521,7 +592,7 @@ onMounted(() => {
               <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[var(--success)]/10 text-[var(--success)]">
                 Active
               </span>
-              <span class="text-xs text-[var(--text-secondary)] font-mono">Model: {{ tmpl.model || 'gemini-2.5-flash' }}</span>
+              <span class="text-xs text-[var(--text-secondary)] font-mono">Model: {{ tmpl.model || 'gemini-3.1-flash-lite' }}</span>
             </div>
             <p class="text-xs text-[var(--text-secondary)] font-mono line-clamp-2 bg-[var(--background)] p-3 rounded-xl border border-[var(--border)]">
               {{ tmpl.content }}
@@ -733,9 +804,9 @@ onMounted(() => {
               v-model="editingPrompt.model"
               class="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border)] rounded-xl text-sm font-semibold text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
-              <option value="gemini-2.5-flash" class="text-[var(--primary)]">Gemini 2.5 Flash (Tốc độ tối ưu)</option>
-              <option value="gemini-2.5-pro" class="text-[var(--primary)]">Gemini 2.5 Pro (Độ chính xác cao)</option>
-              <option value="gpt-4o" class="text-[var(--primary)]">OpenAI GPT-4o</option>
+              <option value="gemini-3.1-flash-lite" class="text-[var(--primary)]">Gemini 3.1 Flash Lite</option>
+              <option value="gemini-2.5-flash-lite" class="text-[var(--primary)]">Gemini 2.5 Flash Lite</option>
+              <option value="gemini-2.5-flash" class="text-[var(--primary)]">Gemini 2.5 Flash</option>
             </select>
           </div>
 

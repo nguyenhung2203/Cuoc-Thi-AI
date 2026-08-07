@@ -288,7 +288,7 @@ const handleGoogleLogin = async () => {
         <!-- Footer Link -->
         <div class="pt-2 text-center border-t border-slate-100 dark:border-slate-700/60">
           <p class="text-sm text-slate-500 dark:text-slate-400">
-            Chưa có tài khoản WeMake AI?
+            Chưa có tài khoản ViệcLàm AI?
             <span @click="router.push('/register')" class="text-[var(--primary)] font-bold hover:underline cursor-pointer ml-1">
               Đăng ký tài khoản mới
             </span>
