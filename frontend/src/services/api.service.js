@@ -10,15 +10,48 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 // Lấy Token từ LocalStorage
 const getToken = () => localStorage.getItem('access_token');
+let refreshPromise = null;
+
+const isAuthEndpoint = (endpoint) => endpoint.includes('/auth/login')
+  || endpoint.includes('/auth/register')
+  || endpoint.includes('/auth/refresh');
+
+const clearSessionAndRedirect = () => {
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('user_role');
+  window.location.href = '/login';
+};
+
+const refreshAccessToken = async () => {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'null',
+    })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok || data.success === false || !data.data?.access_token) {
+          throw data.error || { message: 'Phiên đăng nhập đã hết hạn.' };
+        }
+        localStorage.setItem('access_token', data.data.access_token);
+        return data.data.access_token;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+};
 
 // Hàm wrapper chính
 const request = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+  const { skipAuthRefresh = false, ...requestOptions } = options;
+
   // Mặc định Headers
   const headers = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...requestOptions.headers,
   };
 
   // Gắn Token nếu có
@@ -28,12 +61,13 @@ const request = async (endpoint, options = {}) => {
   }
 
   // Xóa Content-Type nếu gửi FormData (trình duyệt tự tính toán boundary)
-  if (options.body instanceof FormData) {
+  if (requestOptions.body instanceof FormData) {
     delete headers['Content-Type'];
   }
 
   const config = {
-    ...options,
+    ...requestOptions,
+    credentials: 'include',
     headers,
   };
 
@@ -67,11 +101,26 @@ const request = async (endpoint, options = {}) => {
         throw data.error || { message: 'Tài khoản đang chờ phê duyệt.' };
       }
 
+      // Access token hết hạn: refresh một lần rồi retry request gốc.
+      if (response.status === 401 && !skipAuthRefresh && !isAuthEndpoint(endpoint)) {
+        try {
+          const newToken = await refreshAccessToken();
+          const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+          const retryResponse = await fetch(url, { ...config, headers: retryHeaders });
+          const retryData = retryResponse.status === 204 ? null : await retryResponse.json();
+          if (!retryResponse.ok || retryData?.success === false) {
+            throw retryData?.error || { message: 'Phiên đăng nhập đã hết hạn.' };
+          }
+          return retryData?.data;
+        } catch (refreshError) {
+          clearSessionAndRedirect();
+          throw refreshError;
+        }
+      }
+
       // Bắt lỗi 401 Unauthorized -> Đẩy về login (trừ khi đang ở API đăng nhập/đăng ký)
       if (response.status === 401 && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        clearSessionAndRedirect();
         return;
       }
 
@@ -148,8 +197,19 @@ export const apiService = {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     
-    const response = await fetch(url, { method: 'GET', headers, ...options });
+    const response = await fetch(url, { method: 'GET', headers, credentials: 'include', ...options });
     const data = await response.json();
+    if (response.status === 401 && !options.skipAuthRefresh && !isAuthEndpoint(endpoint)) {
+      const newToken = await refreshAccessToken();
+      headers.Authorization = `Bearer ${newToken}`;
+      const retryResponse = await fetch(url, { method: 'GET', headers, credentials: 'include', ...options });
+      const retryData = await retryResponse.json();
+      if (!retryResponse.ok || retryData.success === false) {
+        clearSessionAndRedirect();
+        throw retryData.error || { message: 'Phiên đăng nhập đã hết hạn.' };
+      }
+      return retryData;
+    }
     if (!response.ok || data.success === false) throw data.error || { message: 'Lỗi' };
     return data; // Returns { success, data, meta }
   },

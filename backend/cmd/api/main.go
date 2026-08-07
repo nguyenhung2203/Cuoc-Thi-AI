@@ -153,7 +153,7 @@ func main() {
 	}
 
 	// 5. Handlers
-	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc)
+	authHandler := handler.NewAuthHandler(authSvc, cfg.JWTSecret, auditSvc, cfg.CookieSecure)
 	userHandler := handler.NewUserHandler(userSvc, companySvc, auditSvc, cfg.JWTSecret)
 	companyHandler := handler.NewCompanyHandler(companySvc)
 	jobHandler := handler.NewJobHandler(jobSvc)

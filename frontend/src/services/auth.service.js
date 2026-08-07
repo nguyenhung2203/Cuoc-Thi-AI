@@ -8,7 +8,7 @@ export const authService = {
   /**
    * Đăng nhập
    * @param {Object} credentials - { email, password }
-   * @returns {Promise<Object>} { user, access_token, refresh_token }
+   * @returns {Promise<Object>} { user, access_token }; refresh token is an HttpOnly cookie
    */
   login: (credentials) => {
     return apiService.post('/auth/login', credentials);
@@ -17,7 +17,7 @@ export const authService = {
   /**
    * Đăng ký (payload cần kèm otp đã xác thực qua email)
    * @param {Object} payload - { email, password, full_name, role, otp }
-   * @returns {Promise<Object>} { user, access_token, refresh_token }
+   * @returns {Promise<Object>} { user, access_token }; refresh token is an HttpOnly cookie
    */
   register: (payload) => {
     return apiService.post('/auth/register', payload);
@@ -72,12 +72,12 @@ export const authService = {
   },
 
   /**
-   * Đăng xuất (Revoke token trên server)
-   * @returns {Promise<void>}
+   * Làm mới access token bằng HttpOnly refresh-token cookie.
    */
-  logout: () => {
-    return apiService.post('/auth/logout');
+  refresh: () => {
+    return apiService.post('/auth/refresh', null, { skipAuthRefresh: true });
   },
+
 
   /**
    * Cập nhật thông tin profile user

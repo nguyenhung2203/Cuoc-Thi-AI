@@ -62,9 +62,7 @@ export const authStore = reactive({
       
       // Lưu token
       localStorage.setItem('access_token', data.access_token);
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token);
-      }
+      // Refresh token được trình duyệt giữ trong HttpOnly cookie.
       
       this.user = data.user;
       
@@ -125,7 +123,6 @@ export const authStore = reactive({
     } finally {
       // Dù API thành công hay lỗi, vẫn xóa ở client
       localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user_role');
       this.user = null;
       this.isAuthenticated = false;
@@ -155,9 +152,7 @@ export const authStore = reactive({
       });
 
       localStorage.setItem('access_token', data.access_token);
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token);
-      }
+      // Refresh token được trình duyệt giữ trong HttpOnly cookie.
 
       this.user = data.user;
       this.isAuthenticated = true;
