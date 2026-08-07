@@ -62,7 +62,7 @@ const profile = ref({
   skills: '',
   avatar_url: '',
   bio: '',
-})
+  interviewScore: null,
 
 const newSkill = ref('')
 const addSkill = () => {
@@ -440,6 +440,7 @@ onMounted(async () => {
     if (res) {
       if (res.full_name) profile.value.name = res.full_name
       if (res.email) profile.value.email = res.email
+      if (res.interview_score) profile.value.interviewScore = res.interview_score
       if (res.cv_url && res.cv_name) {
         const parseStatus = res.cv_parse_status || (res.parsed_data ? 'ready' : 'pending')
         const uiStatus = res.parsed_data || parseStatus === 'ready'
@@ -701,6 +702,21 @@ const confirmDeleteAccount = async () => {
         <div v-if="activeTab === 'profile'" class="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <!-- Left Sub-column: Personal Info Form -->
           <div class="xl:col-span-7 space-y-6">
+            <Card v-if="profile.interviewScore" class="pf-card border-[var(--accent)]/30">
+              <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="pf-sub-title mb-1">Kết quả phỏng vấn AI</h3>
+                    <p class="text-xs text-[var(--text-secondary)]">Điểm tổng hợp từ buổi phỏng vấn gần nhất</p>
+                  </div>
+                  <strong class="text-3xl text-[var(--accent)]">{{ Number(profile.interviewScore.final_score || 0).toFixed(1) }}/10</strong>
+                </div>
+                <p v-if="profile.interviewScore.summary" class="text-sm text-[var(--text-secondary)]">{{ profile.interviewScore.summary }}</p>
+                <div v-if="profile.interviewScore.strengths?.length" class="text-sm"><b>Điểm mạnh:</b> {{ profile.interviewScore.strengths.join(' • ') }}</div>
+                <div v-if="profile.interviewScore.weaknesses?.length" class="text-sm"><b>Cần cải thiện:</b> {{ profile.interviewScore.weaknesses.join(' • ') }}</div>
+                <div v-if="profile.interviewScore.advice?.length" class="text-sm"><b>Gợi ý:</b> {{ profile.interviewScore.advice.join(' • ') }}</div>
+              </div>
+            </Card>
             <Card class="pf-card">
               <div class="p-6">
                 <form @submit.prevent="handleSaveProfile" class="space-y-6">

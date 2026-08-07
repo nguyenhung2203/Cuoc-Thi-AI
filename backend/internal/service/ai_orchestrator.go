@@ -233,15 +233,27 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 }
 
 type AIScoreData struct {
-	Score     float64 `json:"score"`
-	AIComment string  `json:"ai_comment"`
+	Score             float64  `json:"score"`
+	AIComment         string   `json:"ai_comment"`
+	Communication     float64  `json:"communication"`
+	Tone              float64  `json:"tone"`
+	Personality       float64  `json:"personality"`
+	Strengths         []string `json:"strengths"`
+	Weaknesses        []string `json:"weaknesses"`
+	ImprovementAdvice []string `json:"improvement_advice"`
 }
 
 type ScoreResult struct {
-	Score      float64
-	Evidence   string
-	AIComment  string
-	Confidence float64
+	Score             float64
+	Evidence          string
+	AIComment         string
+	Confidence        float64
+	Communication     float64
+	Tone              float64
+	Personality       float64
+	Strengths         []string
+	Weaknesses        []string
+	ImprovementAdvice []string
 }
 
 // ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
@@ -267,10 +279,16 @@ func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID strin
 	}
 
 	return &ScoreResult{
-		Score:      scoreData.Score,
-		AIComment:  scoreData.AIComment,
-		Evidence:   fullResp.Evidence,
-		Confidence: fullResp.Confidence,
+		Score:             scoreData.Score,
+		AIComment:         scoreData.AIComment,
+		Evidence:          fullResp.Evidence,
+		Confidence:        fullResp.Confidence,
+		Communication:     scoreData.Communication,
+		Tone:              scoreData.Tone,
+		Personality:       scoreData.Personality,
+		Strengths:         scoreData.Strengths,
+		Weaknesses:        scoreData.Weaknesses,
+		ImprovementAdvice: scoreData.ImprovementAdvice,
 	}, nil
 }
 

@@ -165,6 +165,9 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 			profile.ParsedData = parsed
 		}
 	}
+	if score, err := s.repo.GetLatestInterviewScore(ctx, userID); err == nil {
+		profile.InterviewScore = score
+	}
 
 	return profile, nil
 }
