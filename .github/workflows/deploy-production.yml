@@ -42,14 +42,24 @@ jobs:
             git checkout main
             git reset --hard origin/main
 
+            if [ ! -f .env.production ]; then
+              echo ".env.production is missing"
+              exit 1
+            fi
+
             docker compose --env-file .env.production \
               -f docker-compose.prod.yml config
+
+            docker compose --env-file .env.production \
+              -f docker-compose.prod.yml rm -f -s migrate || true
 
             docker compose --env-file .env.production \
               -f docker-compose.prod.yml up -d --build --remove-orphans
 
             docker compose --env-file .env.production \
               -f docker-compose.prod.yml ps
+
+            sleep 10
 
             curl -fsS https://vieclamai.top/health
 

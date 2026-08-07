@@ -135,7 +135,8 @@ func TestAiPromptTemplate_Defaults(t *testing.T) {
 func TestAuditLog_NullHandling(t *testing.T) {
 	log := AuditLog{
 		ID:     "log-1",
-		Action: "test.action",
+		ActorUserID: sql.NullString{},
+		CompanyID:    sql.NullString{},
 	}
 	// Null strings should have Valid=false by default
 	if log.ActorUserID.Valid {

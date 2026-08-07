@@ -35,6 +35,13 @@ def validate_questions(data, request) -> QuestionGenerationResponse:
     questions = []
     scope_phrases, scope_tokens = _scope_tokens(request)
     degraded = False
+    seen_questions = set()
+    previous_questions = {
+        re.sub(r"\s+", " ", question.strip().lower())
+        for question in request.previous_questions
+        if question.strip()
+    }
+    require_skill = bool(scope_tokens)
     raw_questions = data["questions"]
     if len(raw_questions) > request.question_count:
         warnings.append("question_count_truncated")
@@ -51,8 +58,18 @@ def validate_questions(data, request) -> QuestionGenerationResponse:
             warnings.append(f"question_{index}_invalid_schema")
             degraded = True
             continue
+        normalized_question = re.sub(r"\s+", " ", item.question_text.strip().lower())
+        if normalized_question in seen_questions or normalized_question in previous_questions:
+            warnings.append(f"question_{index}_duplicate")
+            degraded = True
+            continue
+        seen_questions.add(normalized_question)
         if item.difficulty not in LEVEL_DIFFICULTIES[request.level]:
             warnings.append(f"question_{index}_difficulty_mismatch")
+            degraded = True
+            continue
+        if require_skill and not item.skill_tags:
+            warnings.append(f"question_{index}_missing_skill_tags")
             degraded = True
             continue
         if scope_tokens and item.skill_tags and not any(

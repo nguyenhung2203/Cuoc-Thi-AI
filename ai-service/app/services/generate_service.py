@@ -1,6 +1,7 @@
 import logging
+import time
 
-from app.llm.base import BaseLLMClient
+from app.llm.base import BaseLLMClient, LLMError
 from app.llm.gemini_client import GeminiClient
 from app.llm.response_parser import ResponseParser
 from app.models.generate_models import GenerateRequest, GenerateResponse
@@ -19,13 +20,25 @@ class GenerateService:
         self._client = client or GeminiClient()
         self._parser = ResponseParser()
 
+    def _generate_with_retry(self, req: QuestionGenerationRequest):
+        last_error = None
+        for attempt in range(2):
+            try:
+                return self._client.generate(
+                    prompt=build_prompt(req),
+                    model=req.model,
+                    temperature=req.temperature,
+                    max_tokens=req.max_tokens,
+                )
+            except LLMError as error:
+                last_error = error
+                if not error.retryable or attempt == 1:
+                    raise
+                time.sleep(0.2)
+        raise last_error
+
     def generate_questions(self, req: QuestionGenerationRequest) -> QuestionGenerationResponse:
-        result = self._client.generate(
-            prompt=build_prompt(req),
-            model=req.model,
-            temperature=req.temperature,
-            max_tokens=req.max_tokens,
-        )
+        result = self._generate_with_retry(req)
         try:
             data = self._parser.parse_json(result.text)
             return validate_questions(data, req)

@@ -6,18 +6,18 @@ from app.utils.level_mapping import normalize_level, normalize_mode
 
 
 class QuestionGenerationRequest(BaseModel):
-    job_title: str = Field(..., min_length=1)
-    job_description: str = ""
-    requirements: list[str] = Field(default_factory=list)
+    job_title: str = Field(..., min_length=1, max_length=200)
+    job_description: str = Field(default="", max_length=12000)
+    requirements: list[str] = Field(default_factory=list, max_length=50)
     level: str = "unknown"
     mode: str = "real"
-    language: str = "vi"
-    skill_tags: list[str] = Field(default_factory=list)
+    language: str = Field(default="vi", min_length=2, max_length=20)
+    skill_tags: list[str] = Field(default_factory=list, max_length=50)
     rubric: dict[str, Any] = Field(default_factory=dict)
     question_count: int = Field(default=5, ge=1, le=20)
-    previous_questions: list[str] = Field(default_factory=list)
-    recent_answer: str = ""
-    model: str = ""
+    previous_questions: list[str] = Field(default_factory=list, max_length=50)
+    recent_answer: str = Field(default="", max_length=12000)
+    model: str = Field(default="", max_length=100)
     temperature: float = Field(default=0.2, ge=0, le=2)
     max_tokens: int = Field(default=4096, ge=1, le=32768)
 
