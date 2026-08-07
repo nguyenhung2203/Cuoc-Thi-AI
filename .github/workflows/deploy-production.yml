@@ -32,12 +32,14 @@ jobs:
             APP_DIR="/home/deploy/CuocThiAI"
 
             if [ ! -d "$APP_DIR/.git" ]; then
-              echo "Application source does not exist: $APP_DIR"
-              exit 1
+              echo "Application directory does not exist. Cloning repo..."
+              mkdir -p /home/deploy
+              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$APP_DIR"
             fi
 
             cd "$APP_DIR"
 
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch origin main
             git checkout main
             git reset --hard origin/main
