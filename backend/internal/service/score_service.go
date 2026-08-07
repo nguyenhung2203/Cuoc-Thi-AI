@@ -141,8 +141,10 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 			scoreVal = sql.NullFloat64{Valid: false}
 			weightedScoreVal = sql.NullFloat64{Valid: false}
 		} else {
-			weightedScore := (result.Score / float64(criterion.MaxScore)) * criterion.Weight
-			scoreVal = sql.NullFloat64{Float64: result.Score, Valid: true}
+
+			blended := result.Score*0.70 + ((result.Communication+result.Tone+result.Personality)/3)*0.30
+			weightedScore := (blended / float64(criterion.MaxScore)) * criterion.Weight
+			scoreVal = sql.NullFloat64{Float64: blended, Valid: true}
 			weightedScoreVal = sql.NullFloat64{Float64: weightedScore, Valid: true}
 		}
 
