@@ -5,7 +5,7 @@ export const usePlatformStore = defineStore('platform', () => {
   const brandName = ref(localStorage.getItem('platform_brand_name') || 'ViệcLàm')
   const brandBadge = ref(localStorage.getItem('platform_brand_badge') || 'AI')
   const brandSlogan = ref(localStorage.getItem('platform_brand_slogan') || 'Nền tảng Phỏng vấn & Tuyển dụng Thông minh')
-  const brandLogoUrl = ref(localStorage.getItem('platform_brand_logo_url') || '')
+  const brandLogoUrl = ref(localStorage.getItem('platform_brand_logo_url') || '/images/logo.png')
   const supportEmail = ref(localStorage.getItem('platform_support_email') || 'support@vieclam.ai')
   const systemName = ref(localStorage.getItem('platform_system_name') || 'ViệcLàm AI Recruitment')
 
