@@ -62,16 +62,31 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 	}
 }
 
-// RequireAdmin middleware ensures the authenticated user has the 'admin' role.
-// Must be used after AuthMiddleware.
-func RequireAdmin(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID, _ := r.Context().Value(CtxRequestID).(string)
-		role, ok := r.Context().Value(CtxUserRole).(string)
-		if !ok || role != "admin" {
-			response.Error(w, apierrors.NewForbidden("admin access required"), requestID)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+// RoleMiddleware restricts access to the specified roles.
+func RoleMiddleware(roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID, _ := r.Context().Value(CtxRequestID).(string)
+			userRole, ok := r.Context().Value(CtxUserRole).(string)
+			if !ok {
+				response.Error(w, apierrors.NewForbidden("missing user role in context"), requestID)
+				return
+			}
+
+			allowed := false
+			for _, role := range roles {
+				if userRole == role {
+					allowed = true
+					break
+				}
+			}
+
+			if !allowed {
+				response.Error(w, apierrors.NewForbidden("insufficient permissions to access this resource"), requestID)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }

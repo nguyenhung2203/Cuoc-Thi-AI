@@ -1,113 +1,339 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { Search, UserX, UserCheck, Shield } from 'lucide-vue-next'
+import { ref, onMounted, computed, watch } from 'vue'
 import Card from '../../components/common/AppCard.vue'
-import Button from '../../components/common/AppButton.vue'
-import Input from '../../components/common/AppInput.vue'
-import Badge from '../../components/common/AppBadge.vue'
 import { apiService } from '../../services/api.service'
+import { fileService } from '../../services/file.service'
+import { Users, Search, CheckCircle2, XCircle, Shield, FileText, Clock, RefreshCw, Filter, UserCheck } from 'lucide-vue-next'
+import { isOneOf, isValidId, maxLength, normalizeText } from '../../utils/validators.js'
 
 const users = ref([])
-const loading = ref(true)
+const loading = ref(false)
+const approving = ref(null)
+const activeTab = ref('pending')
 const searchQuery = ref('')
+const roleFilter = ref('all')
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const totalPages = ref(0)
+const counts = ref({ pending: 0, all: 0 })
+let searchTimer
+
+const displayedUsers = computed(() => users.value)
 
 const fetchUsers = async () => {
   loading.value = true
   try {
-    const res = await apiService.get('/admin/users')
-    users.value = Array.isArray(res) ? res : (res.data || [])
+    const params = new URLSearchParams({ page: String(currentPage.value), page_size: String(pageSize.value) })
+    if (searchQuery.value.trim()) params.set('search', searchQuery.value.trim())
+    if (activeTab.value === 'all' && roleFilter.value !== 'all') params.set('role', roleFilter.value)
+    const endpoint = activeTab.value === 'pending' ? '/admin/users/pending' : '/admin/users'
+    const envelope = await apiService.getWithMeta(`${endpoint}?${params}`)
+    const payload = envelope.data || {}
+    users.value = Array.isArray(payload) ? payload : (payload.users || [])
+    total.value = envelope.meta?.total ?? users.value.length
+    totalPages.value = envelope.meta?.total_pages ?? (total.value ? Math.ceil(total.value / pageSize.value) : 0)
+    if (payload.counts) counts.value = payload.counts
   } catch (error) {
-    console.error('Failed to load users:', error)
+    console.error('Failed to fetch users', error)
+    users.value = []
+  } finally { loading.value = false }
+}
+
+const changeTab = (tab) => { activeTab.value = tab; currentPage.value = 1 }
+const changePage = (page) => { if (page >= 1 && page <= totalPages.value) { currentPage.value = page; fetchUsers() } }
+watch([activeTab, roleFilter], () => { currentPage.value = 1; fetchUsers() })
+watch(searchQuery, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { currentPage.value = 1; fetchUsers() }, 300) })
+
+const openingFile = ref(null)
+
+const viewFile = async (fileId) => {
+  if (!fileId) return
+  openingFile.value = fileId
+  try {
+    const res = await fileService.getDownloadUrl(fileId)
+    const url = res?.url
+    if (url) {
+      window.open(url, '_blank', 'noopener')
+    } else {
+      alert('Không lấy được đường dẫn file.')
+    }
+  } catch (error) {
+    console.error('Failed to get file signed url', error)
+    alert('Lỗi mở file: ' + (error.message || error))
   } finally {
-    loading.value = false
+    openingFile.value = null
   }
+}
+
+const approveUser = async (userId) => {
+  if (!isValidId(userId) || approving.value) return
+  if (!confirm('Bạn có chắc chắn muốn phê duyệt nhà tuyển dụng này? Họ sẽ có thể đăng tin tuyển dụng ngay lập tức.')) return
+  
+  approving.value = userId
+  try {
+    await apiService.put(`/admin/users/${userId}/approve`)
+    await fetchUsers()
+    alert('Đã phê duyệt tài khoản thành công!')
+  } catch (error) {
+    console.error('Failed to approve user', error)
+    alert('Lỗi phê duyệt: ' + (error.response?.data?.message || error.message || error))
+  } finally {
+    approving.value = null
+  }
+}
+
+const toggleUserStatus = async (user) => {
+  if (!isValidId(user?.id) || approving.value) return
+  if (isOneOf(user.role, ['candidate', 'recruiter', 'admin'], 'Vai trò người dùng không hợp lệ.')) return
+  if (isOneOf(user.status, ['active', 'blocked', 'inactive'], 'Trạng thái người dùng không hợp lệ.')) return
+  const newStatus = user.status === 'active' ? 'blocked' : 'active'
+  const actionText = newStatus === 'blocked' ? 'khóa' : 'mở khóa'
+  if (!confirm(`Bạn có chắc chắn muốn ${actionText} tài khoản của ${user.full_name || user.email}?`)) return
+  
+  try {
+    await apiService.put(`/admin/users/${user.id}/status`, { status: newStatus })
+    await fetchUsers()
+    alert(`Đã ${actionText} tài khoản thành công!`)
+  } catch (error) {
+    console.error('Failed to update user status', error)
+    alert(`Lỗi khi ${actionText} tài khoản: ` + (error.response?.data?.message || error.message || error))
+  }
+}
+
+const formatDate = (isoStr) => {
+  if (!isoStr) return '—'
+  return new Date(isoStr).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 onMounted(() => {
   fetchUsers()
 })
-
-const handleToggleStatus = async (user) => {
-  if (!confirm(`Bạn có chắc muốn ${user.is_active ? 'khoá' : 'kích hoạt'} tài khoản này?`)) return
-  try {
-    await apiService.put(`/admin/users/${user.id}/status`, { is_active: !user.is_active })
-    user.is_active = !user.is_active
-  } catch (error) {
-    console.error('Failed to update status:', error)
-  }
-}
-
-const handleToggleRole = async (user) => {
-  if (!confirm(`Bạn có chắc muốn đổi quyền của tài khoản này thành ${user.role === 'admin' ? 'người dùng' : 'Admin'}?`)) return
-  try {
-    const newRole = user.role === 'admin' ? 'candidate' : 'admin'
-    await apiService.put(`/admin/users/${user.id}/role`, { role: newRole })
-    user.role = newRole
-  } catch (error) {
-    console.error('Failed to update role:', error)
-  }
-}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex justify-between items-center">
+  <div class="space-y-6 animate-fade-in">
+    <!-- Page Header -->
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm border border-[var(--border)]">
       <div>
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Người dùng</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">Quản lý toàn bộ tài khoản trên hệ thống.</p>
+        <h1 class="text-h1 flex items-center gap-2.5">
+          <Users size="26" class="text-[var(--primary)]" />
+          Quản lý Tài khoản & Người dùng
+        </h1>
+        <p class="text-[var(--text-secondary)] text-sm mt-1">
+          Xét duyệt giấy phép nhà tuyển dụng, phân quyền và quản lý trạng thái hoạt động của toàn bộ user.
+        </p>
       </div>
-    </div>
+      <button 
+        @click="fetchUsers" 
+        :disabled="loading"
+        class="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--surface-soft)] hover:bg-[var(--border)] text-[var(--text-main)] rounded-xl font-semibold text-sm transition-colors shrink-0 disabled:opacity-50"
+      >
+        <RefreshCw size="16" :class="{ 'animate-spin': loading }" /> Làm mới danh sách
+      </button>
+    </Card>
 
-    <Card class="p-6">
-      <div class="flex gap-4 mb-6">
-        <div class="relative w-72">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size="18" />
-          <Input v-model="searchQuery" placeholder="Tìm tên, email..." class="pl-10 w-full" />
+    <!-- Filters Bar & Tabs -->
+    <Card class="p-4 rounded-2xl shadow-sm border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <!-- Tabs -->
+      <div class="flex items-center gap-2 bg-[var(--surface)] p-1.5 rounded-xl border border-[var(--border)]">
+        <button 
+          @click="changeTab('pending')"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
+          :class="activeTab === 'pending' ? 'bg-[var(--background)] text-[var(--primary)] shadow-xs border border-[var(--border)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'"
+        >
+          <Clock size="16" />
+          <span>Chờ duyệt</span>
+          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'pending' ? 'bg-[var(--primary-light)] text-[var(--primary)]' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)]'">
+            {{ counts.pending }}
+          </span>
+        </button>
+
+        <button 
+          @click="changeTab('all')"
+          class="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm transition-all"
+          :class="activeTab === 'all' ? 'bg-[var(--background)] text-[var(--primary)] shadow-xs border border-[var(--border)]' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'"
+        >
+          <Users size="16" />
+          <span>Tất cả thành viên</span>
+          <span class="px-2 py-0.5 rounded-full text-[11px]" :class="activeTab === 'all' ? 'bg-[var(--primary-light)] text-[var(--primary)]' : 'bg-[var(--surface-soft)] text-[var(--text-secondary)]'">
+            {{ counts.all }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Search and Role filter -->
+      <div class="flex items-center gap-3">
+        <div class="relative flex-1 sm:w-64">
+          <Search size="16" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+          <input 
+            type="text" 
+            v-model="searchQuery"
+            placeholder="Tìm theo tên, email..." 
+            class="w-full pl-9 pr-4 py-2 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-all"
+          />
         </div>
+
+        <select 
+          v-if="activeTab === 'all'"
+          v-model="roleFilter"
+          class="px-3.5 py-2 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] font-medium"
+        >
+          <option value="all">Tất cả vai trò</option>
+          <option value="recruiter">Nhà tuyển dụng</option>
+          <option value="candidate">Ứng viên</option>
+          <option value="admin">Quản trị viên</option>
+        </select>
+      </div>
+    </Card>
+
+    <!-- Data Table Card -->
+    <Card class="rounded-2xl shadow-sm border border-[var(--border)] overflow-hidden">
+      <!-- Loading Skeleton -->
+      <div v-if="loading" class="p-12 text-center space-y-4">
+        <div class="inline-block w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-[var(--text-secondary)] text-sm font-medium">Đang tải danh sách người dùng...</p>
       </div>
 
-      <div v-if="loading" class="flex justify-center p-12">
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-      </div>
-
-      <div v-else-if="users.length === 0" class="text-center p-12 text-slate-500">
-        Không tìm thấy người dùng nào.
-      </div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
+      <!-- Table View -->
+      <div v-else-if="displayedUsers.length > 0" class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="border-b border-slate-200 dark:border-slate-700 text-slate-500 font-medium">
-              <th class="pb-3 pl-4">Họ và tên</th>
-              <th class="pb-3">Email</th>
-              <th class="pb-3">Quyền</th>
-              <th class="pb-3">Trạng thái</th>
-              <th class="pb-3 text-right pr-4">Hành động</th>
+            <tr class="bg-[var(--surface)] border-b border-[var(--border)] text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+              <th class="py-4 px-6">Thành viên</th>
+              <th class="py-4 px-6">Vai trò</th>
+              <th class="py-4 px-6">Trạng thái</th>
+              <th class="py-4 px-6">Ngày tham gia</th>
+              <th v-if="activeTab === 'pending'" class="py-4 px-6">Giấy tờ xác thực</th>
+              <th class="py-4 px-6 text-right">Thao tác</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="user in users" :key="user.id" class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-              <td class="py-4 pl-4 font-medium text-slate-800 dark:text-slate-200">{{ user.full_name }}</td>
-              <td class="py-4 text-slate-600 dark:text-slate-400">{{ user.email }}</td>
-              <td class="py-4">
-                <Badge :variant="user.role === 'admin' ? 'primary' : 'secondary'">{{ user.role }}</Badge>
+          <tbody class="divide-y divide-[var(--border)] text-sm">
+            <tr 
+              v-for="user in displayedUsers" 
+              :key="user.id" 
+              class="hover:bg-[var(--surface)]/50 transition-colors group"
+            >
+              <!-- Name & Avatar -->
+              <td class="py-4 px-6">
+                <div class="flex items-center gap-3.5">
+                  <div class="w-10 h-10 rounded-full bg-[var(--primary)] text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                    {{ user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U' }}
+                  </div>
+                  <div>
+                    <div class="font-bold text-[var(--text-main)] group-hover:text-[var(--primary-hover)] transition-colors">
+                      {{ user.full_name || 'Chưa đặt tên' }}
+                    </div>
+                    <div class="text-xs text-[var(--text-secondary)] mt-0.5">{{ user.email }}</div>
+                  </div>
+                </div>
               </td>
-              <td class="py-4">
-                <Badge :variant="user.is_active ? 'success' : 'danger'">
-                  {{ user.is_active ? 'Hoạt động' : 'Đã khoá' }}
-                </Badge>
+
+              <!-- Role -->
+              <td class="py-4 px-6">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide"
+                  :class="{
+                    'bg-[var(--primary-light)] text-[var(--primary)] border border-blue-200/40': user.role === 'recruiter' || user.role === 'candidate',
+                    'bg-[var(--highlight-bg)] text-[var(--highlight-hover)] border border-[var(--highlight)]/20': user.role === 'admin'
+                  }">
+                  <Shield v-if="user.role === 'admin'" size="13" />
+                  <Users v-else size="13" />
+                  {{ user.role === 'recruiter' ? 'Nhà tuyển dụng' : (user.role === 'candidate' ? 'Ứng viên' : 'Quản trị viên') }}
+                </span>
               </td>
-              <td class="py-4 pr-4 flex justify-end gap-2">
-                <Button variant="outline" size="sm" @click="handleToggleRole(user)" :title="user.role === 'admin' ? 'Hủy Admin' : 'Cấp Admin'">
-                  <Shield size="16" />
-                </Button>
-                <Button :variant="user.is_active ? 'danger' : 'success'" size="sm" @click="handleToggleStatus(user)" :title="user.is_active ? 'Khoá tài khoản' : 'Mở khoá'">
-                  <component :is="user.is_active ? UserX : UserCheck" size="16" />
-                </Button>
+
+              <!-- Status -->
+              <td class="py-4 px-6">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                  :class="{
+                    'bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/20': user.status === 'active',
+                    'bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/20': user.status === 'pending',
+                    'bg-[var(--danger)]/10 text-[var(--danger)] border border-[var(--danger)]/20': user.status === 'blocked' || user.status === 'inactive'
+                  }">
+                  <span class="w-1.5 h-1.5 rounded-full animate-pulse" :class="{
+                    'bg-[var(--success)]': user.status === 'active',
+                    'bg-[var(--warning)]': user.status === 'pending',
+                    'bg-[var(--danger)]': user.status === 'blocked' || user.status === 'inactive'
+                  }"></span>
+                  {{ user.status === 'active' ? 'Hoạt động' : (user.status === 'pending' ? 'Chờ duyệt' : 'Đã khóa') }}
+                </span>
+              </td>
+
+              <!-- Date -->
+              <td class="py-4 px-6 text-[var(--text-secondary)] text-xs">
+                {{ formatDate(user.created_at) }}
+              </td>
+
+              <!-- Verification File -->
+              <td v-if="activeTab === 'pending'" class="py-4 px-6">
+                <button
+                  v-if="user.verification_file_id"
+                  :disabled="openingFile === user.verification_file_id"
+                  @click="viewFile(user.verification_file_id)"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--primary-light)] text-[var(--primary)] hover:bg-[var(--primary-light)]/80 rounded-lg text-xs font-semibold transition-colors border border-blue-200/40 disabled:opacity-50"
+                >
+                  <FileText size="14" /> {{ openingFile === user.verification_file_id ? 'Đang mở...' : 'Xem giấy phép' }}
+                </button>
+                <span v-else class="inline-flex items-center gap-1 text-[var(--text-secondary)] italic text-xs">
+                  <Clock size="14" /> Chưa tải file
+                </span>
+              </td>
+
+              <!-- Actions -->
+              <td class="py-4 px-6 text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <button 
+                    v-if="user.status === 'pending'"
+                    @click="approveUser(user.id)" 
+                    :disabled="approving === user.id"
+                    class="px-3.5 py-2 bg-[var(--success)] hover:bg-[var(--success)]/90 text-white font-bold text-xs rounded-xl shadow-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 size="14" />
+                    {{ approving === user.id ? 'Đang duyệt...' : 'Phê duyệt' }}
+                  </button>
+
+                  <button 
+                    v-if="user.status === 'active' && user.role !== 'admin'" 
+                    @click="toggleUserStatus(user)"
+                    class="px-3 py-1.5 border border-[var(--border)] hover:bg-[var(--danger)]/15 hover:text-[var(--danger)] hover:border-[var(--danger)]/20 rounded-xl text-[var(--text-secondary)] font-medium text-xs transition-colors"
+                  >
+                    Khóa tài khoản
+                  </button>
+
+                  <button 
+                    v-if="(user.status === 'blocked' || user.status === 'inactive') && user.role !== 'admin'" 
+                    @click="toggleUserStatus(user)"
+                    class="px-3 py-1.5 border border-[var(--success)]/20 hover:bg-[var(--success)]/15 hover:text-[var(--success)] hover:border-[var(--success)]/25 rounded-xl text-[var(--text-secondary)] font-medium text-xs transition-colors"
+                  >
+                    Mở khóa
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else class="p-16 text-center">
+        <div class="w-16 h-16 bg-[var(--surface)] rounded-full flex items-center justify-center mx-auto mb-4 text-[var(--text-secondary)]">
+          <UserCheck size="32" />
+        </div>
+        <h3 class="font-bold text-[var(--text-main)] text-base">Không tìm thấy người dùng nào</h3>
+        <p class="text-[var(--text-secondary)] text-sm mt-1">
+          {{ activeTab === 'pending' ? 'Tất cả các nhà tuyển dụng đăng ký mới đã được xét duyệt xong!' : 'Chưa có tài khoản nào khớp với từ khóa tìm kiếm của bạn.' }}
+        </p>
+      </div>
+
+      <div v-if="!loading && total > 0" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-[var(--border)]">
+        <span class="text-sm text-[var(--text-secondary)]">Tổng {{ total }} người dùng · Trang {{ currentPage }}/{{ totalPages }}</span>
+        <div class="flex items-center gap-2">
+          <select v-model.number="pageSize" @change="currentPage = 1; fetchUsers()" class="px-3 py-2 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg">
+            <option :value="20">20 / trang</option><option :value="50">50 / trang</option><option :value="100">100 / trang</option>
+          </select>
+          <button @click="changePage(currentPage - 1)" :disabled="currentPage <= 1" class="px-3 py-2 text-sm border border-[var(--border)] rounded-lg disabled:opacity-40">Trước</button>
+          <button @click="changePage(currentPage + 1)" :disabled="currentPage >= totalPages" class="px-3 py-2 text-sm border border-[var(--border)] rounded-lg disabled:opacity-40">Sau</button>
+        </div>
       </div>
     </Card>
   </div>

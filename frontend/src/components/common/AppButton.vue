@@ -27,7 +27,7 @@ defineProps({
   font-family: var(--sans);
   font-size: 14px;
   font-weight: 600;
-  border-radius: 10px !important;
+  border-radius: var(--radius-full) !important;
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -47,45 +47,59 @@ defineProps({
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  background: var(--primary);
   color: white;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-glow);
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
   background: var(--surface);
-  color: var(--text-h);
+  color: var(--text-main);
   border-color: var(--border);
   box-shadow: var(--shadow-sm);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--primary-light);
+  border-color: var(--primary);
   color: var(--primary);
-  background: var(--bg);
+  background: var(--surface-soft);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, var(--danger), #f43f5e);
+  background: var(--danger);
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 8px 24px -4px rgba(239, 68, 68, 0.4);
+  background: #b91c1c;
+  box-shadow: var(--shadow-md);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--text);
+  color: var(--text-secondary);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--accent-bg);
+  background: var(--surface-soft);
   color: var(--primary);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary-light);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary);
 }
 </style>

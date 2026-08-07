@@ -1,2 +1,0 @@
-class MockInterviewer:
-    pass

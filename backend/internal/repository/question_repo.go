@@ -6,17 +6,19 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"backend/internal/models"
 	"backend/internal/pkg/pagination"
 )
 
 type QuestionRepository interface {
-	List(ctx context.Context, companyID string, jobID, qType, level, keyword string, p pagination.Params) ([]models.QuestionBank, int64, error)
-	GetByID(ctx context.Context, companyID, id string) (*models.QuestionBank, error)
-	Create(ctx context.Context, q *models.QuestionBank) error
 	CreateQuestions(ctx context.Context, questions []models.QuestionBank) error
-	Update(ctx context.Context, companyID, id string, updates map[string]interface{}) error
-	Delete(ctx context.Context, companyID, id string) error
+	List(ctx context.Context, companyID string, jobID, questionType, level, keyword string, p pagination.Params) ([]models.QuestionBank, int, error)
+	GetByID(ctx context.Context, companyID, questionID string) (*models.QuestionBank, error)
+	Create(ctx context.Context, q *models.QuestionBank) error
+	Update(ctx context.Context, companyID, questionID string, patch map[string]any) error
+	Delete(ctx context.Context, companyID, questionID string) error
 }
 
 type questionRepository struct {
@@ -27,109 +29,156 @@ func NewQuestionRepository(db *sql.DB) QuestionRepository {
 	return &questionRepository{db: db}
 }
 
-func (r *questionRepository) List(ctx context.Context, companyID string, jobID, qType, level, keyword string, p pagination.Params) ([]models.QuestionBank, int64, error) {
-	where := []string{"company_id = $1"}
-	args := []interface{}{companyID}
-	argID := 2
+func (r *questionRepository) List(ctx context.Context, companyID string, jobID, questionType, level, keyword string, p pagination.Params) ([]models.QuestionBank, int, error) {
+	args := []any{companyID}
+	argIdx := 2
+	where := []string{"company_id = $1::uuid"}
 
 	if jobID != "" {
-		where = append(where, fmt.Sprintf("job_id = $%d", argID))
+		where = append(where, fmt.Sprintf("(job_id = $%d::uuid OR job_id IS NULL)", argIdx))
 		args = append(args, jobID)
-		argID++
+		argIdx++
 	}
-	if qType != "" {
-		where = append(where, fmt.Sprintf("question_type = $%d", argID))
-		args = append(args, qType)
-		argID++
+	if questionType != "" {
+		where = append(where, fmt.Sprintf("question_type = $%d", argIdx))
+		args = append(args, questionType)
+		argIdx++
 	}
 	if level != "" {
-		where = append(where, fmt.Sprintf("level = $%d", argID))
+		where = append(where, fmt.Sprintf("level = $%d", argIdx))
 		args = append(args, level)
-		argID++
+		argIdx++
 	}
 	if keyword != "" {
-		where = append(where, fmt.Sprintf("question_text ILIKE $%d", argID))
+		where = append(where, fmt.Sprintf("question_text ILIKE $%d", argIdx))
 		args = append(args, "%"+keyword+"%")
-		argID++
+		argIdx++
 	}
 
 	whereClause := "WHERE " + strings.Join(where, " AND ")
 
-	countQuery := "SELECT count(*) FROM question_bank " + whereClause
-	var total int64
-	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count query: %w", err)
+	var total int
+	countQ := fmt.Sprintf("SELECT COUNT(*) FROM question_bank %s", whereClause)
+	if err := r.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("question list count: %w", err)
 	}
 
-	if total == 0 {
-		return []models.QuestionBank{}, 0, nil
-	}
-
-	query := fmt.Sprintf(`
-		SELECT id, company_id, job_id, created_by, question_text, question_type, 
-			   skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at
-		FROM question_bank
-		%s
-		ORDER BY created_at DESC
-		LIMIT $%d OFFSET $%d
-	`, whereClause, argID, argID+1)
+	listQ := fmt.Sprintf(
+		"SELECT id, company_id, job_id, created_by, question_text, question_type, skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata FROM question_bank %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		whereClause, argIdx, argIdx+1,
+	)
 	args = append(args, p.PageSize, p.Offset())
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, listQ, args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("select query: %w", err)
+		return nil, 0, fmt.Errorf("question list query: %w", err)
 	}
 	defer rows.Close()
 
-	var items []models.QuestionBank
+	var questions []models.QuestionBank
 	for rows.Next() {
 		var q models.QuestionBank
 		if err := rows.Scan(
-			&q.ID, &q.CompanyID, &q.JobID, &q.CreatedBy, &q.QuestionText, &q.QuestionType,
-			&q.SkillTags, &q.Level, &q.ExpectedSignals, &q.IsAIGenerated, &q.CreatedAt, &q.UpdatedAt,
+			&q.ID, &q.CompanyID, &q.JobID, &q.CreatedBy,
+			&q.QuestionText, &q.QuestionType, &q.SkillTags,
+			&q.Level, &q.ExpectedSignals, &q.IsAIGenerated,
+			&q.CreatedAt, &q.UpdatedAt, &q.FollowUpPrompts, &q.TimeboxMinutes,
+			&q.EvidenceRequired, &q.GenerationMode, &q.PromptVersion, &q.AIMetadata,
 		); err != nil {
-			return nil, 0, fmt.Errorf("scan: %w", err)
+			return nil, 0, fmt.Errorf("question scan: %w", err)
 		}
-		items = append(items, q)
+		questions = append(questions, q)
 	}
-
-	return items, total, nil
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("question rows: %w", err)
+	}
+	if questions == nil {
+		questions = []models.QuestionBank{}
+	}
+	return questions, total, nil
 }
 
-func (r *questionRepository) GetByID(ctx context.Context, companyID, id string) (*models.QuestionBank, error) {
-	query := `
-		SELECT id, company_id, job_id, created_by, question_text, question_type, 
-			   skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at
-		FROM question_bank
-		WHERE id = $1 AND company_id = $2
-	`
-	var q models.QuestionBank
-	err := r.db.QueryRowContext(ctx, query, id, companyID).Scan(
-		&q.ID, &q.CompanyID, &q.JobID, &q.CreatedBy, &q.QuestionText, &q.QuestionType,
-		&q.SkillTags, &q.Level, &q.ExpectedSignals, &q.IsAIGenerated, &q.CreatedAt, &q.UpdatedAt,
-	)
-	if err != nil {
+func (r *questionRepository) GetByID(ctx context.Context, companyID, questionID string) (*models.QuestionBank, error) {
+	const q = `SELECT id, company_id, job_id, created_by, question_text, question_type, skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata FROM question_bank WHERE id = $1::uuid AND company_id = $2::uuid`
+	var qb models.QuestionBank
+	if err := r.db.QueryRowContext(ctx, q, questionID, companyID).Scan(
+		&qb.ID, &qb.CompanyID, &qb.JobID, &qb.CreatedBy,
+		&qb.QuestionText, &qb.QuestionType, &qb.SkillTags,
+		&qb.Level, &qb.ExpectedSignals, &qb.IsAIGenerated,
+		&qb.CreatedAt, &qb.UpdatedAt,
+		&qb.FollowUpPrompts, &qb.TimeboxMinutes, &qb.EvidenceRequired,
+		&qb.GenerationMode, &qb.PromptVersion, &qb.AIMetadata,
+	); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // not found
+			return nil, nil
 		}
-		return nil, fmt.Errorf("get by id query: %w", err)
+		return nil, fmt.Errorf("question get by id: %w", err)
 	}
-	return &q, nil
+	return &qb, nil
 }
 
 func (r *questionRepository) Create(ctx context.Context, q *models.QuestionBank) error {
-	query := `
+	if q.ID == "" {
+		q.ID = uuid.NewString()
+	}
+	const query = `
 		INSERT INTO question_bank (
 			id, company_id, job_id, created_by, question_text, question_type,
-			skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			skill_tags, level, expected_signals, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata, is_ai_generated
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		q.ID, q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
-		q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated, q.CreatedAt, q.UpdatedAt,
+		q.SkillTags, q.Level, q.ExpectedSignals, q.FollowUpPrompts, q.TimeboxMinutes,
+		q.EvidenceRequired, q.GenerationMode, q.PromptVersion, q.AIMetadata, q.IsAIGenerated,
 	)
 	if err != nil {
-		return fmt.Errorf("create query: %w", err)
+		return fmt.Errorf("question create: %w", err)
+	}
+	return nil
+}
+
+func (r *questionRepository) Update(ctx context.Context, companyID, questionID string, patch map[string]any) error {
+	if len(patch) == 0 {
+		return nil
+	}
+	allowedCols := map[string]bool{
+		"question_text": true, "question_type": true, "skill_tags": true,
+		"level": true, "expected_signals": true, "follow_up_prompts": true, "timebox_minutes": true,
+		"evidence_required": true, "generation_mode": true, "prompt_version": true, "ai_metadata": true,
+	}
+	setClauses := make([]string, 0, len(patch)+1)
+	args := make([]any, 0, len(patch)+2)
+	idx := 1
+	for col, val := range patch {
+		if !allowedCols[col] {
+			continue
+		}
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, idx))
+		args = append(args, val)
+		idx++
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, questionID, companyID)
+	q := fmt.Sprintf(
+		`UPDATE question_bank SET %s WHERE id = $%d::uuid AND company_id = $%d::uuid`,
+		strings.Join(setClauses, ", "), idx, idx+1,
+	)
+	_, err := r.db.ExecContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("question update: %w", err)
+	}
+	return nil
+}
+
+func (r *questionRepository) Delete(ctx context.Context, companyID, questionID string) error {
+	const q = `DELETE FROM question_bank WHERE id = $1::uuid AND company_id = $2::uuid`
+	_, err := r.db.ExecContext(ctx, q, questionID, companyID)
+	if err != nil {
+		return fmt.Errorf("question delete: %w", err)
 	}
 	return nil
 }
@@ -147,9 +196,9 @@ func (r *questionRepository) CreateQuestions(ctx context.Context, questions []mo
 
 	query := `
 		INSERT INTO question_bank (
-			id, company_id, job_id, created_by, question_text, question_type,
-			skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			company_id, job_id, created_by, question_text, question_type,
+			skill_tags, level, expected_signals, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata, is_ai_generated
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 
 	stmt, err := tx.PrepareContext(ctx, query)
@@ -160,8 +209,9 @@ func (r *questionRepository) CreateQuestions(ctx context.Context, questions []mo
 
 	for _, q := range questions {
 		_, err := stmt.ExecContext(ctx,
-			q.ID, q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
-			q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated, q.CreatedAt, q.UpdatedAt,
+			q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
+			q.SkillTags, q.Level, q.ExpectedSignals, q.FollowUpPrompts, q.TimeboxMinutes,
+			q.EvidenceRequired, q.GenerationMode, q.PromptVersion, q.AIMetadata, q.IsAIGenerated,
 		)
 		if err != nil {
 			return fmt.Errorf("execute statement: %w", err)
@@ -169,50 +219,4 @@ func (r *questionRepository) CreateQuestions(ctx context.Context, questions []mo
 	}
 
 	return tx.Commit()
-}
-
-func (r *questionRepository) Update(ctx context.Context, companyID, id string, updates map[string]interface{}) error {
-	if len(updates) == 0 {
-		return nil
-	}
-
-	setClauses := make([]string, 0, len(updates))
-	args := make([]interface{}, 0, len(updates)+2)
-	argID := 1
-
-	for k, v := range updates {
-		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", k, argID))
-		args = append(args, v)
-		argID++
-	}
-
-	setClauses = append(setClauses, fmt.Sprintf("updated_at = NOW()"))
-
-	query := fmt.Sprintf("UPDATE question_bank SET %s WHERE id = $%d AND company_id = $%d",
-		strings.Join(setClauses, ", "), argID, argID+1)
-	
-	args = append(args, id, companyID)
-
-	res, err := r.db.ExecContext(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("update query: %w", err)
-	}
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
-func (r *questionRepository) Delete(ctx context.Context, companyID, id string) error {
-	query := "DELETE FROM question_bank WHERE id = $1 AND company_id = $2"
-	res, err := r.db.ExecContext(ctx, query, id, companyID)
-	if err != nil {
-		return fmt.Errorf("delete query: %w", err)
-	}
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
 }

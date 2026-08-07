@@ -80,6 +80,15 @@ export const mockService = {
   },
 
   /**
+   * Lưu transcript hội thoại giọng nói (Gemini Live) thành messages khi kết thúc.
+   * @param {String} mockId
+   * @param {Array<{role:string,text:string}>} turns
+   */
+  saveLiveTranscript: (mockId, turns) => {
+    return apiService.post(`/mock-interviews/${mockId}/save-live-transcript`, { turns });
+  },
+
+  /**
    * [Legacy] Gửi tin nhắn - alias cho submitAnswer với format cũ
    * Dùng sendMessage nếu backend vẫn hỗ trợ endpoint /messages
    * @param {String} mockId
@@ -87,13 +96,5 @@ export const mockService = {
    */
   sendMessage: (mockId, content) => {
     return apiService.post(`/mock-interviews/${mockId}/messages`, { content });
-  },
-
-  /**
-   * [Legacy] Kết thúc interview - alias cho endMockInterview
-   * @param {String} mockId
-   */
-  finishMockInterview: (mockId) => {
-    return apiService.post(`/mock-interviews/${mockId}/end`);
   }
 };

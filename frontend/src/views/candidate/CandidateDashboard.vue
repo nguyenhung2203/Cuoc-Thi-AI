@@ -6,7 +6,11 @@ import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import WelcomeAlert from '../../components/common/WelcomeAlert.vue'
 import { candidatePortalService } from '../../services/candidate-portal.service'
+import { apiService } from '../../services/api.service'
 import { authStore } from '../../stores/auth.store'
+import { langStore } from '../../stores/lang.store'
+import { Calendar, CalendarPlus, Bot, Star, UserCheck, ArrowRight, Building2, Play, ShieldCheck, FileText, Award, Sparkles, CheckCircle2, AlertCircle, Briefcase, MapPin, Banknote, Clock } from 'lucide-vue-next'
+import { formatSalaryTrieu } from '../../utils/formatters'
 
 const router = useRouter()
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
@@ -18,27 +22,74 @@ const stats = ref({
   profile_completeness: 0
 })
 const upcomingInterviews = ref([])
+const recommendedJobs = ref([])
 const loading = ref(true)
+
+const unwrap = (val) => {
+  if (!val) return ''
+  if (typeof val === 'object') {
+    if ('String' in val) return val.Valid ? val.String : ''
+    if ('Int64' in val) return val.Valid ? val.Int64 : ''
+    if ('Float64' in val) return val.Valid ? val.Float64 : ''
+  }
+  return val
+}
+
+const getSalaryDisplay = (job) => formatSalaryTrieu(unwrap(job.salary_min), unwrap(job.salary_max))
+
+const loadError = ref('')
+
+const loadDashboard = async () => {
+  loading.value = true
+  loadError.value = ''
+
+  if (!authStore.isAuthenticated && !localStorage.getItem('access_token')) {
+    stats.value = {
+      upcoming_interviews: 0,
+      completed_mock_tests: 0,
+      average_mock_score: 0,
+      profile_completeness: 0
+    }
+    upcomingInterviews.value = []
+    recommendedJobs.value = []
+    loading.value = false
+    return
+  }
+
+  try {
+    const [statsData, interviewsData, jobsRes] = await Promise.all([
+      candidatePortalService.getDashboardStats(),
+      candidatePortalService.getInterviews(),
+      apiService.getWithMeta('/public/all-jobs?page=1&page_size=3')
+    ])
+
+    stats.value = {
+      upcoming_interviews: Number(statsData?.upcoming_interviews || 0),
+      completed_mock_tests: Number(statsData?.completed_mock_tests || 0),
+      average_mock_score: Number(statsData?.average_mock_score || 0),
+      profile_completeness: Number(statsData?.profile_completeness || 0),
+    }
+
+    upcomingInterviews.value = (Array.isArray(interviewsData) ? interviewsData : [])
+      .filter(i => i?.status === 'scheduled' || i?.status === 'active')
+      .slice(0, 3)
+
+    recommendedJobs.value = (Array.isArray(jobsRes?.data) ? jobsRes.data : []).map(j => ({
+      ...j, company_name: unwrap(j.company_name), location: unwrap(j.location), employment_type: unwrap(j.employment_type), department: unwrap(j.department), level: unwrap(j.level)
+    }))
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu dashboard:', err)
+    loadError.value = err?.message || 'Không tải được trang chủ ứng viên. Vui lòng thử lại.'
+  } finally {
+    loading.value = false
+  }
+}
 
 onMounted(async () => {
   if (history.state?.message) {
     window.history.replaceState({}, document.title)
   }
-
-  try {
-    const [statsData, interviewsData] = await Promise.all([
-      candidatePortalService.getDashboardStats(),
-      candidatePortalService.getInterviews()
-    ])
-    
-    stats.value = statsData
-    // Filter only future interviews or recently active ones
-    upcomingInterviews.value = interviewsData.filter(i => i.status === 'scheduled' || i.status === 'active').slice(0, 3)
-  } catch (err) {
-    console.error('Lỗi tải dữ liệu dashboard:', err)
-  } finally {
-    loading.value = false
-  }
+  await loadDashboard()
 })
 
 const formatDate = (dateString) => {
@@ -49,229 +100,288 @@ const formatDate = (dateString) => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in pb-10">
-    <WelcomeAlert 
-      v-if="entryToast" 
+  <div class="space-y-6 pb-10">
+    <WelcomeAlert
+      v-if="entryToast"
       role="candidate"
       title="Thành công!"
-      :message="entryToast.message" 
-      @close="entryToast = null" 
+      :message="entryToast.message"
+      @close="entryToast = null"
     />
 
-    <!-- Header Section -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+    <!-- Framed Welcome Header (Exact style as MockSetup & PracticeHistory) -->
+    <div class="header-box animate-rise mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-sm gap-4">
       <div>
-        <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-          Chào mừng trở lại, {{ authStore.user?.full_name || 'Ứng viên' }} 👋
+        <h1 class="text-h1 mb-1.5 text-[var(--text-main)]">
+          {{ langStore.t('dashboard', 'welcome') }}, {{ authStore.user?.full_name || 'Ứng viên' }}!
         </h1>
-        <p class="text-gray-500 mt-2 text-base">
-          Theo dõi lịch phỏng vấn, luyện tập với AI và cải thiện kỹ năng trả lời của bạn.
+        <p class="text-secondary text-sm">
+          Hệ thống AI đã sẵn sàng hỗ trợ bạn đánh giá kỹ năng và tìm kiếm cơ hội phù hợp.
         </p>
       </div>
+      <div class="shrink-0">
+        <Button variant="primary" @click="router.push('/mock-setup')" class="sheen">
+          <Play :size="16" class="mr-1.5 shrink-0" />
+          <span>Luyện tập phỏng vấn ngay</span>
+        </Button>
+      </div>
     </div>
-    
+
     <!-- Loading State -->
     <div v-if="loading" class="flex flex-col items-center justify-center py-20">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-      <p class="text-gray-500 font-medium animate-pulse">Đang tải dữ liệu dashboard...</p>
+      <div class="dash-spinner mb-4"></div>
+      <p class="text-helper">Đang tải dữ liệu dashboard...</p>
     </div>
-    
+
+    <div v-else-if="loadError" class="empty-state bg-[var(--surface)] p-10 rounded-2xl border border-dashed border-[var(--border)] text-center">
+      <AlertCircle :size="36" class="mx-auto mb-3 text-[var(--danger)]" />
+      <h3 class="text-base font-bold text-[var(--text-main)] mb-1">Không tải được dữ liệu</h3>
+      <p class="text-sm text-[var(--text-secondary)] mb-4">{{ loadError }}</p>
+      <Button variant="primary" @click="loadDashboard">Thử lại</Button>
+    </div>
+
     <template v-else>
       <!-- Stats Overview Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 stagger">
         <!-- Card 1 -->
-        <Card class="relative overflow-hidden group bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 rounded-2xl">
-          <div class="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-50"></div>
-          <div class="relative p-6">
-            <div class="flex items-center justify-between mb-4">
-              <div class="p-3 bg-blue-100/50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              </div>
-            </div>
-            <h3 class="text-gray-500 text-sm font-medium">Lịch sắp tới</h3>
-            <p class="text-4xl font-extrabold text-gray-900 mt-1">{{ stats.upcoming_interviews }}</p>
+        <Card class="card-elevate tilt-3d kpi-card">
+          <div class="kpi-icon">
+            <Calendar :size="22" />
           </div>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'upcoming') }}</h3>
+          <p class="kpi-value">{{ stats.upcoming_interviews }}</p>
         </Card>
 
         <!-- Card 2 -->
-        <Card class="relative overflow-hidden group bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 rounded-2xl">
-          <div class="absolute inset-0 bg-gradient-to-br from-indigo-50 to-transparent opacity-50"></div>
-          <div class="relative p-6">
-            <div class="flex items-center justify-between mb-4">
-              <div class="p-3 bg-indigo-100/50 text-indigo-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              </div>
-            </div>
-            <h3 class="text-gray-500 text-sm font-medium">Luyện tập AI đã xong</h3>
-            <p class="text-4xl font-extrabold text-gray-900 mt-1">{{ stats.completed_mock_tests }}</p>
+        <Card class="card-elevate tilt-3d kpi-card">
+          <div class="kpi-icon is-accent">
+            <Bot :size="22" />
           </div>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'completedAI') }}</h3>
+          <p class="kpi-value">{{ stats.completed_mock_tests }}</p>
         </Card>
 
         <!-- Card 3 -->
-        <Card class="relative overflow-hidden group bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 rounded-2xl">
-          <div class="absolute inset-0 bg-gradient-to-br from-amber-50 to-transparent opacity-50"></div>
-          <div class="relative p-6">
-            <div class="flex items-center justify-between mb-4">
-              <div class="p-3 bg-amber-100/50 text-amber-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>
-              </div>
-            </div>
-            <h3 class="text-gray-500 text-sm font-medium">Điểm AI trung bình</h3>
-            <p class="text-4xl font-extrabold text-gray-900 mt-1">{{ stats.average_mock_score.toFixed(1) }}</p>
+        <Card class="card-elevate tilt-3d kpi-card">
+          <div class="kpi-icon is-warning">
+            <Star :size="22" />
           </div>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'avgScore') }}</h3>
+          <p class="kpi-value">{{ stats.average_mock_score ? stats.average_mock_score.toFixed(1) : '0' }}</p>
         </Card>
 
         <!-- Card 4 -->
-        <Card class="relative overflow-hidden group bg-white/80 backdrop-blur-xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 rounded-2xl">
-          <div class="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-50"></div>
-          <div class="relative p-6">
-            <div class="flex items-center justify-between mb-4">
-              <div class="p-3 bg-emerald-100/50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-              </div>
-            </div>
-            <h3 class="text-gray-500 text-sm font-medium">Mức độ hoàn thiện CV</h3>
-            <div class="flex items-baseline gap-2 mt-1">
-              <p class="text-4xl font-extrabold text-gray-900">{{ stats.profile_completeness }}%</p>
-            </div>
-            <!-- Mini progress bar -->
-            <div class="w-full bg-gray-200 rounded-full h-1.5 mt-4 overflow-hidden">
-              <div class="bg-gradient-to-r from-emerald-400 to-emerald-500 h-1.5 rounded-full transition-all duration-1000 ease-out" :style="`width: ${stats.profile_completeness}%`"></div>
-            </div>
+        <Card class="card-elevate tilt-3d kpi-card">
+          <div class="kpi-icon is-success">
+            <UserCheck :size="22" />
+          </div>
+          <h3 class="kpi-label">{{ langStore.t('dashboard', 'profileComplete') }}</h3>
+          <p class="kpi-value">{{ stats.profile_completeness }}%</p>
+          <div class="kpi-progress">
+            <div class="kpi-progress-bar" :style="`width: ${stats.profile_completeness}%`"></div>
           </div>
         </Card>
       </div>
       
-      <div class="grid grid-cols-1 lg:grid-cols-3 mt-8 gap-8">
-        <!-- Lịch phỏng vấn sắp tới -->
-        <div class="lg:col-span-2 space-y-8">
-          <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl p-6">
-            <div class="flex justify-between items-center mb-6">
-              <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                Lịch phỏng vấn sắp tới
-              </h3>
-              <button class="text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors" @click="router.push('/my-interviews')">
-                Xem tất cả &rarr;
-              </button>
-            </div>
-            
-            <div v-if="upcomingInterviews.length === 0" class="py-12 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-              <div class="w-16 h-16 bg-blue-50 text-blue-300 rounded-full flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+      <!-- 2-Column Balanced Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 mt-8 gap-6 items-stretch">
+        <!-- Main Column (2 cols) -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+          <!-- Lịch phỏng vấn sắp tới -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-5">
+                <h3 class="section-heading">
+                  <span class="kpi-icon"><Calendar :size="18" /></span>
+                  {{ langStore.t('dashboard', 'upcomingSection') }}
+                </h3>
+                <button class="link-more" @click="router.push('/my-interviews')">
+                  {{ langStore.t('dashboard', 'viewAll') }} <ArrowRight :size="15" />
+                </button>
               </div>
-              <p class="text-gray-500 font-medium">Bạn chưa có lịch phỏng vấn nào sắp tới.</p>
-              <Button variant="outline" class="mt-4" @click="router.push('/job-board')">Tìm việc ngay</Button>
-            </div>
-            
-            <div class="space-y-4">
-              <div v-for="iv in upcomingInterviews" :key="iv.id" 
-                class="group border border-gray-100 hover:border-blue-200 rounded-xl p-5 transition-all duration-300 hover:shadow-md bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h4 class="font-bold text-gray-900 text-lg group-hover:text-blue-600 transition-colors">{{ iv.job_title || iv.title }}</h4>
-                  <p class="text-gray-500 text-sm font-medium mt-1 flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                    {{ iv.company_name || 'Công ty ẩn danh' }}
-                  </p>
-                  <div class="flex flex-wrap gap-2 mt-3">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700">
-                      {{ formatDate(iv.scheduled_at) }}
-                    </span>
-                    <span :class="['inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold', iv.mode === 'real' ? 'bg-rose-50 text-rose-700' : 'bg-gray-100 text-gray-700']">
-                      {{ iv.mode === 'real' ? 'Phỏng vấn thật' : 'Phỏng vấn thử' }}
-                    </span>
+
+              <div v-if="upcomingInterviews.length === 0" class="empty-box my-auto">
+                <div class="empty-icon"><CalendarPlus :size="28" /></div>
+                <p class="text-secondary-strong">{{ langStore.t('dashboard', 'noUpcoming') }}</p>
+                <Button variant="outline" class="mt-3" @click="router.push('/job-board')">{{ langStore.t('dashboard', 'findJobsNow') }}</Button>
+              </div>
+
+              <div v-else class="space-y-3">
+                <div v-for="iv in upcomingInterviews" :key="iv.id" class="iv-item hover-rail">
+                  <div>
+                    <h4 class="iv-title">{{ iv.job_title || iv.title }}</h4>
+                    <p class="iv-company">
+                      <Building2 :size="15" />
+                      {{ iv.company_name || 'Công ty ẩn danh' }}
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      <span class="badge badge-info">{{ formatDate(iv.scheduled_at) }}</span>
+                      <span class="badge" :class="iv.mode === 'real' ? 'badge-danger' : 'badge-neutral'">
+                        {{ iv.mode === 'real' ? langStore.t('dashboard', 'realMode') : langStore.t('dashboard', 'mockMode') }}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <Button v-if="iv.mode === 'real'" variant="primary" class="w-full sm:w-auto shadow-md hover:shadow-lg shadow-blue-500/30" @click="iv.join_link ? router.push(iv.join_link) : null">
-                    Tham gia ngay
-                  </Button>
+                  <div>
+                    <Button v-if="iv.mode === 'real'" variant="primary" class="sheen" @click="iv.join_link ? router.push(iv.join_link) : null">
+                      {{ langStore.t('dashboard', 'joinNow') }}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </Card>
-          
-          <!-- Banner: AI Practice -->
-          <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-600 p-8 text-white shadow-xl">
-            <div class="absolute top-0 right-0 -mt-16 -mr-16 text-white/10">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-64 w-64" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+
+          <!-- Gợi ý việc làm -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex justify-between items-center mb-5">
+                <h3 class="section-heading">
+                  <span class="kpi-icon is-accent"><Briefcase :size="18" /></span>
+                  Gợi ý việc làm phù hợp
+                </h3>
+                <button class="link-more" @click="router.push('/job-board')">
+                  {{ langStore.t('dashboard', 'viewAll') }} <ArrowRight :size="15" />
+                </button>
+              </div>
+
+              <div v-if="recommendedJobs.length === 0" class="empty-box my-auto" style="padding: 24px;">
+                <div class="empty-icon"><Briefcase :size="28" /></div>
+                <p class="text-secondary-strong">Hiện tại chưa có công việc gợi ý phù hợp.</p>
+                <Button variant="outline" class="mt-3" @click="router.push('/job-board')">Khám phá tất cả việc làm</Button>
+              </div>
+              <div v-else class="space-y-3">
+                <div v-for="job in recommendedJobs" :key="job.id" class="iv-item hover-rail !p-3.5" style="cursor: pointer;" @click="router.push(`/careers/${job.company_id}/jobs/${job.id}`)">
+                  <div>
+                    <h4 class="iv-title !text-[15px]">{{ job.title }}</h4>
+                    <p class="iv-company !mt-1">
+                      <Building2 :size="14" />
+                      {{ job.company_name || 'Công ty ẩn danh' }}
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                      <span class="badge badge-info"><MapPin :size="13" class="mr-1"/> {{ job.location || 'Bất kỳ' }}</span>
+                      <span class="badge badge-success"><Banknote :size="13" class="mr-1"/> {{ getSalaryDisplay(job) }}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Button variant="primary" class="sheen !px-3 !py-1.5 !text-xs" @click.stop="router.push(`/careers/${job.company_id}/jobs/${job.id}`)">
+                      Ứng tuyển
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="relative z-10">
-              <h3 class="text-2xl font-bold mb-2">Sẵn sàng vượt qua mọi câu hỏi phỏng vấn?</h3>
-              <p class="text-blue-100 mb-6 max-w-lg text-lg">Trải nghiệm phỏng vấn 1-kèm-1 với AI Interviewer của chúng tôi. Luyện tập không giới hạn, nhận phản hồi ngay lập tức.</p>
-              <button @click="router.push('/mock-setup')" class="bg-white text-blue-600 hover:bg-blue-50 font-bold py-3 px-6 rounded-full shadow-lg transition-transform transform hover:scale-105 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
-                Bắt đầu luyện tập
-              </button>
-            </div>
-          </div>
+          </Card>
         </div>
-        
-        <!-- Sidebar -->
-        <div class="space-y-8">
-          <Card class="bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl p-6">
-            <h3 class="text-lg font-bold text-gray-800 mb-5 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.95 11.95 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-              Hành trang ứng viên
+
+        <!-- Sidebar Column (1 col) -->
+        <div class="flex flex-col gap-6">
+          <!-- Hành trang ứng viên -->
+          <Card class="card-elevate section-card animate-rise">
+            <h3 class="section-heading mb-4">
+              <span class="kpi-icon is-success"><ShieldCheck :size="18" /></span>
+              {{ langStore.t('dashboard', 'prepTitle') }}
             </h3>
-            <div class="space-y-4">
-              <div class="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" @click="router.push('/my-cv')">
+            <div class="space-y-2.5">
+              <div class="prep-row" @click="router.push('/profile')">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                  </div>
+                  <div class="kpi-icon"><FileText :size="18" /></div>
                   <div>
-                    <span class="block text-sm font-bold text-gray-800">Tải lên CV</span>
-                    <span class="block text-xs text-gray-500">Bắt buộc để AI phân tích</span>
+                    <span class="prep-title">Tải lên CV</span>
+                    <span class="prep-sub">Bắt buộc để AI phân tích</span>
                   </div>
                 </div>
-                <span v-if="stats.profile_completeness > 50" class="text-emerald-500"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg></span>
-                <span v-else class="text-amber-500"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg></span>
+                <CheckCircle2 v-if="stats.profile_completeness > 50" :size="20" class="text-success" />
+                <AlertCircle v-else :size="20" class="text-warning" />
               </div>
-              
-              <div class="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" @click="router.push('/profile')">
+
+              <div class="prep-row" @click="router.push('/profile')">
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                  </div>
+                  <div class="kpi-icon is-accent"><Award :size="18" /></div>
                   <div>
-                    <span class="block text-sm font-bold text-gray-800">Thêm Kỹ năng</span>
-                    <span class="block text-xs text-gray-500">Giúp nhà tuyển dụng tìm thấy bạn</span>
+                    <span class="prep-title">Thêm Kỹ năng</span>
+                    <span class="prep-sub">Giúp nhà tuyển dụng tìm thấy bạn</span>
                   </div>
                 </div>
-                <span class="text-amber-500"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg></span>
+                <AlertCircle :size="20" class="text-warning" />
               </div>
             </div>
           </Card>
-          
-          <Card class="relative overflow-hidden bg-white/90 backdrop-blur-md shadow-xl border-0 rounded-2xl p-6 border-t-4 border-t-indigo-500">
-            <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <span class="animate-pulse">✨</span> AI Career Coach
-            </h3>
-            <div class="bg-indigo-50 rounded-xl p-4 border border-indigo-100 relative">
-              <div class="absolute -left-2 -top-2 w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center shadow-md">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" /></svg>
+
+          <!-- Hoạt động gần đây -->
+          <Card class="card-elevate section-card animate-rise flex-1 flex flex-col justify-between">
+            <div>
+              <h3 class="section-heading mb-4">
+                <span class="kpi-icon"><Clock :size="18" /></span>
+                Hoạt động gần đây
+              </h3>
+              <div class="empty-box" style="padding: 24px;">
+                <div class="empty-icon"><Clock :size="26" /></div>
+                <p class="text-secondary-strong">Chưa có hoạt động nào gần đây.</p>
               </div>
-              <p class="text-sm text-gray-700 leading-relaxed pl-2">
-                Dựa trên kết quả phỏng vấn gần đây, tốc độ nói của bạn rất tốt, tuy nhiên bạn nên luyện tập thêm cách trả lời rành mạch các câu hỏi về <strong class="text-indigo-600 font-bold">Kỹ năng chuyên môn sâu</strong>.
-              </p>
             </div>
-            <button class="w-full mt-4 py-2.5 px-4 bg-white border-2 border-indigo-100 text-indigo-600 font-semibold rounded-xl hover:bg-indigo-50 transition-colors shadow-sm" @click="router.push('/mock-setup')">
-              Luyện chủ đề này
-            </button>
           </Card>
         </div>
       </div>
+
+      <!-- Full-Width AI Coach Banner at the Bottom -->
+      <Card class="card-elevate animate-rise mt-6 flex flex-col sm:flex-row items-center justify-between p-6 rounded-2xl border border-[rgba(37,99,235,0.2)] bg-gradient-to-r from-[var(--primary-light)] to-[rgba(236,254,255,0.7)] gap-6">
+        <div class="space-y-2 max-w-2xl">
+          <div class="flex items-center gap-2 text-xs font-bold text-[var(--primary)] uppercase tracking-wider">
+            <Sparkles :size="14" /> AI Career Coach
+          </div>
+          <h3 class="text-xl font-bold text-slate-900">{{ langStore.t('dashboard', 'bannerTitle') }}</h3>
+          <p class="text-sm text-slate-600">Trải nghiệm phỏng vấn giả lập 1-kèm-1 với Trợ lý AI. Luyện tập không giới hạn và nhận phản hồi Rubric ngay lập tức.</p>
+        </div>
+        <div class="shrink-0 flex items-center gap-4">
+          <Button variant="primary" class="sheen !px-5 !py-2.5 !text-sm font-semibold shadow-md" @click="router.push('/mock-setup')">
+            <Play :size="16" class="mr-2" /> {{ langStore.t('dashboard', 'bannerCta') }}
+          </Button>
+        </div>
+      </Card>
     </template>
   </div>
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+.dash-spinner {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 3px solid var(--primary-light);
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
 }
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* KPI cards */
+.kpi-card { padding: 22px; }
+.kpi-label { color: var(--text-secondary); font-size: 13px; font-weight: 500; margin-top: 14px; }
+.kpi-value { font-size: 30px; font-weight: 700; color: var(--text-main); margin-top: 4px; letter-spacing: -0.02em; }
+.kpi-progress { width: 100%; height: 6px; border-radius: 999px; background: var(--surface-soft); margin-top: 14px; overflow: hidden; }
+.kpi-progress-bar { height: 100%; border-radius: 999px; background: var(--gradient-brand); transition: width 1s cubic-bezier(0.2,0.8,0.2,1); }
+
+.section-card { padding: 24px; }
+.section-heading { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; color: var(--text-main); }
+.link-more { display: inline-flex; align-items: center; gap: 4px; color: var(--primary); font-weight: 600; font-size: 14px; }
+.link-more:hover { color: var(--primary-hover); }
+
+.empty-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 40px 16px; border: 2px dashed var(--border); border-radius: var(--radius); background: var(--surface-soft); }
+.empty-icon { display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; background: var(--primary-light); color: var(--primary); margin-bottom: 6px; }
+.text-secondary-strong { color: var(--text-secondary); font-weight: 500; }
+
+.iv-item { display: flex; flex-direction: column; gap: 16px; padding: 18px; padding-left: 22px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); transition: box-shadow 0.3s ease, border-color 0.3s ease; }
+.iv-item:hover { box-shadow: var(--shadow-md); border-color: var(--primary-light); }
+.iv-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+.iv-company { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 14px; font-weight: 500; margin-top: 4px; }
+@media (min-width: 640px) { .iv-item { flex-direction: row; align-items: center; justify-content: space-between; } }
+
+
+.prep-row { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-radius: var(--radius); cursor: pointer; transition: background 0.2s ease; }
+.prep-row:hover { background: var(--surface-soft); }
+.prep-title { display: block; font-size: 14px; font-weight: 600; color: var(--text-main); }
+.prep-sub { display: block; font-size: 12px; color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+
+.coach-card { padding: 24px; border-top: 3px solid var(--accent); }
+
+.coach-card { padding: 24px; border-top: 3px solid var(--accent); }
 </style>

@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
-	"time"
+	"fmt"
+	"strings"
 
-	"github.com/jmoiron/sqlx"
 	"backend/internal/models"
+	"backend/internal/pkg/pagination"
+	"github.com/jmoiron/sqlx"
 )
 
 type UserRepository struct {
@@ -43,6 +45,125 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User,
 	return &user, nil
 }
 
+type UserListFilter struct {
+	Search string
+	Role   string
+}
+
+func userListQuery(filter UserListFilter, pending bool) (string, []interface{}) {
+	conditions := []string{"deleted_at IS NULL"}
+	args := []interface{}{}
+	if pending {
+		conditions = append(conditions, "status = 'pending'")
+	}
+	if filter.Search != "" {
+		args = append(args, "%"+filter.Search+"%")
+		conditions = append(conditions, fmt.Sprintf("(full_name ILIKE $%d OR email ILIKE $%d)", len(args), len(args)))
+	}
+	if filter.Role != "" && filter.Role != "all" {
+		args = append(args, filter.Role)
+		conditions = append(conditions, fmt.Sprintf("role = $%d", len(args)))
+	}
+	return strings.Join(conditions, " AND "), args
+}
+
+func (r *UserRepository) listUsers(ctx context.Context, p pagination.Params, filter UserListFilter, pending bool) ([]models.User, int, error) {
+	where, args := userListQuery(filter, pending)
+	var total int
+	if err := r.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM users WHERE "+where, args...); err != nil {
+		return nil, 0, err
+	}
+	query := "SELECT * FROM users WHERE " + where + fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, p.PageSize, p.Offset())
+	users := make([]models.User, 0)
+	if err := r.db.SelectContext(ctx, &users, query, args...); err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
+func (r *UserRepository) ListPendingUsersPage(ctx context.Context, p pagination.Params, filter UserListFilter) ([]models.User, int, error) {
+	return r.listUsers(ctx, p, filter, true)
+}
+
+func (r *UserRepository) ListAllUsersPage(ctx context.Context, p pagination.Params, filter UserListFilter) ([]models.User, int, error) {
+	return r.listUsers(ctx, p, filter, false)
+}
+
+// ListPendingUsers returns all users with status = 'pending'.
+func (r *UserRepository) ListPendingUsers(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+	err := r.db.SelectContext(ctx, &users, "SELECT * FROM users WHERE status = 'pending' AND deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// ListAllUsers returns all users.
+func (r *UserRepository) ListAllUsers(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+	err := r.db.SelectContext(ctx, &users, "SELECT * FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// UpdateProfile updates editable profile fields for a user.
+func (r *UserRepository) UpdateProfile(ctx context.Context, id, fullName, avatarURL string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET full_name = $1, avatar_url = NULLIF($2, ''), updated_at = NOW()
+		 WHERE id = $3 AND deleted_at IS NULL`,
+		fullName, avatarURL, id)
+	return err
+}
+
+// UpdateVerificationFile updates the verification_file_id for a user.
+func (r *UserRepository) UpdateVerificationFile(ctx context.Context, id, fileID string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET verification_file_id = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		fileID, id)
+	return err
+}
+
+// UpdateStatus updates the status of a user (e.g. pending -> active).
+func (r *UserRepository) UpdateStatus(ctx context.Context, id, status string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET status = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		status, id)
+	return err
+}
+
+// SoftDelete marks a user account as deleted (data retained, login disabled).
+func (r *UserRepository) SoftDelete(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET deleted_at = NOW(), status = 'inactive', updated_at = NOW()
+		 WHERE id = $1 AND deleted_at IS NULL`,
+		id)
+	return err
+}
+
+// UpdatePassword sets a new password hash for a user.
+func (r *UserRepository) UpdatePassword(ctx context.Context, id, passwordHash string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		passwordHash, id)
+	return err
+}
+
+// UpdateSettings replaces the user's settings JSON blob.
+func (r *UserRepository) UpdateSettings(ctx context.Context, id string, settings models.JSONB) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET settings = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		settings, id)
+	return err
+}
+
 type UserCompanyRow struct {
 	CompanyID   string `db:"company_id"`
 	CompanyName string `db:"company_name"`
@@ -64,122 +185,103 @@ func (r *UserRepository) FindUserCompanies(ctx context.Context, userID string) (
 	return rows, nil
 }
 
-func (r *UserRepository) UpdatePassword(ctx context.Context, userID, newHash string) error {
-	query := `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, query, newHash, userID)
-	return err
-}
+// GetDashboardStats returns high-level metrics for the admin dashboard.
+func (r *UserRepository) GetDashboardStats(ctx context.Context) (map[string]int, error) {
+	stats := make(map[string]int)
 
-// Password Reset Token methods
-func (r *UserRepository) CreatePasswordResetToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
-	query := `
-		INSERT INTO password_reset_tokens (user_id, token, expires_at)
-		VALUES ($1, $2, $3)
-	`
-	_, err := r.db.ExecContext(ctx, query, userID, token, expiresAt)
-	return err
-}
-
-type PasswordResetTokenRow struct {
-	ID        string    `db:"id"`
-	UserID    string    `db:"user_id"`
-	Token     string    `db:"token"`
-	ExpiresAt time.Time `db:"expires_at"`
-	Used      bool      `db:"used"`
-}
-
-func (r *UserRepository) GetPasswordResetToken(ctx context.Context, token string) (*PasswordResetTokenRow, error) {
-	var row PasswordResetTokenRow
-	err := r.db.GetContext(ctx, &row, "SELECT id, user_id, token, expires_at, used FROM password_reset_tokens WHERE token = $1", token)
-	if err != nil {
+	var totalUsers int
+	if err := r.db.GetContext(ctx, &totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"); err != nil {
 		return nil, err
 	}
-	return &row, nil
-}
+	stats["total_users"] = totalUsers
 
-func (r *UserRepository) MarkPasswordResetTokenUsed(ctx context.Context, tokenID string) error {
-	query := `UPDATE password_reset_tokens SET used = TRUE WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, tokenID)
-	return err
-}
-
-// OTP Verifications methods
-func (r *UserRepository) CreateOTP(ctx context.Context, email, otp, purpose string, expiresAt time.Time) error {
-	query := `
-		INSERT INTO otp_verifications (email, otp, purpose, expires_at)
-		VALUES ($1, $2, $3, $4)
-	`
-	_, err := r.db.ExecContext(ctx, query, email, otp, purpose, expiresAt)
-	return err
-}
-
-type OTPRow struct {
-	ID        string    `db:"id"`
-	Email     string    `db:"email"`
-	OTP       string    `db:"otp"`
-	Purpose   string    `db:"purpose"`
-	ExpiresAt time.Time `db:"expires_at"`
-	Used      bool      `db:"used"`
-}
-
-func (r *UserRepository) GetOTP(ctx context.Context, email, otp, purpose string) (*OTPRow, error) {
-	var row OTPRow
-	err := r.db.GetContext(ctx, &row, "SELECT id, email, otp, purpose, expires_at, used FROM otp_verifications WHERE email = $1 AND otp = $2 AND purpose = $3 ORDER BY created_at DESC LIMIT 1", email, otp, purpose)
-	if err != nil {
+	var pendingUsers int
+	if err := r.db.GetContext(ctx, &pendingUsers, "SELECT COUNT(*) FROM users WHERE status = 'pending' AND deleted_at IS NULL"); err != nil {
 		return nil, err
 	}
-	return &row, nil
-}
+	stats["pending_users"] = pendingUsers
 
-func (r *UserRepository) MarkOTPUsed(ctx context.Context, id string) error {
-	query := `UPDATE otp_verifications SET used = TRUE WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
-}
-
-func (r *UserRepository) MarkEmailVerified(ctx context.Context, userID string) error {
-	query := `UPDATE users SET email_verified_at = NOW(), status = 'active' WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, userID)
-	return err
-}
-
-func (r *UserRepository) List(ctx context.Context, limit, offset int) ([]models.User, int, error) {
-	var total int
-	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&total)
-	if err != nil {
-		return nil, 0, err
+	var totalCompanies int
+	if err := r.db.GetContext(ctx, &totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"); err != nil {
+		return nil, err
 	}
+	stats["total_companies"] = totalCompanies
 
-	query := `SELECT id, email, password_hash, full_name, role, status, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`
-	rows, err := r.db.QueryxContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, 0, err
+	var totalInterviews int
+	if err := r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews"); err != nil {
+		return nil, err
 	}
-	defer rows.Close()
+	stats["total_interviews"] = totalInterviews
 
-	var users []models.User
-	for rows.Next() {
-		var u models.User
-		if err := rows.StructScan(&u); err != nil {
-			return nil, 0, err
+	var totalCandidates int
+	if err := r.db.GetContext(ctx, &totalCandidates, "SELECT COUNT(*) FROM candidates WHERE deleted_at IS NULL"); err != nil {
+		return nil, err
+	}
+	stats["total_candidates"] = totalCandidates
+
+	return stats, nil
+}
+
+type MonthlyItem struct {
+	Month string `db:"month"`
+	Usage int64  `db:"usage"`
+}
+
+type GrowthItem struct {
+	Period string `db:"period"`
+	Users  int    `db:"users"`
+}
+
+type ModelUsageItem struct {
+	Model string `db:"model"`
+	Usage int64  `db:"usage"`
+}
+
+type CostItem struct {
+	Cost float64 `db:"cost"`
+}
+
+func (r *UserRepository) GetTotalAICost(ctx context.Context) (float64, error) {
+	var item CostItem
+	err := r.db.GetContext(ctx, &item, `SELECT COALESCE(SUM(cost), 0) AS cost FROM ai_request_logs WHERE status = 'success' AND cost IS NOT NULL`)
+	return item.Cost, err
+}
+
+func (r *UserRepository) GetTokenUsageByModel(ctx context.Context) ([]ModelUsageItem, error) {
+	items := []ModelUsageItem{}
+	err := r.db.SelectContext(ctx, &items, `
+		SELECT COALESCE(NULLIF(model, ''), 'unknown') AS model,
+		       COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS usage
+		FROM ai_request_logs
+		WHERE status = 'success'
+		GROUP BY COALESCE(NULLIF(model, ''), 'unknown')
+		ORDER BY usage DESC`)
+	return items, err
+}
+
+func (r *UserRepository) GetReportsData(ctx context.Context) (totalUsers, totalCandidates, totalRecruiters, totalCompanies, totalInterviews int, tokensIn, tokensOut int64, monthlyItems []MonthlyItem, growthItems []GrowthItem, err error) {
+	queries := []struct {
+		dest interface{}
+		sql  string
+	}{
+		{&totalUsers, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"},
+		{&totalCandidates, "SELECT COUNT(*) FROM users WHERE role = 'candidate' AND deleted_at IS NULL"},
+		{&totalRecruiters, "SELECT COUNT(*) FROM users WHERE role = 'recruiter' AND deleted_at IS NULL"},
+		{&totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"},
+		{&totalInterviews, "SELECT COUNT(*) FROM interviews"},
+		{&tokensIn, "SELECT COALESCE(SUM(tokens_in), 0) FROM ai_request_logs WHERE status = 'success'"},
+		{&tokensOut, "SELECT COALESCE(SUM(tokens_out), 0) FROM ai_request_logs WHERE status = 'success'"},
+	}
+	for _, q := range queries {
+		if err = r.db.GetContext(ctx, q.dest, q.sql); err != nil {
+			return
 		}
-		users = append(users, u)
 	}
-	return users, total, nil
-}
-
-func (r *UserRepository) UpdateRole(ctx context.Context, userID, role string) error {
-	query := `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, query, role, userID)
-	return err
-}
-
-func (r *UserRepository) UpdateStatus(ctx context.Context, userID string, isActive bool) error {
-	status := "inactive"
-	if isActive {
-		status = "active"
+	if err = r.db.SelectContext(ctx, &monthlyItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') AS month, COALESCE(SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)), 0) AS usage FROM ai_request_logs WHERE status = 'success' GROUP BY month ORDER BY month ASC"); err != nil {
+		return
 	}
-	query := `UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2`
-	_, err := r.db.ExecContext(ctx, query, status, userID)
-	return err
+	if err = r.db.SelectContext(ctx, &growthItems, "SELECT TO_CHAR(created_at, 'YYYY-MM') AS period, COUNT(*) AS users FROM users WHERE deleted_at IS NULL GROUP BY period ORDER BY period ASC"); err != nil {
+		return
+	}
+	return
 }

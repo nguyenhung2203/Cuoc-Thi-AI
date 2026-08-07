@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 
-	"github.com/jmoiron/sqlx"
 	"backend/internal/models"
+	"github.com/jmoiron/sqlx"
 )
 
 type CompanyRepository struct {
@@ -57,6 +57,12 @@ func (r *CompanyRepository) ListByUserID(ctx context.Context, userID string) ([]
 	`
 	var companies []models.Company
 	err := r.db.SelectContext(ctx, &companies, query, userID)
+	return companies, err
+}
+
+func (r *CompanyRepository) ListAll(ctx context.Context) ([]models.Company, error) {
+	var companies []models.Company
+	err := r.db.SelectContext(ctx, &companies, "SELECT * FROM companies WHERE deleted_at IS NULL ORDER BY created_at DESC")
 	return companies, err
 }
 

@@ -6,50 +6,36 @@ import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Toast from '../../components/common/AppToast.vue'
-import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users, Trash2 } from 'lucide-vue-next'
+import { ArrowLeft, Save, Sparkles, AlertCircle, CheckCircle, Users } from 'lucide-vue-next'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
+import { JOB_STATUSES, JOB_LEVELS, EMPLOYMENT_TYPES } from '../../utils/constants.js'
+import { isOneOf, isValidSalaryRange, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id
 const isNew = ref(id === 'new')
 
-const job = ref({ 
-  title: '', 
-  status: 'Open', 
+const job = ref({
+  title: '',
+  location: '',
+  department: '',
+  level: '',
+  employment_type: '',
+  status: 'open',
   description: '',
   requirements: '',
-  benefits: ''
+  benefits: '',
+  salary_min: '',
+  salary_max: ''
 })
 const loading = ref(!isNew.value)
 const saving = ref(false)
 const aiAnalyzing = ref(false)
 const rubric = ref(null)
 const localToast = ref(null)
-const candidates = ref([])
-
-const handlePipelineChange = async (candidateId, newStatus) => {
-  try {
-    const companyId = authStore.user?.companies?.[0]?.id
-    await jobService.updateCandidatePipeline(companyId, id, candidateId, newStatus)
-    localToast.value = { type: 'success', message: 'Đã cập nhật trạng thái ứng viên!' }
-  } catch (err) {
-    localToast.value = { type: 'error', message: 'Lỗi cập nhật trạng thái' }
-  }
-}
-
-const handleUnassign = async (candidateId) => {
-  if (!confirm('Bạn có chắc chắn muốn gỡ ứng viên này khỏi công việc?')) return
-  try {
-    const companyId = authStore.user?.companies?.[0]?.id
-    await jobService.unassignCandidate(companyId, id, candidateId)
-    candidates.value = candidates.value.filter(c => c.candidate_id !== candidateId)
-    localToast.value = { type: 'success', message: 'Đã gỡ ứng viên thành công' }
-  } catch (err) {
-    localToast.value = { type: 'error', message: 'Lỗi gỡ ứng viên' }
-  }
-}
+const errors = ref({})
 
 const unwrap = (val) => {
   if (!val) return ''
@@ -60,11 +46,6 @@ const unwrap = (val) => {
 }
 
 onMounted(async () => {
-  if (authStore.user?.role === 'candidate') {
-    router.replace('/home')
-    return
-  }
-
   if (!isNew.value) {
     try {
       const companyId = authStore.user?.companies?.[0]?.id
@@ -86,20 +67,9 @@ onMounted(async () => {
             weight: `${r.weight}%`
           }))
         }
-        
-        // Fetch candidates for this job
-        try {
-          const candidatesData = await jobService.getJobCandidates(companyId, id)
-          candidates.value = candidatesData.data || candidatesData || []
-        } catch(e) {
-          console.error("Error loading candidates", e)
-        }
-      } else {
-        localToast.value = { type: 'error', message: 'Tài khoản chưa được gán vào công ty nào' }
       }
     } catch (error) {
-      console.error(error)
-      localToast.value = { type: 'error', message: error?.message || 'Không thể tải chi tiết công việc' }
+      localToast.value = { type: 'error', message: 'Không thể tải chi tiết công việc' }
     } finally {
       loading.value = false
     }
@@ -108,25 +78,53 @@ onMounted(async () => {
 
 const handleSave = async (e) => {
   e.preventDefault()
-  
-  if (!job.value.requirements.trim()) {
-    localToast.value = { type: 'error', message: 'Vui lòng nhập Yêu cầu ứng viên' }
-    return
-  }
-  if (!job.value.benefits.trim()) {
-    localToast.value = { type: 'error', message: 'Vui lòng nhập Quyền lợi' }
-    return
-  }
-  
+  if (saving.value) return
+
+  const normalizedJob = { ...job.value, title: normalizeText(job.value.title), location: normalizeText(job.value.location) }
+  const validation = validateForm(normalizedJob, {
+    title: [
+      (value) => requiredTrim(value, 'Vui lòng nhập tiêu đề công việc.'),
+      (value) => minLength(value, 2, 'Tiêu đề công việc phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Tiêu đề công việc không được vượt quá 255 ký tự.'),
+    ],
+    location: [
+      (value) => requiredTrim(value, 'Vui lòng nhập vị trí làm việc.'),
+      (value) => minLength(value, 2, 'Vị trí làm việc phải có ít nhất 2 ký tự.'),
+      (value) => maxLength(value, 255, 'Vị trí làm việc không được vượt quá 255 ký tự.'),
+    ],
+    department: [(value) => maxLength(value, 255, 'Phòng ban không được vượt quá 255 ký tự.')],
+    level: [(value) => isOneOf(String(value || '').toLowerCase(), JOB_LEVELS, 'Cấp độ công việc không hợp lệ.')],
+    employment_type: [(value) => isOneOf(String(value || '').toLowerCase(), EMPLOYMENT_TYPES, 'Loại hình làm việc không hợp lệ.')],
+    description: [
+      (value) => requiredTrim(value, 'Vui lòng nhập mô tả công việc.'),
+      (value) => minLength(value, 10, 'Mô tả công việc phải có ít nhất 10 ký tự.'),
+      (value) => maxLength(value, 20000, 'Mô tả công việc không được vượt quá 20.000 ký tự.'),
+    ],
+    requirements: [(value) => maxLength(value, 10000, 'Yêu cầu không được vượt quá 10.000 ký tự.')],
+    benefits: [(value) => maxLength(value, 10000, 'Quyền lợi không được vượt quá 10.000 ký tự.')],
+    status: [(value) => isOneOf(String(value || '').toLowerCase(), JOB_STATUSES, 'Trạng thái công việc không hợp lệ.')],
+  })
+  const salaryError = isValidSalaryRange(job.value.salary_min, job.value.salary_max)
+  errors.value = { ...validation.errors, ...(salaryError ? { salary: salaryError } : {}) }
+  if (!validation.isValid || salaryError) return
+  job.value.title = normalizedJob.title
+  job.value.location = normalizedJob.location
+
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     const payload = {
       title: job.value.title,
+      location: job.value.location,
       description: job.value.description,
       requirements: job.value.requirements,
       benefits: job.value.benefits,
-      status: job.value.status === 'Open' ? 'open' : (job.value.status === 'Closed' ? 'closed' : 'draft')
+      status: String(job.value.status || '').toLowerCase(),
+      ...(job.value.department ? { department: normalizeText(job.value.department) } : {}),
+      ...(job.value.level ? { level: String(job.value.level).toLowerCase() } : {}),
+      ...(job.value.employment_type ? { employment_type: String(job.value.employment_type).toLowerCase() } : {}),
+      ...(job.value.salary_min !== '' ? { salary_min: Number(job.value.salary_min) } : {}),
+      ...(job.value.salary_max !== '' ? { salary_max: Number(job.value.salary_max) } : {}),
     }
     
     if (isNew.value) {
@@ -145,30 +143,71 @@ const handleSave = async (e) => {
 
 const aiResult = ref(null)
 
+// Nạp lại kết quả phân tích từ job (analyze lưu vào ai_analysis_json, endpoint
+// không trả kết quả trực tiếp). Tách riêng để lỗi refetch không bị báo nhầm
+// thành "phân tích thất bại".
+const refreshAiResult = async (companyId) => {
+  const jobData = await jobService.getJob(companyId, id)
+  const rawJob = jobData.data || jobData
+  if (rawJob.ai_analysis_json) {
+    let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
+    aiResult.value = result
+    rubric.value = (result?.suggested_rubric || []).map(r => ({
+      criterion: r.name,
+      weight: `${r.weight}%`
+    }))
+  }
+}
+
 const handleAiAnalyze = async () => {
+  if (aiAnalyzing.value) return
+  const titleError = requiredTrim(job.value.title, 'Vui lòng nhập tiêu đề công việc.') || minLength(job.value.title, 2, 'Tiêu đề công việc phải có ít nhất 2 ký tự.')
+  const locationError = requiredTrim(job.value.location, 'Vui lòng nhập vị trí làm việc.') || minLength(job.value.location, 2, 'Vị trí làm việc phải có ít nhất 2 ký tự.')
+  const descriptionError = requiredTrim(job.value.description, 'Vui lòng nhập mô tả công việc.') || minLength(job.value.description, 10, 'Mô tả công việc phải có ít nhất 10 ký tự.')
+  errors.value = {
+    ...(titleError ? { title: titleError } : {}),
+    ...(locationError ? { location: locationError } : {}),
+    ...(descriptionError ? { description: descriptionError } : {}),
+  }
+  if (Object.keys(errors.value).length) {
+    localToast.value = { type: 'error', message: 'Vui lòng hoàn thiện JD hợp lệ trước khi yêu cầu AI phân tích.' }
+    return
+  }
+  if (isNew.value || !id) {
+    localToast.value = { type: 'error', message: 'Vui lòng lưu công việc trước khi yêu cầu AI phân tích.' }
+    return
+  }
+
   aiAnalyzing.value = true
-  aiResult.value = null
+  const companyId = authStore.user?.companies?.[0]?.id
   try {
-    const companyId = authStore.user?.companies?.[0]?.id
     // API_SPEC §4.6 — POST /companies/:company_id/jobs/:job_id/analyze
     await jobService.analyzeJD(companyId, id, false)
-    
-    // AIAnalysis is saved to the database, we need to fetch the job again
-    const jobData = await jobService.getJob(companyId, id)
-    const rawJob = jobData.data || jobData
-    
-    if (rawJob.ai_analysis_json) {
-      let result = typeof rawJob.ai_analysis_json === 'string' ? JSON.parse(rawJob.ai_analysis_json) : rawJob.ai_analysis_json
-      aiResult.value = result
-      rubric.value = (result?.suggested_rubric || []).map(r => ({
-        criterion: r.name,
-        weight: `${r.weight}%`
-      }))
+  } catch (err) {
+    // err là error payload từ backend ({code, message, details}) — hiển thị
+    // nguyên nhân thật thay vì thông báo chết cứng che lỗi.
+    const code = (err?.code || '').toUpperCase()
+    if (code === 'CONFLICT') {
+      localToast.value = { type: 'warning', message: 'Công việc này đã được AI phân tích trước đó.' }
+      try { await refreshAiResult(companyId) } catch { /* giữ kết quả đang hiển thị */ }
+    } else if (code === 'AI_SERVICE_ERROR') {
+      localToast.value = { type: 'error', message: 'Dịch vụ AI đang bận hoặc không phản hồi. Vui lòng thử lại sau ít phút.' }
+    } else if (code === 'VALIDATION_ERROR') {
+      localToast.value = { type: 'error', message: (err.details || []).join(' ') || err.message }
+    } else if (code === 'NOT_FOUND') {
+      localToast.value = { type: 'error', message: 'Không tìm thấy công việc.' }
+    } else {
+      localToast.value = { type: 'error', message: err?.message || 'Phân tích JD thất bại.' }
     }
-    
+    aiAnalyzing.value = false
+    return
+  }
+
+  try {
+    await refreshAiResult(companyId)
     localToast.value = { type: 'success', message: 'AI đã phân tích JD thành công!' }
   } catch (err) {
-    localToast.value = { type: 'info', message: 'Tính năng AI phân tích đang chờ Backend của Khôi.' }
+    localToast.value = { type: 'warning', message: 'Phân tích xong nhưng chưa tải lại được kết quả. Hãy tải lại trang.' }
   } finally {
     aiAnalyzing.value = false
   }
@@ -177,14 +216,14 @@ const handleAiAnalyze = async () => {
 
 <template>
   <div v-if="loading" class="flex flex-col items-center justify-center min-h-[400px] text-slate-500 dark:text-slate-400">
-    <div class="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+    <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
     <span class="font-medium">Đang tải chi tiết công việc...</span>
   </div>
   <div v-else class="animate-fade-in space-y-6">
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
 
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center gap-4 p-6 rounded-2xl shadow-sm">
       <button @click="router.push('/jobs')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-600 shrink-0">
         <ArrowLeft size="20" />
       </button>
@@ -197,36 +236,50 @@ const handleAiAnalyze = async () => {
         </div>
         <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Jobs > {{ isNew ? 'New' : job.title }}</p>
       </div>
-    </div>
+    </Card>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-6">
         <!-- Main Form Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <Card class="rounded-2xl shadow-sm p-6">
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Thông tin chung</h2>
           <form @submit="handleSave" class="space-y-5">
             <!-- Job Title -->
             <div class="space-y-2">
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Tiêu đề công việc</label>
-              <input 
-                v-model="job.title" 
-                required 
+              <input
+                v-model="job.title"
+                required
                 minlength="2"
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.title }]"
                 placeholder="Ví dụ: Frontend Developer"
               />
+              <span v-if="errors.title" class="error-text">{{ errors.title }}</span>
             </div>
             
+            <!-- Job Location -->
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí làm việc</label>
+              <input
+                v-model="job.location"
+                required
+                placeholder="Ví dụ: Hà Nội, TP. Hồ Chí Minh hoặc Remote"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]', { 'input-error': errors.location }]"
+              />
+              <span v-if="errors.location" class="error-text">{{ errors.location }}</span>
+            </div>
+
             <!-- Status -->
             <div class="space-y-2">
               <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái</label>
               <select 
-                v-model="job.status" 
-                class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+                v-model="job.status"
+                :class="['w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]', { 'input-error': errors.status }]"
               >
                 <option value="Open">Đang mở (Open)</option>
                 <option value="Closed">Đã đóng (Closed)</option>
               </select>
+              <span v-if="errors.status" class="error-text">{{ errors.status }}</span>
             </div>
 
             <!-- Job Description -->
@@ -238,8 +291,9 @@ const handleAiAnalyze = async () => {
                 placeholder="Nhập mô tả tổng quan về công việc (tối thiểu 10 ký tự)..."
                 required
                 minlength="10"
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.description }]"
               ></textarea>
+              <span v-if="errors.description" class="error-text">{{ errors.description }}</span>
             </div>
 
             <!-- Requirements -->
@@ -250,8 +304,9 @@ const handleAiAnalyze = async () => {
                 v-model="job.requirements"
                 placeholder="Nhập yêu cầu về kỹ năng, kinh nghiệm..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.requirements }]"
               ></textarea>
+              <span v-if="errors.requirements" class="error-text">{{ errors.requirements }}</span>
             </div>
 
             <!-- Benefits -->
@@ -262,71 +317,36 @@ const handleAiAnalyze = async () => {
                 v-model="job.benefits"
                 placeholder="Nhập các quyền lợi, chế độ đãi ngộ..."
                 required
-                class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400 resize-y"
+                :class="['w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] resize-y', { 'input-error': errors.benefits }]"
               ></textarea>
+              <span v-if="errors.benefits" class="error-text">{{ errors.benefits }}</span>
             </div>
 
             <div class="flex justify-end pt-4 gap-3 border-t border-slate-100 dark:border-slate-700">
               <Button type="button" variant="ghost" @click="router.push('/jobs')" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Hủy</Button>
-              <Button type="submit" :disabled="saving" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+              <Button type="submit" :disabled="saving" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
                 <Save size="16" class="mr-2" v-if="!saving" /> 
                 <div v-else class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
                 {{ saving ? 'Đang lưu...' : 'Lưu thông tin' }}
               </Button>
             </div>
           </form>
-        </div>
+        </Card>
         
-        <div v-if="!isNew" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên ({{ candidates.length }})</h2>
-          
-          <div v-if="candidates.length === 0" class="text-center text-slate-500 dark:text-slate-400 py-12">
+        <Card v-if="!isNew" class="rounded-2xl shadow-sm p-6">
+          <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Danh sách ứng viên</h2>
+          <div class="text-center text-slate-500 dark:text-slate-400 py-12">
             <Users size="48" class="mx-auto mb-4 text-slate-300 dark:text-slate-600" />
             <p class="font-medium text-sm">Chưa có ứng viên nào nộp đơn.</p>
           </div>
-          
-          <div v-else class="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-            <div v-for="c in candidates" :key="c.candidate_id" class="p-4 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold flex items-center justify-center">
-                  {{ c.full_name ? c.full_name.charAt(0) : '?' }}
-                </div>
-                <div>
-                  <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100 cursor-pointer hover:text-indigo-600" @click="router.push(`/candidates/${c.candidate_id}`)">
-                    {{ c.full_name || 'Unknown' }}
-                  </h4>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">{{ c.email || 'N/A' }}</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-3">
-                <!-- Dropdown for Pipeline status -->
-                <select 
-                  :value="c.pipeline_status" 
-                  @change="handlePipelineChange(c.candidate_id, $event.target.value)"
-                  class="text-xs px-2 py-1.5 border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-slate-700 dark:text-slate-300"
-                >
-                  <option value="Applied">Nộp đơn (Applied)</option>
-                  <option value="Screening">Vòng hồ sơ (Screening)</option>
-                  <option value="Interviewing">Phỏng vấn (Interviewing)</option>
-                  <option value="Offered">Đề nghị (Offered)</option>
-                  <option value="Hired">Nhận việc (Hired)</option>
-                  <option value="Rejected">Loại (Rejected)</option>
-                </select>
-                
-                <button @click="handleUnassign(c.candidate_id)" class="text-slate-400 hover:text-red-500 transition-colors p-1" title="Gỡ ứng viên khỏi công việc này">
-                  <Trash2 size="16" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </Card>
       </div>
 
       <!-- Right Column -->
       <div class="space-y-6">
         <!-- AI Analysis Card -->
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 border-t-4 border-t-indigo-500 relative overflow-hidden">
-          <div class="absolute -right-6 -top-6 text-indigo-500/10 pointer-events-none">
+        <Card class="rounded-2xl shadow-sm p-6 border-t-4 border-t-blue-500 relative overflow-hidden">
+          <div class="absolute -right-6 -top-6 text-blue-500/10 pointer-events-none">
             <Sparkles size="100" />
           </div>
           <h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-3 relative z-10">AI Phân tích JD</h2>
@@ -340,21 +360,21 @@ const handleAiAnalyze = async () => {
             :class="[
               aiAnalyzing || !job.description 
                 ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed'
-                : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border-indigo-200 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400'
+                : 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400'
             ]"
             @click="handleAiAnalyze"
             :disabled="aiAnalyzing || !job.description"
           >
             <Sparkles size="16" v-if="!aiAnalyzing" />
-            <div v-else class="w-4 h-4 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+            <div v-else class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
             {{ aiAnalyzing ? 'Đang phân tích...' : 'Phân tích JD bằng AI' }}
           </button>
 
           <!-- AI result: Summary -->
           <div v-if="aiResult" class="mt-6 pt-5 border-t border-slate-100 dark:border-slate-700 flex flex-col gap-5 relative z-10 animate-fade-in">
             <!-- Summary Box -->
-            <div v-if="aiResult.summary" class="bg-indigo-50/50 dark:bg-indigo-500/5 rounded-xl p-4 border border-indigo-100/50 dark:border-indigo-500/10">
-              <p class="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2">Tóm tắt AI</p>
+            <div v-if="aiResult.summary" class="bg-blue-50/50 dark:bg-blue-500/5 rounded-xl p-4 border border-blue-100/50 dark:border-blue-500/10">
+              <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Tóm tắt AI</p>
               <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ aiResult.summary }}</p>
             </div>
 
@@ -363,7 +383,7 @@ const handleAiAnalyze = async () => {
               <p class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Kỹ năng bắt buộc</p>
               <div class="flex flex-wrap gap-2">
                 <span v-for="s in aiResult.required_skills" :key="s"
-                  class="px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-500/20">
+                  class="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold border border-blue-100 dark:border-blue-500/20">
                   {{ s }}
                 </span>
               </div>
@@ -390,7 +410,7 @@ const handleAiAnalyze = async () => {
                 <div v-for="(r, i) in rubric" :key="i"
                   class="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-lg">
                   <span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ r.criterion }}</span>
-                  <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded">{{ r.weight }}</span>
+                  <span class="text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded">{{ r.weight }}</span>
                 </div>
               </div>
             </div>
@@ -407,7 +427,7 @@ const handleAiAnalyze = async () => {
           <div v-if="!job.description && !aiResult" class="mt-5 flex items-center gap-2 text-amber-500 bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg border border-amber-100 dark:border-amber-500/20 text-sm relative z-10 font-medium">
             <AlertCircle size="16" class="shrink-0" /> Cần nhập JD để AI có thể phân tích.
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   </div>

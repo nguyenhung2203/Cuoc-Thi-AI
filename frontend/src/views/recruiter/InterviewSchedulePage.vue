@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -10,6 +10,7 @@ import { jobService } from '../../services/job.service'
 import { candidateService } from '../../services/candidate.service'
 import { interviewService } from '../../services/interview.service'
 import { authStore } from '../../stores/auth.store'
+import { isFutureDateTime, requiredTrim, validateForm } from '../../utils/validators.js'
 
 const router = useRouter()
 const jobs = ref([])
@@ -22,18 +23,50 @@ const interview = ref({
 })
 const saving = ref(false)
 const loading = ref(true)
+const candidatesLoading = ref(false)
 const localToast = ref(null)
+const errors = ref({})
+const minimumDateTime = computed(() => {
+  const date = new Date(Date.now() + 15 * 60_000)
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
+})
+
+watch(() => interview.value.jobId, async (jobId) => {
+  interview.value.candidateId = ''
+  candidates.value = []
+  if (!jobId) return
+
+  const companyId = authStore.user?.companies?.[0]?.id
+  if (!companyId) return
+
+  candidatesLoading.value = true
+  try {
+    const data = await candidateService.getCandidates(companyId, {
+      job_id: jobId,
+      page_size: 100,
+    })
+    candidates.value = Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []
+  } catch (error) {
+    localToast.value = {
+      type: 'error',
+      message: 'Không thể tải ứng viên của công việc: ' + (error.message || 'Không xác định'),
+    }
+  } finally {
+    candidatesLoading.value = false
+  }
+})
 
 onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) throw new Error('Không tìm thấy company ID')
+    if (!companyId) {
+      loadingData.value = false
+      return
+    }
     
     const jobsData = await jobService.getJobs(companyId)
-    jobs.value = jobsData
-    
-    const candidatesData = await candidateService.getCandidates(companyId)
-    candidates.value = candidatesData
+    jobs.value = Array.isArray(jobsData) ? jobsData : []
   } catch (error) {
     localToast.value = { type: 'error', message: 'Lỗi tải danh sách: ' + (error.message || 'Không xác định') }
   } finally {
@@ -43,8 +76,25 @@ onMounted(async () => {
 
 const handleSave = async (e) => {
   e.preventDefault()
-  if (!interview.value.jobId || !interview.value.candidateId || !interview.value.datetime) return
-  
+  if (saving.value) return
+
+  const validation = validateForm(interview.value, {
+    jobId: [
+      (value) => requiredTrim(value, 'Vui lòng chọn công việc.'),
+      (value) => jobs.value.some(job => job?.id === value) ? '' : 'Công việc đã chọn không hợp lệ.',
+    ],
+    candidateId: [
+      (value) => requiredTrim(value, 'Vui lòng chọn ứng viên.'),
+      (value) => candidates.value.some(candidate => candidate?.id === value) ? '' : 'Ứng viên không thuộc công việc đã chọn.',
+    ],
+    datetime: [
+      (value) => requiredTrim(value, 'Vui lòng chọn ngày giờ phỏng vấn.'),
+      (value) => isFutureDateTime(value, 15, 'Lịch phỏng vấn phải cách thời điểm hiện tại ít nhất 15 phút.'),
+    ],
+  })
+  errors.value = validation.errors
+  if (!validation.isValid) return
+
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -93,28 +143,45 @@ const handleSave = async (e) => {
         <div style="display: flex; flex-direction: column; gap: 20px">
           <div class="input-group">
             <label class="input-label">Công việc (Vị trí ứng tuyển)</label>
-            <select class="input-field" required v-model="interview.jobId">
+            <select :class="['input-field', { 'input-error': errors.jobId }]" required v-model="interview.jobId">
               <option value="">-- Chọn công việc --</option>
               <option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.title }}</option>
             </select>
+            <span v-if="errors.jobId" class="error-text">{{ errors.jobId }}</span>
           </div>
 
           <div class="input-group">
             <label class="input-label">Ứng viên</label>
-            <select class="input-field" required v-model="interview.candidateId">
-              <option value="">-- Chọn ứng viên --</option>
+            <select
+              :class="['input-field', { 'input-error': errors.candidateId }]"
+              required
+              v-model="interview.candidateId"
+              :disabled="!interview.jobId || candidatesLoading || candidates.length === 0"
+            >
+              <option value="">
+                {{ !interview.jobId
+                  ? '-- Vui lòng chọn công việc trước --'
+                  : candidatesLoading
+                    ? '-- Đang tải ứng viên --'
+                    : candidates.length === 0
+                      ? '-- Chưa có ứng viên ứng tuyển công việc này --'
+                      : '-- Chọn ứng viên --' }}
+              </option>
               <option v-for="c in candidates" :key="c.id" :value="c.id">{{ c.full_name || c.name }} ({{ c.email }})</option>
             </select>
+            <span v-if="errors.candidateId" class="error-text">{{ errors.candidateId }}</span>
           </div>
 
           <div class="input-group">
             <label class="input-label">Ngày và giờ phỏng vấn</label>
             <input 
               type="datetime-local" 
-              class="input-field" 
+              :class="['input-field', { 'input-error': errors.datetime }]"
               required
+              :min="minimumDateTime"
               v-model="interview.datetime"
             />
+            <span v-if="errors.datetime" class="error-text">{{ errors.datetime }}</span>
           </div>
           
           <div style="padding: 16px; background-color: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.1); border-radius: 8px; display: flex; gap: 12px">

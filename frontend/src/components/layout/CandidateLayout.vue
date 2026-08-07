@@ -1,83 +1,102 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
-import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe } from 'lucide-vue-next'
-
-import { notificationService } from '../../services/notification.service'
+import { useNotificationStore } from '../../stores/notification.store'
+import { langStore } from '../../stores/lang.store'
+import AppFooter from './AppFooter.vue'
+import AppLogo from '../common/AppLogo.vue'
+import { Home, Calendar, Bot, Award, User as UserIcon, FileText, Settings, Bell, LogOut, ChevronDown, Briefcase, Globe, Sun, Moon, Check, Bookmark, Menu, X } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 const showNotifications = ref(false)
 const showProfileMenu = ref(false)
-const notifications = ref([])
+const showLangMenu = ref(false)
+const isMobileMenuOpen = ref(false)
+const notificationStore = useNotificationStore()
+
+const currentTheme = ref(localStorage.getItem('app_theme') || 'light')
+const currentLang = computed(() => langStore.lang)
+
+const notifications = computed(() => notificationStore.notifications)
+const unreadCount = computed(() => notificationStore.unreadCount)
+
+const applyTheme = () => {
+  if (currentTheme.value === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+const toggleTheme = () => {
+  currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light'
+  localStorage.setItem('app_theme', currentTheme.value)
+  applyTheme()
+}
+
+const setLanguage = (code) => {
+  langStore.setLang(code)
+  showLangMenu.value = false
+}
+
+const closeAllMenus = () => {
+  showNotifications.value = false
+  showProfileMenu.value = false
+  showLangMenu.value = false
+}
 
 onMounted(async () => {
-  try {
-    if (authStore.user) {
-      const data = await notificationService.getNotifications()
-      if (data && data.notifications) {
-        notifications.value = data.notifications
-      } else if (Array.isArray(data)) {
-        notifications.value = data
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load notifications:', error)
+  applyTheme()
+  window.addEventListener('click', closeAllMenus)
+  if (authStore.user) {
+    notificationStore.startPolling()
   }
 })
 
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
+onUnmounted(() => {
+  window.removeEventListener('click', closeAllMenus)
+  notificationStore.stopPolling()
+})
 
 const handleMarkAllAsRead = async (e) => {
   e.stopPropagation()
-  try {
-    if (authStore.user) {
-      await notificationService.markAllAsRead()
-      notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
-    }
-  } catch (error) {
-    console.error(error)
-  }
+  await notificationStore.markAllRead()
 }
 
 const handleMarkAsRead = async (e, id) => {
   e.stopPropagation()
-  try {
-    if (authStore.user) {
-      await notificationService.markAsRead(id)
-      const notif = notifications.value.find(n => n.id === id)
-      if (notif) notif.is_read = true
-    }
-  } catch (error) {
-    console.error(error)
-  }
+  await notificationStore.markRead(id)
 }
 
 const formatTimeAgo = (isoStr) => {
   if (!isoStr) return ''
   const diff = new Date() - new Date(isoStr)
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'Vừa xong'
-  if (minutes < 60) return `${minutes} phút trước`
+  if (minutes < 1) return langStore.t('nav', 'justNow')
+  if (minutes < 60) return `${minutes} ${langStore.t('nav', 'minutesAgo')}`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} giờ trước`
-  return `${Math.floor(hours / 24)} ngày trước`
+  if (hours < 24) return `${hours} ${langStore.t('nav', 'hoursAgo')}`
+  return `${Math.floor(hours / 24)} ${langStore.t('nav', 'daysAgo')}`
 }
 
-const candidateMenu = [
-  { path: '/', name: 'Giới thiệu', icon: Globe },
-  { path: '/home', name: 'Tổng quan', icon: Home },
-  { path: '/job-board', name: 'Tìm việc', icon: Briefcase },
-  { path: '/my-interviews', name: 'Công việc & Phỏng vấn', icon: Calendar },
-  { path: '/mock-setup', name: 'Luyện tập AI', icon: Bot },
-  { path: '/mock-results', name: 'Kết quả', icon: Award }
-]
+const candidateMenu = computed(() => [
+  { path: '/', name: langStore.t('nav', 'about'), icon: Globe },
+  { path: '/home', name: langStore.t('nav', 'overview'), icon: Home },
+  { path: '/job-board', name: langStore.t('nav', 'jobs'), icon: Briefcase },
+  { path: '/my-interviews', name: langStore.t('nav', 'interviews'), icon: Calendar },
+  { path: '/mock-setup', name: langStore.t('nav', 'aiPractice'), icon: Bot },
+  { path: '/mock-results', name: langStore.t('nav', 'results'), icon: Award }
+])
 
-const profileMenu = [
-  { path: '/profile', name: 'Hồ sơ của tôi', icon: UserIcon },
-  { path: '/candidate-settings', name: 'Cài đặt', icon: Settings }
-]
+const profileMenu = computed(() => [
+  { path: '/profile?tab=profile', name: langStore.t('nav', 'myProfile'), icon: UserIcon },
+  { path: '/my-applications', name: langStore.t('nav', 'appliedJobs'), icon: FileText },
+  { path: '/saved-jobs', name: langStore.t('nav', 'savedJobs'), icon: Bookmark }
+])
 
 const handleLogout = async () => {
   await authStore.logout()
@@ -87,49 +106,100 @@ const handleLogout = async () => {
 <template>
   <div class="candidate-layout">
     <!-- Top Navbar -->
-    <header class="top-navbar">
+    <header v-if="!route.path.includes('/candidate-room')" class="top-navbar">
       <div class="nav-container">
-        <!-- Logo -->
-        <div class="nav-brand flex items-center" style="cursor: pointer;" @click="router.push('/home')">
-          <img src="/images/logo.png" alt="Logo" style="height: 56px; object-fit: contain;" />
+        <!-- Left Side: Logo & Menu -->
+        <div class="nav-left">
+          <!-- Mobile Menu Button -->
+          <button class="mobile-nav-toggle" @click.stop="isMobileMenuOpen = !isMobileMenuOpen">
+            <Menu v-if="!isMobileMenuOpen" :size="20" />
+            <X v-else :size="20" />
+          </button>
+
+          <!-- Logo -->
+          <div class="nav-brand cursor-pointer" @click="router.push('/home')">
+            <AppLogo size="md" />
+          </div>
+
+          <!-- Menu -->
+          <nav class="nav-menu" :class="{ 'is-open': isMobileMenuOpen }">
+            <router-link 
+              v-for="item in candidateMenu" 
+              :key="item.path"
+              :to="item.path"
+              class="nav-link"
+              active-class="active"
+              @click="isMobileMenuOpen = false"
+            >
+              <component :is="item.icon" size="18" />
+              {{ item.name }}
+            </router-link>
+          </nav>
         </div>
 
-        <!-- Center Menu -->
-        <nav class="nav-menu">
-          <router-link 
-            v-for="item in candidateMenu" 
-            :key="item.path"
-            :to="item.path"
-            class="nav-link"
-            active-class="active"
-          >
-            <component :is="item.icon" size="18" />
-            {{ item.name }}
-          </router-link>
-        </nav>
-
-        <!-- Right Actions -->
+        <!-- Right Side: Actions -->
         <div class="nav-actions">
+          <!-- Language Selector Dropdown -->
+          <div style="position: relative; cursor: pointer; margin-right: 12px" @click.stop="showLangMenu = !showLangMenu; showNotifications = false; showProfileMenu = false">
+            <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background-color: var(--surface-soft); border: 1px solid var(--border); transition: all 0.2s; font-size: 13px; font-weight: 600; color: var(--text-main)" class="hover-border">
+              <Globe size="15" color="var(--primary)" />
+              <span>{{ currentLang === 'en' ? 'EN' : 'VN' }}</span>
+              <ChevronDown size="14" color="var(--text-muted)" />
+            </div>
+
+            <div v-if="showLangMenu" class="dropdown-menu" style="width: 210px; right: 0;">
+              <div style="padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+                Ngôn ngữ Giao diện
+              </div>
+              <div 
+                @click.stop="setLanguage('vi')"
+                style="padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; color: var(--text-main); cursor: pointer; transition: background 0.15s;"
+                class="hover-bg"
+                :style="{ background: currentLang === 'vi' ? 'var(--primary-light)' : 'transparent', color: currentLang === 'vi' ? 'var(--primary)' : 'var(--text-main)' }"
+              >
+                <span>Tiếng Việt</span>
+                <Check v-if="currentLang === 'vi'" size="16" color="var(--primary)" />
+              </div>
+              <div 
+                @click.stop="setLanguage('en')"
+                style="padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; color: var(--text-main); cursor: pointer; transition: background 0.15s;"
+                class="hover-bg"
+                :style="{ background: currentLang === 'en' ? 'var(--primary-light)' : 'transparent', color: currentLang === 'en' ? 'var(--primary)' : 'var(--text-main)' }"
+              >
+                <span>English</span>
+                <Check v-if="currentLang === 'en'" size="16" color="var(--primary)" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Dark / Light Mode Toggle Button -->
+          <div style="cursor: pointer; margin-right: 14px" @click.stop="toggleTheme" :title="currentTheme === 'dark' ? 'Chuyển sang chế độ Sáng (Light Mode)' : 'Chuyển sang chế độ Tối (Dark Mode)'">
+            <div style="width: 36px; height: 36px; border-radius: 50%; background-color: var(--surface-soft); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; transition: all 0.2s" class="hover-circle">
+              <Sun v-if="currentTheme === 'dark'" size="18" style="color: #FACC15" />
+              <Moon v-else size="18" style="color: var(--text-secondary)" />
+            </div>
+          </div>
+
           <template v-if="authStore.isAuthenticated">
             <!-- Notification Bell -->
-            <div style="position: relative; cursor: pointer; margin-right: 16px" @click="showNotifications = !showNotifications; showProfileMenu = false">
-              <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s" class="hover-circle">
+            <div style="position: relative; cursor: pointer; margin-right: 16px" @click.stop="showNotifications = !showNotifications; showProfileMenu = false; showLangMenu = false">
+              <div style="padding: 8px; border-radius: 50%; background-color: var(--surface-soft); transition: background-color 0.2s; display: flex; align-items: center; justify-content: center;" class="hover-circle">
                 <Bell size="20" color="var(--text-secondary)" />
-                <div v-if="unreadCount > 0" style="position: absolute; top: 0px; right: 0px; background-color: var(--danger); color: white; border-radius: 50%; border: 2px solid var(--surface); font-size: 10px; font-weight: bold; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;">
-                  {{ unreadCount }}
-                </div>
+              </div>
+              <div v-if="unreadCount > 0" style="position: absolute; top: 2px; right: 2px; background-color: var(--danger); color: white; border-radius: 9999px; border: 2px solid var(--surface); font-size: 10px; font-weight: bold; min-width: 18px; height: 18px; padding: 0 4px; display: flex; align-items: center; justify-content: center; transform: translate(25%, -25%); pointer-events: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);">
+                {{ unreadCount }}
               </div>
               
               <!-- Notifications Dropdown -->
               <div v-if="showNotifications" class="dropdown-menu">
                 <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center">
-                  <span style="font-weight: 600; color: var(--text-main)">Thông báo</span>
-                  <span style="font-size: 12px; color: var(--primary); font-weight: 500; cursor: pointer;" @click="handleMarkAllAsRead">Đánh dấu đã đọc</span>
+                  <span style="font-weight: 600; color: var(--text-main)">{{ langStore.t('nav', 'notifications') }}</span>
+                  <span style="font-size: 12px; color: var(--primary); font-weight: 500; cursor: pointer;" @click="handleMarkAllAsRead">{{ langStore.t('nav', 'markAllRead') }}</span>
                 </div>
                 
                 <div style="max-height: 400px; overflow-y: auto;">
                   <div v-if="notifications.length === 0" style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 14px;">
-                    Chưa có thông báo nào.
+                    {{ langStore.t('nav', 'noNotifications') }}
                   </div>
                   <div v-for="n in notifications" :key="n.id" 
                        style="padding: 16px; border-bottom: 1px solid var(--border); transition: background-color 0.2s" 
@@ -147,21 +217,21 @@ const handleLogout = async () => {
                 </div>
 
                 <div style="padding: 12px; text-align: center; color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; background-color: var(--surface-soft)">
-                  Xem tất cả thông báo
+                  {{ langStore.t('nav', 'viewAllNotifications') }}
                 </div>
               </div>
             </div>
 
             <!-- User Profile Dropdown -->
-            <div style="position: relative; cursor: pointer" @click="showProfileMenu = !showProfileMenu; showNotifications = false">
-              <div style="display: flex; align-items: center; gap: 12px; padding: 4px 8px; border-radius: 24px; border: 1px solid var(--border); transition: border-color 0.2s" class="hover-border">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background-color: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold">
+            <div style="position: relative; cursor: pointer" @click.stop="showProfileMenu = !showProfileMenu; showNotifications = false; showLangMenu = false">
+              <div style="display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 24px; border: 1px solid var(--border); transition: border-color 0.2s" class="hover-border">
+                <div style="width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background-color: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold">
                   {{ authStore.user?.full_name ? authStore.user.full_name[0].toUpperCase() : 'C' }}
                 </div>
-                <div style="display: flex; flex-direction: column">
-                  <span style="font-size: 13px; font-weight: 600; color: var(--text-main)">{{ authStore.user?.full_name || 'Ứng viên' }}</span>
+                <div style="display: flex; flex-direction: column; max-width: 130px;">
+                  <span style="font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ authStore.user?.full_name || 'Ứng viên' }}</span>
                 </div>
-                <ChevronDown size="16" color="var(--text-muted)" style="margin-right: 4px" />
+                <ChevronDown size="14" color="var(--text-muted)" />
               </div>
 
               <div v-if="showProfileMenu" class="dropdown-menu" style="width: 240px">
@@ -183,7 +253,7 @@ const handleLogout = async () => {
                 <div style="padding: 8px; border-top: 1px solid var(--border)">
                   <button class="dropdown-item text-danger" @click="handleLogout">
                     <LogOut size="16" />
-                    Đăng xuất
+                    {{ langStore.t('nav', 'logout') }}
                   </button>
                 </div>
               </div>
@@ -197,9 +267,10 @@ const handleLogout = async () => {
     </header>
 
     <!-- Page Content -->
-    <main class="page-content" :class="{ 'container-bounded': route.path !== '/' }">
+    <main class="page-content" :class="[(route.path.includes('candidate-room') || route.path.includes('mock-room')) ? 'room-fullscreen' : (route.path !== '/' ? 'container-bounded' : '')]">
       <router-view />
     </main>
+    <AppFooter v-if="!route.path.includes('candidate-room') && !route.path.includes('mock-room')" />
   </div>
 </template>
 
@@ -207,7 +278,7 @@ const handleLogout = async () => {
 .candidate-layout {
   min-height: 100vh;
   background-color: var(--background);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .top-navbar {
@@ -227,6 +298,14 @@ const handleLogout = async () => {
   padding-top: 72px;
 }
 
+.page-content.room-fullscreen {
+  padding-top: 0 !important;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .container-bounded {
   max-width: 1200px;
   margin: 0 auto;
@@ -238,7 +317,7 @@ const handleLogout = async () => {
 }
 
 .nav-container {
-  max-width: 1200px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 32px;
   width: 100%;
@@ -247,31 +326,82 @@ const handleLogout = async () => {
   justify-content: space-between;
 }
 
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
 .nav-brand {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  align-items: center;
+  cursor: pointer;
 }
 
-.brand-logo {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--primary);
-  letter-spacing: -0.5px;
-}
-
-.brand-subtitle {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-  margin-top: 2px;
+.brand-img {
+  height: 48px;
+  object-fit: contain;
 }
 
 .nav-menu {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Mobile Menu Toggle button */
+.mobile-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: 8px;
+}
+.mobile-nav-toggle:hover {
+  background-color: var(--surface-soft);
+  color: var(--text-main);
+}
+
+@media (max-width: 992px) {
+  .mobile-nav-toggle {
+    display: flex;
+  }
+  
+  .nav-menu {
+    display: none;
+    position: fixed;
+    top: 72px;
+    left: 0;
+    right: 0;
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
+    box-shadow: var(--shadow-md);
+  }
+  
+  .nav-menu.is-open {
+    display: flex;
+  }
+  
+  .nav-link {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  .nav-left {
+    gap: 16px;
+  }
+  
+  .nav-container {
+    padding: 0 16px;
+  }
 }
 
 .nav-link {
@@ -294,7 +424,7 @@ const handleLogout = async () => {
 }
 
 .nav-link.active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(59, 130, 246, 0.15));
+  background: var(--primary-light);
   color: var(--primary);
   font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--primary);
@@ -303,6 +433,7 @@ const handleLogout = async () => {
 .nav-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .hover-circle:hover {

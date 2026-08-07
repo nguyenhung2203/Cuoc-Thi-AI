@@ -1,7 +1,6 @@
 <script setup>
-import { defineProps, defineEmits, onMounted } from 'vue'
-import { PartyPopper, CheckCircle } from 'lucide-vue-next'
-import Button from './AppButton.vue'
+import { defineProps, defineEmits, ref, onMounted, onBeforeUnmount } from 'vue'
+import { PartyPopper, CheckCircle2, Sparkles, X, ArrowRight } from 'lucide-vue-next'
 
 const props = defineProps({
   message: String,
@@ -17,105 +16,122 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
+const progress = ref(100)
+let timer = null
+let interval = null
+
 onMounted(() => {
-  // Auto close after 4 seconds
-  setTimeout(() => {
+  const duration = 4500
+  const step = 50
+  const decrement = (step / duration) * 100
+
+  interval = setInterval(() => {
+    progress.value = Math.max(0, progress.value - decrement)
+  }, step)
+
+  timer = setTimeout(() => {
     emit('close')
-  }, 4000)
+  }, duration)
+})
+
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer)
+  if (interval) clearInterval(interval)
 })
 </script>
 
 <template>
-  <div class="alert-overlay" @click="emit('close')">
-    <div class="alert-box" @click.stop>
-      <div class="alert-icon-wrapper" :class="role === 'recruiter' ? 'bg-primary' : 'bg-success'">
-        <PartyPopper v-if="role === 'candidate'" size="32" color="white" />
-        <CheckCircle v-else size="32" color="white" />
+  <div style="display: none;">
+    <Teleport to="body">
+      <div class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fade-in" @click="emit('close')">
+        <!-- Main Welcome Glass Card -->
+        <div 
+          class="relative w-full max-w-md bg-white dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-7 shadow-2xl shadow-indigo-500/10 overflow-hidden text-center transform transition-all animate-bounce-in"
+          @click.stop
+        >
+          <!-- Top decorative ambient glow -->
+          <div class="absolute -top-24 -left-24 w-48 h-48 bg-gradient-to-br from-blue-500/30 to-cyan-500/20 rounded-full blur-2xl pointer-events-none"></div>
+          <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-full blur-2xl pointer-events-none"></div>
+
+          <!-- Close Button -->
+          <button 
+            @click="emit('close')"
+            class="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-20"
+            title="Đóng"
+          >
+            <X size="18" />
+          </button>
+
+          <!-- Role Badge -->
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider mb-4" :class="role === 'recruiter' ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60' : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60'">
+            <Sparkles size="13" class="animate-spin-slow" />
+            <span>{{ role === 'recruiter' ? 'Nhà Tuyển Dụng Portal' : 'Ứng Viên AI Portal' }}</span>
+          </div>
+
+          <!-- Icon Circle -->
+          <div class="relative mx-auto w-20 h-20 flex items-center justify-center mb-5">
+            <div class="absolute inset-0 rounded-2xl transform rotate-6 scale-105 opacity-20" :class="role === 'recruiter' ? 'bg-[var(--primary)]' : 'bg-gradient-to-tr from-emerald-600 to-teal-600'"></div>
+            <div class="w-20 h-20 rounded-2xl flex items-center justify-center shadow-xl relative z-10 text-white transform -rotate-3 transition-transform hover:rotate-0" :class="role === 'recruiter' ? 'bg-[var(--primary)] shadow-blue-500/30' : 'bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-emerald-500/30'">
+              <PartyPopper v-if="role === 'candidate'" size="38" class="animate-bounce" />
+              <CheckCircle2 v-else size="38" />
+            </div>
+          </div>
+
+          <!-- Title & Message -->
+          <h2 class="text-2xl font-black tracking-tight text-slate-800 dark:text-white mb-2">
+            {{ title }}
+          </h2>
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm mx-auto mb-7 font-medium">
+            {{ message }}
+          </p>
+
+          <!-- Action Button -->
+          <button 
+            @click="emit('close')"
+            class="w-full py-3.5 px-6 rounded-2xl font-bold text-sm text-white shadow-lg flex items-center justify-center gap-2 transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 relative overflow-hidden group"
+            :class="role === 'recruiter' ? 'bg-[var(--primary)] hover:bg-[var(--primary-hover)] shadow-blue-600/30 hover:shadow-blue-600/40' : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 shadow-emerald-600/30 hover:shadow-emerald-600/40'"
+          >
+            <span>Bắt đầu trải nghiệm ngay</span>
+            <ArrowRight size="16" class="transition-transform group-hover:translate-x-1" />
+          </button>
+
+          <!-- Auto Dismiss Progress Bar -->
+          <div class="absolute bottom-0 left-0 right-0 h-1 bg-slate-100 dark:bg-slate-800">
+            <div 
+              class="h-full transition-all duration-100 ease-linear"
+              :class="role === 'recruiter' ? 'bg-[var(--primary)]' : 'bg-gradient-to-r from-emerald-500 to-teal-500'"
+              :style="{ width: `${progress}%` }"
+            ></div>
+          </div>
+        </div>
       </div>
-      
-      <h2 class="alert-title">{{ title }}</h2>
-      <p class="alert-message">{{ message }}</p>
-      
-      <Button 
-        :variant="role === 'recruiter' ? 'primary' : 'primary'" 
-        style="width: 100%; margin-top: 24px"
-        @click="emit('close')"
-      >
-        Bắt đầu làm việc
-      </Button>
-    </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.alert-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10000;
-  animation: fadeIn 0.3s ease-out;
-}
-
-.alert-box {
-  background-color: var(--surface);
-  border-radius: 20px;
-  padding: 32px;
-  width: 100%;
-  max-width: 400px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  animation: scaleUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.alert-icon-wrapper {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-.bg-primary {
-  background: linear-gradient(135deg, var(--primary), #60A5FA);
-}
-
-.bg-success {
-  background: linear-gradient(135deg, var(--success), #34D399);
-}
-
-.alert-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-main);
-  margin-bottom: 8px;
-}
-
-.alert-message {
-  font-size: 15px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
 
-@keyframes scaleUp {
-  from { transform: scale(0.8); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.8) translateY(20px); }
+  70% { transform: scale(1.02) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-bounce-in {
+  animation: bounceIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spinSlow 8s linear infinite;
 }
 </style>

@@ -81,6 +81,24 @@ func (r *MockRepository) UpdateStartedAt(ctx context.Context, id string, t time.
 	return err
 }
 
+// UpdateAIState persists question/scoring lifecycle independently from the
+// interview session lifecycle. A processing transition counts as a new attempt.
+func (r *MockRepository) UpdateAIState(ctx context.Context, id, operation, status string, operationErr error) error {
+	column := "ai_question_status"
+	if operation == "scoring" {
+		column = "ai_scoring_status"
+	}
+	var errorText any
+	if operationErr != nil {
+		errorText = operationErr.Error()
+	}
+	q := `UPDATE mock_interviews SET ` + column + ` = $1, ai_error = $2,
+	      ai_attempts = ai_attempts + CASE WHEN $1 = 'processing' THEN 1 ELSE 0 END,
+	      updated_at = NOW() WHERE id = $3`
+	_, err := r.db.ExecContext(ctx, q, status, errorText, id)
+	return err
+}
+
 func (r *MockRepository) UpdateEndedAt(ctx context.Context, id string, t time.Time) error {
 	q := `UPDATE mock_interviews SET ended_at = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, q, t, id)
@@ -107,6 +125,13 @@ func (r *MockRepository) CreateMessage(ctx context.Context, msg *models.MockInte
 	}
 	defer stmt.Close()
 	return stmt.QueryRowContext(ctx, msg).Scan(&msg.ID, &msg.CreatedAt)
+}
+
+// UpdateMessageScore sets score_json on a single message (used by AI scoring at End).
+func (r *MockRepository) UpdateMessageScore(ctx context.Context, messageID string, scoreJSON models.JSONB) error {
+	q := `UPDATE mock_interview_messages SET score_json = $1 WHERE id = $2`
+	_, err := r.db.ExecContext(ctx, q, scoreJSON, messageID)
+	return err
 }
 
 func (r *MockRepository) ListMessages(ctx context.Context, mockID string) ([]models.MockInterviewMessage, error) {

@@ -2,6 +2,8 @@ package validator
 
 import (
 	"testing"
+
+	"backend/internal/dto/request"
 )
 
 type testStruct struct {
@@ -72,5 +74,23 @@ func TestValidate_Ptr(t *testing.T) {
 	}
 	if msgs := Validate(v); msgs != nil {
 		t.Fatalf("expected no errors, got %v", msgs)
+	}
+}
+
+// K-AUTH-04/05: the register DTO's tags are the only guard once the OTP gate
+// is disabled — an empty payload must produce all three field errors.
+func TestValidate_RegisterRequest(t *testing.T) {
+	msgs := Validate(&request.RegisterRequest{})
+	if len(msgs) != 3 {
+		t.Fatalf("empty register: got %d messages (%v), want 3", len(msgs), msgs)
+	}
+
+	ok := &request.RegisterRequest{
+		Email:    "user@example.com",
+		Password: "secret123",
+		FullName: "Nguyen Van A",
+	}
+	if msgs := Validate(ok); msgs != nil {
+		t.Fatalf("valid register: got %v", msgs)
 	}
 }

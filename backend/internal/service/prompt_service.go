@@ -61,12 +61,10 @@ func (s *PromptService) CreateNewVersion(ctx context.Context, t *models.AIPrompt
 	return created, nil
 }
 
-// ListAllLatestSystem lists the latest version of all system templates
-func (s *PromptService) ListAllLatestSystem(ctx context.Context) ([]models.AIPromptTemplate, error) {
-	tmpls, err := s.repo.ListAllLatestSystem(ctx)
+func (s *PromptService) ListAllTemplates(ctx context.Context) ([]models.AIPromptTemplate, error) {
+	tmpls, err := s.repo.ListAllTemplates(ctx)
 	if err != nil {
 		return nil, errors.NewInternal("failed to list prompt templates")
 	}
 	return tmpls, nil
 }
-

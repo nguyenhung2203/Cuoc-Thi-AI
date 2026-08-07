@@ -5,9 +5,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
 	"backend/internal/repository"
+	"backend/internal/service"
 )
 
 // HandlerFunc is the signature for event handlers.
@@ -27,24 +30,46 @@ type MessageRouter struct {
 	auditLogger        *AuditLogger
 	aiRetryMu          sync.Mutex
 	aiRetries          map[string]int
+
+	// Real dependencies (nil in dev/tests without Postgres). When present, AI
+	// requests call the real orchestrator-backed services instead of canned replies.
+	interviewRepo  *repository.InterviewRepository
+	transcriptRepo *repository.TranscriptRepository
+	suggestionSvc  *service.SuggestionService
+	scoreSvc       *service.ScoreService
 }
 
 // NewMessageRouter constructs a router and registers all known event handlers.
-func NewMessageRouter(cm *ConnectionManager, rm *RoomManager) *MessageRouter {
+// db may be nil in dev/tests: audit logging and transcript persistence become
+// no-ops and AI requests fall back to canned responses.
+func NewMessageRouter(cm *ConnectionManager, rm *RoomManager, db *sqlx.DB, deps RouterDeps) *MessageRouter {
 	r := &MessageRouter{
 		handlers:         make(map[string]HandlerFunc),
 		connManager:      cm,
 		roomManager:      rm,
 		presenceManager:  NewPresenceManager(rm),
 		audioHook:        livekit.NewAudioHookService(),
-		transcriptSaver:  NewTranscriptBatchSaver(100, 5*time.Second),
+		transcriptSaver:  NewTranscriptBatchSaver(db, 100, 5*time.Second),
 		aiRateLimiter:    NewAIRateLimiter(10, 10*time.Minute),
 		scoreRateLimiter: NewAIRateLimiter(10, 10*time.Minute),
-		auditLogger:      NewAuditLogger(repository.NewAuditRepository(nil)), // stub, will wire real db later
+		auditLogger:      NewAuditLogger(repository.NewAuditRepository(db)),
 		aiRetries:        make(map[string]int),
+		interviewRepo:    deps.InterviewRepo,
+		transcriptRepo:   deps.TranscriptRepo,
+		suggestionSvc:    deps.SuggestionSvc,
+		scoreSvc:         deps.ScoreSvc,
 	}
 	r.registerHandlers()
 	return r
+}
+
+// RouterDeps bundles the real service dependencies wired in production.
+type RouterDeps struct {
+	InterviewRepo  *repository.InterviewRepository
+	TranscriptRepo *repository.TranscriptRepository
+	SuggestionSvc  *service.SuggestionService
+	ScoreSvc       *service.ScoreService
+	AILogSvc       *service.AILogService
 }
 
 // SetTranscriptPipeline attaches the async transcript pipeline to the router.
@@ -58,7 +83,7 @@ func (r *MessageRouter) GetTranscriptSaver() *TranscriptBatchSaver {
 }
 
 // registerHandlers wires every client→server event to its handler.
-// Handlers are implemented in backend/internal/realtime/handlers/*.go
+// Handlers are implemented in the *_handler.go files of this package.
 func (r *MessageRouter) registerHandlers() {
 	// Room lifecycle
 	r.register(events.EventRoomJoin, r.handleRoomJoin)
@@ -77,8 +102,8 @@ func (r *MessageRouter) registerHandlers() {
 
 	// Chat & notes
 	r.register(events.EventChatSend, r.handleChatSend)
-	r.register(events.EventNoteCreate, r.stubHandler("note:create"))
-	r.register(events.EventQuestionMarkAsked, r.stubHandler("question:mark_asked"))
+	r.register(events.EventNoteCreate, r.handleNoteCreate)
+	r.register(events.EventQuestionMarkAsked, r.handleQuestionMarkAsked)
 
 	// Transcript (from STT pipeline)
 	r.register(events.EventTranscriptPartial, r.handleTranscriptPartial)
@@ -103,13 +128,4 @@ func (r *MessageRouter) Route(conn *ClientConnection, env *events.Envelope) {
 		return
 	}
 	h(conn, env)
-}
-
-// stubHandler returns a placeholder HandlerFunc that logs the event.
-// Sprint 1–4 tasks will replace each stub with a real implementation.
-func (r *MessageRouter) stubHandler(name string) HandlerFunc {
-	return func(conn *ClientConnection, env *events.Envelope) {
-		log.Printf("[router] stub handler for event=%q connID=%s requestID=%s",
-			name, conn.ID, env.RequestID)
-	}
 }

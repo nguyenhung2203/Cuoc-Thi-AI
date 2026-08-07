@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"database/sql"
+	"encoding/hex"
 	"io"
 	"mime/multipart"
-	"os"
-	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
@@ -17,80 +17,137 @@ import (
 	"backend/internal/models"
 	"backend/internal/pkg/errors"
 	"backend/internal/repository"
+	"backend/internal/storage"
 )
+
+// allowedMIMEs is the upload whitelist, checked against the DETECTED type
+// (magic bytes), never the client-supplied Content-Type header.
+var allowedMIMEs = map[string]bool{
+	"application/pdf":    true,
+	"image/jpeg":         true,
+	"image/png":          true,
+	"application/msword": true,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+}
+
+// mimeExt maps detected MIME types to the sanitized storage-key extension.
+// Extensions never come from the client filename — that produced keys like
+// "cv.p df" and could smuggle unexpected types.
+var mimeExt = map[string]string{
+	"application/pdf":    ".pdf",
+	"image/jpeg":         ".jpg",
+	"image/png":          ".png",
+	"application/msword": ".doc",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+
+var extPattern = regexp.MustCompile(`^\.[a-z0-9]{1,5}$`)
+
+// sanitizeExt returns ext lowercased when it is a plain dot-extension
+// ([a-z0-9]{1,5}); anything else becomes empty.
+func sanitizeExt(ext string) string {
+	ext = strings.ToLower(ext)
+	if extPattern.MatchString(ext) {
+		return ext
+	}
+	return ""
+}
+
+// isAllowedMIME reports whether a detected MIME type may be stored.
+func isAllowedMIME(mime string) bool { return allowedMIMEs[mime] }
 
 type FileService struct {
 	fileRepo *repository.FileRepository
+	baseURL  string
+	store    *storage.LocalStore
+	signer   *storage.Signer
+	maxBytes int64
 }
 
-func NewFileService(fileRepo *repository.FileRepository) *FileService {
-	return &FileService{fileRepo: fileRepo}
+func NewFileService(fileRepo *repository.FileRepository, baseURL string, store *storage.LocalStore, signer *storage.Signer, maxBytes int64) *FileService {
+	return &FileService{fileRepo: fileRepo, baseURL: baseURL, store: store, signer: signer, maxBytes: maxBytes}
+}
+
+// MaxUploadBytes exposes the configured upload cap to handlers.
+func (s *FileService) MaxUploadBytes() int64 {
+	if s.maxBytes <= 0 {
+		return 10 << 20
+	}
+	return s.maxBytes
+}
+
+// SignedURL builds a time-limited, HMAC-signed download URL for a stored file
+// key. This replaced PublicURL: an unsigned /uploads/ URL must never escape.
+func (s *FileService) SignedURL(storageKey string) (string, time.Time) {
+	return s.signer.SignURL(s.baseURL, storageKey)
 }
 
 func (s *FileService) ProcessUpload(ctx context.Context, file multipart.File, header *multipart.FileHeader, userID, companyID, fileType string) (*models.File, error) {
-	// Calc SHA-256
+	// Defense-in-depth size guard; the handler-level MaxBytesReader is primary.
+	if max := s.MaxUploadBytes(); header.Size > max {
+		return nil, errors.NewPayloadTooLarge("file exceeds the maximum allowed size")
+	}
+
+	// 1. Detect the real MIME type from magic bytes BEFORE any disk write, so
+	// rejected uploads never touch the filesystem.
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	mime := mimetype.Detect(head[:n])
+	if !isAllowedMIME(mime.String()) {
+		return nil, errors.NewValidation("file", []string{
+			"file type not allowed: " + mime.String(),
+			"supported formats: PDF, JPEG, PNG, DOC, DOCX",
+		})
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, errors.NewInternal("failed to read uploaded file")
+	}
+
+	// 2. Checksum (integrity metadata only — per-file storage, no dedupe:
+	// sharing one blob across tenants by checksum let company A mint valid
+	// signed URLs to company B's stored object).
 	hasher := sha256.New()
-	if _, err := io.Copy(hasher, file); err != nil {
+	written, err := io.Copy(hasher, file)
+	if err != nil {
 		return nil, errors.NewInternal("failed to hash file")
 	}
 	checksum := hex.EncodeToString(hasher.Sum(nil))
-	file.Seek(0, 0)
-
-	// Check if exists in DB
-	existing, err := s.fileRepo.FindByChecksum(ctx, checksum)
-	if err == nil && existing != nil {
-		// Also verify it actually exists on disk
-		uploadDir := filepath.Join(".", "uploads")
-		existingPath := filepath.Join(uploadDir, existing.StorageKey)
-		if _, err := os.Stat(existingPath); err == nil {
-			return s.SaveMetadata(ctx, companyID, userID, header.Filename, existing.StorageKey, existing.MimeType, header.Size, fileType, checksum)
-		}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, errors.NewInternal("failed to read uploaded file")
 	}
 
-	uploadDir := filepath.Join(".", "uploads")
-	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
-		return nil, errors.NewInternal("failed to create upload directory")
-	}
+	// 3. Write to a .part key, then atomically publish via rename so a
+	// half-written file can never be served.
+	ext := sanitizeExt(mimeExt[mime.String()])
+	storageKey := uuid.NewString() + ext
+	tmpKey := storageKey + ".part"
 
-	storageKey := uuid.NewString() + filepath.Ext(header.Filename)
-	filePath := filepath.Join(uploadDir, storageKey)
-	
-	dst, err := os.Create(filePath)
+	dst, err := s.store.Create(tmpKey)
 	if err != nil {
 		return nil, errors.NewInternal("failed to save file")
 	}
-	defer dst.Close()
-	
 	if _, err := io.Copy(dst, file); err != nil {
+		dst.Close()
+		_ = s.store.Remove(tmpKey)
 		return nil, errors.NewInternal("failed to write file")
 	}
-
-	// Validate magic bytes
-	file.Seek(0, 0)
-	buf := make([]byte, 512)
-	n, _ := file.Read(buf)
-	mime := mimetype.Detect(buf[:n])
-	file.Seek(0, 0)
-
-	allowedMIMEs := map[string]bool{
-		"application/pdf": true,
-		"image/jpeg":      true,
-		"image/png":       true,
-		"application/msword": true,
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	if err := dst.Sync(); err != nil {
+		dst.Close()
+		_ = s.store.Remove(tmpKey)
+		return nil, errors.NewInternal("failed to write file")
+	}
+	if err := dst.Close(); err != nil {
+		_ = s.store.Remove(tmpKey)
+		return nil, errors.NewInternal("failed to write file")
+	}
+	if err := s.store.Rename(tmpKey, storageKey); err != nil {
+		_ = s.store.Remove(tmpKey)
+		return nil, errors.NewInternal("failed to save file")
 	}
 
-	if !allowedMIMEs[mime.String()] {
-		os.Remove(filePath) // clean up invalid file
-		return nil, errors.NewBadRequest("file type not allowed: " + mime.String())
-	}
-
-	mimeType := header.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-
-	return s.SaveMetadata(ctx, companyID, userID, header.Filename, storageKey, mimeType, header.Size, fileType, checksum)
+	// Persist the DETECTED type and the actual byte count — both are what the
+	// download handler will serve, not what the client claimed.
+	return s.SaveMetadata(ctx, companyID, userID, header.Filename, storageKey, mime.String(), written, fileType, checksum)
 }
 
 func (s *FileService) SaveMetadata(
@@ -124,12 +181,18 @@ func (s *FileService) GetSignedURL(
 	ctx context.Context,
 	fileID, requestingUserID, companyID string,
 	isRecruiter bool,
+	isAdmin bool,
 ) (url string, expiresAt time.Time, err error) {
 	var file *models.File
 
-	if isRecruiter {
+	switch {
+	case isAdmin:
+		// Admin can access any file (e.g. recruiter verification documents,
+		// which are owner-uploaded and not scoped to a company).
+		file, err = s.fileRepo.GetByID(ctx, fileID)
+	case isRecruiter:
 		file, err = s.fileRepo.GetByIDAndCompany(ctx, fileID, companyID)
-	} else {
+	default:
 		file, err = s.fileRepo.GetByIDAndOwner(ctx, fileID, requestingUserID)
 	}
 
@@ -137,8 +200,59 @@ func (s *FileService) GetSignedURL(
 		return "", time.Time{}, errors.NewNotFound("file not found or access denied")
 	}
 
-	stubURL := "http://localhost:18080/uploads/" + file.StorageKey
-	expiresAt = time.Now().Add(15 * time.Minute)
+	url, expiresAt = s.SignedURL(file.StorageKey)
+	return url, expiresAt, nil
+}
 
-	return stubURL, expiresAt, nil
+// GetOwnedCV returns a CV file owned by userID, or nil when not found.
+func (s *FileService) GetOwnedCV(ctx context.Context, userID, fileID string) (*models.File, error) {
+	file, err := s.fileRepo.GetByIDAndOwner(ctx, fileID, userID)
+	if err != nil {
+		return nil, errors.NewInternal("failed to load CV file")
+	}
+	if file == nil || file.FileType != "cv" {
+		return nil, nil
+	}
+	return file, nil
+}
+
+// DeleteOwnedCVFile removes an owned CV file from DB and disk after the caller
+// has cleared foreign-key references.
+func (s *FileService) DeleteOwnedCVFile(ctx context.Context, userID, fileID string) error {
+	file, err := s.fileRepo.GetByIDAndOwner(ctx, fileID, userID)
+	if err != nil {
+		return errors.NewInternal("failed to load CV file")
+	}
+	if file == nil || file.FileType != "cv" {
+		return errors.NewNotFound("CV not found")
+	}
+	ok, err := s.fileRepo.DeleteOwnedCV(ctx, fileID, userID)
+	if err != nil {
+		return errors.NewInternal("failed to delete CV")
+	}
+	if !ok {
+		return errors.NewNotFound("CV not found")
+	}
+	_ = s.store.Remove(file.StorageKey)
+	return nil
+}
+
+// PurgeOwnedCVFiles deletes every CV owned by the user (DB + disk). Callers must
+// detach FK references first.
+func (s *FileService) PurgeOwnedCVFiles(ctx context.Context, userID string) error {
+	files, err := s.fileRepo.ListOwnedCVs(ctx, userID)
+	if err != nil {
+		return errors.NewInternal("failed to list CV files")
+	}
+	for i := range files {
+		f := files[i]
+		ok, delErr := s.fileRepo.DeleteOwnedCV(ctx, f.ID, userID)
+		if delErr != nil {
+			return errors.NewInternal("failed to delete CV")
+		}
+		if ok {
+			_ = s.store.Remove(f.StorageKey)
+		}
+	}
+	return nil
 }

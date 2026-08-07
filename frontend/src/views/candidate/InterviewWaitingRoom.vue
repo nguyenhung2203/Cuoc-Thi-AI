@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
@@ -13,7 +13,28 @@ const agreed = ref(false)
 const loading = ref(true)
 const errorMsg = ref('')
 const interviewInfo = ref(null)
-const inviteToken = ref(route.query.token || '')
+const inviteToken = computed(() => route.query.token || '')
+const joining = ref(false)
+const deviceReady = ref(false)
+
+const checkDevices = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errorMsg.value = 'Trình duyệt không hỗ trợ truy cập camera hoặc micro.'
+    return false
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+    stream.getTracks().forEach(track => track.stop())
+    deviceReady.value = true
+    return true
+  } catch (error) {
+    const denied = error?.name === 'NotAllowedError'
+    errorMsg.value = denied
+      ? 'Bạn đã từ chối quyền camera hoặc micro. Vui lòng cấp quyền để tham gia.'
+      : 'Không tìm thấy hoặc không thể sử dụng camera/micro trên thiết bị.'
+    return false
+  }
+}
 
 onMounted(async () => {
   if (!inviteToken.value) {
@@ -24,6 +45,7 @@ onMounted(async () => {
 
   try {
     const data = await interviewService.joinByToken(inviteToken.value)
+    if (!data || !data.room_access_token || !data.interview_id) throw new Error('Dữ liệu phòng phỏng vấn không đầy đủ.')
     interviewInfo.value = data
   } catch (error) {
     errorMsg.value = error.message || 'Không thể xác thực link mời phỏng vấn. Link có thể đã hết hạn.'
@@ -32,14 +54,19 @@ onMounted(async () => {
   }
 })
 
-const handleJoin = () => {
-  if (!agreed.value) return
-  // Pass token and details to candidate room
-  router.push({ 
-    path: '/candidate-room', 
-    query: { token: inviteToken.value },
-    state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value } 
-  })
+const handleJoin = async () => {
+  if (joining.value || !agreed.value || !interviewInfo.value?.room_access_token) return
+  joining.value = true
+  try {
+    if (!deviceReady.value && !(await checkDevices())) return
+    router.push({
+      path: '/candidate-room',
+      query: { token: interviewInfo.value.room_access_token },
+      state: { message: 'Vào phòng phỏng vấn thành công!', interviewInfo: interviewInfo.value }
+    })
+  } finally {
+    joining.value = false
+  }
 }
 </script>
 
@@ -47,32 +74,30 @@ const handleJoin = () => {
   <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden font-sans">
     <!-- Relaxing background animations -->
     <div class="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-      <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-400/20 rounded-full blur-3xl animate-blob"></div>
-      <div class="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-indigo-400/20 rounded-full blur-3xl animate-blob animation-delay-2000"></div>
-      <div class="absolute bottom-[-10%] left-[20%] w-[50%] h-[50%] bg-emerald-400/20 rounded-full blur-3xl animate-blob animation-delay-4000"></div>
+      <!-- Clean background, no blobs as per design system -->
     </div>
 
     <div class="max-w-2xl w-full relative z-10 animate-fade-in-up">
       <div class="text-center mb-10">
-        <div class="w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-blue-500/30 transform hover:scale-105 transition-transform">
+        <div class="w-20 h-20 bg-[var(--primary)] text-white rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg transform hover:scale-105 transition-transform">
           <ShieldCheck class="w-10 h-10" />
         </div>
-        <h1 class="text-3xl font-extrabold text-gray-800 tracking-tight">Chuẩn bị vào phòng phỏng vấn</h1>
+        <h1 class="text-h1 font-extrabold tracking-tight">Chuẩn bị vào phòng phỏng vấn</h1>
         
         <div v-if="loading" class="mt-4 flex flex-col items-center justify-center gap-3">
-          <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+          <div class="w-8 h-8 border-4 border-blue-200 border-t-[var(--primary)] rounded-full animate-spin"></div>
           <p class="text-gray-500 font-medium animate-pulse">Đang xác thực thông tin phòng...</p>
         </div>
         <div v-else-if="errorMsg" class="mt-4 text-rose-600 font-medium bg-rose-50 inline-block px-4 py-2 rounded-lg border border-rose-100">
           {{ errorMsg }}
         </div>
         <div v-else class="mt-4 inline-flex items-center gap-2 bg-white px-5 py-2 rounded-full shadow-sm border border-gray-200">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse"></span>
           <p class="text-gray-700 font-bold">{{ interviewInfo?.job_title }} <span class="text-gray-400 mx-1">|</span> {{ interviewInfo?.company_name }}</p>
         </div>
       </div>
 
-      <Card v-if="!loading && !errorMsg" class="bg-white/90 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl p-8 md:p-10">
+      <Card v-if="!loading && !errorMsg" class="shadow-lg rounded-2xl p-8 md:p-10">
         <!-- AI & Privacy Notice -->
         <div class="bg-amber-50/80 border border-amber-200/60 rounded-2xl p-6 mb-8 flex flex-col md:flex-row gap-5 hover:bg-amber-50 transition-colors">
           <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
@@ -102,15 +127,15 @@ const handleJoin = () => {
 
         <!-- System Checks -->
         <div class="flex items-center gap-4 p-5 bg-slate-50 border border-slate-200 rounded-2xl mb-8">
-          <div class="flex gap-3 text-blue-600 bg-white p-2 rounded-xl shadow-sm border border-blue-100">
+          <div class="flex gap-3 text-[var(--primary)] bg-white p-2 rounded-xl shadow-sm border border-[var(--primary-light)]">
             <div class="relative">
               <Video class="w-6 h-6" />
-              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full"></div>
+              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--success)] border-2 border-white rounded-full"></div>
             </div>
-            <div class="w-px h-6 bg-blue-100"></div>
+            <div class="w-px h-6 bg-[var(--primary-light)]"></div>
             <div class="relative">
               <Mic class="w-6 h-6" />
-              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full animate-pulse"></div>
+              <div class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--success)] border-2 border-white rounded-full animate-pulse"></div>
             </div>
           </div>
           <p class="text-gray-600 text-sm font-medium leading-relaxed flex-1">
@@ -124,7 +149,7 @@ const handleJoin = () => {
             <input 
               type="checkbox" 
               v-model="agreed"
-              class="peer appearance-none w-6 h-6 border-2 border-gray-300 rounded-lg checked:bg-blue-600 checked:border-blue-600 transition-colors cursor-pointer focus:ring-4 focus:ring-blue-500/20 outline-none" 
+              class="peer appearance-none w-6 h-6 border-2 border-gray-300 rounded-lg checked:bg-[var(--primary)] checked:border-[var(--primary)] transition-colors cursor-pointer focus:ring-4 focus:ring-[var(--accent)]/20 outline-none" 
             />
             <svg class="absolute w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
@@ -140,13 +165,13 @@ const handleJoin = () => {
           <button @click="router.push('/home')" class="flex-1 py-3.5 px-6 bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-colors shadow-sm focus:ring-4 focus:ring-gray-100 outline-none">
             Từ chối & Quay lại
           </button>
-          <button @click="handleJoin" :disabled="!agreed" class="flex-1 py-3.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none disabled:shadow-none focus:ring-4 focus:ring-blue-500/20 outline-none">
+          <button @click="handleJoin" :disabled="!agreed" class="flex-1 py-3.5 px-6 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-bold rounded-xl shadow-md transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none disabled:shadow-none outline-none">
             Tham gia phỏng vấn
           </button>
         </div>
       </Card>
       
-      <Card v-if="errorMsg" class="bg-white/90 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl p-10 text-center animate-fade-in-up">
+      <Card v-if="errorMsg" class="shadow-lg rounded-2xl p-10 text-center animate-fade-in-up">
         <div class="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
           <AlertTriangle class="w-8 h-8" />
         </div>

@@ -2,175 +2,185 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { authStore } from '../../stores/auth.store'
-import { LogOut, Home, Briefcase, Users, Calendar, BarChart2, BookOpen, Bot, Settings, Bell, Scale, FileText } from 'lucide-vue-next'
-import { notificationService } from '../../services/notification.service'
+import { LayoutDashboard, Users, Building, Settings, LogOut, ChevronLeft, ChevronRight, Menu, Activity, ShieldCheck, Bell, Search, Sparkles, BarChart3 } from 'lucide-vue-next'
+import { usePlatformStore } from '../../stores/platform.store'
 
 const router = useRouter()
 const route = useRoute()
+const platformStore = usePlatformStore()
+
+const isCollapsed = ref(false)
 const showNotifications = ref(false)
-const notifications = ref([])
-const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
-
-onMounted(async () => {
-  // Ensure light mode is default
-  document.documentElement.classList.remove('dark')
-  localStorage.setItem('theme', 'light')
-
-  try {
-    if (authStore.user) {
-      const data = await notificationService.getNotifications()
-      notifications.value = data.notifications || []
-    }
-  } catch (error) {
-    console.error('Failed to load notifications:', error)
-  }
-})
-
-const handleMarkAllAsRead = async (e) => {
-  e.stopPropagation();
-  try {
-    if (authStore.user) {
-      await notificationService.markAllAsRead()
-      notifications.value = notifications.value.map(n => ({ ...n, is_read: true }))
-    }
-  } catch (error) {
-    console.error('Failed to mark all as read:', error)
-  }
-}
-
-const handleMarkAsRead = async (e, id) => {
-  e.stopPropagation();
-  try {
-    if (authStore.user) {
-      await notificationService.markAsRead(id)
-      const notif = notifications.value.find(n => n.id === id)
-      if (notif) notif.is_read = true
-    }
-  } catch (error) {
-    console.error('Failed to mark as read:', error)
-  }
-}
-
-const formatTimeAgo = (isoStr) => {
-  if (!isoStr) return ''
-  const diff = new Date() - new Date(isoStr)
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return 'Vừa xong'
-  if (minutes < 60) return `${minutes} phút trước`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} giờ trước`
-  return `${Math.floor(hours / 24)} ngày trước`
-}
-
 
 const handleLogout = async () => {
   await authStore.logout()
+  router.push('/admin/login')
 }
 
-const adminMenu = [
-  { path: '/admin/dashboard', name: 'Tổng quan', icon: Home },
-  { path: '/admin/users', name: 'Người dùng', icon: Users },
-  { path: '/admin/companies', name: 'Công ty', icon: Briefcase },
-  { path: '/admin/prompts', name: 'Mẫu AI', icon: Bot },
-  { path: '/admin/audit-logs', name: 'Nhật ký HT', icon: FileText }
+const navItems = [
+  { name: 'Tổng quan', path: '/admin/dashboard', icon: LayoutDashboard },
+  { name: 'Quản lý Người dùng', path: '/admin/users', icon: Users },
+  { name: 'Quản lý Công ty', path: '/admin/companies', icon: Building },
+  { name: 'Báo cáo & Thống kê', path: '/admin/reports', icon: BarChart3 },
+  { name: 'Nhật ký Hệ thống', path: '/admin/logs', icon: Activity },
+  { name: 'Cài đặt Hệ thống', path: '/admin/settings', icon: Settings },
 ]
 
-const currentMenu = computed(() => adminMenu)
+const isActive = (path) => {
+  if (path === '/admin') return route.path === '/admin' || route.path === '/admin/dashboard'
+  if (path === '/admin/dashboard') return route.path === '/admin' || route.path === '/admin/dashboard'
+  return route.path.startsWith(path)
+}
+
+onMounted(() => {
+  // Ensure consistent theme
+  document.documentElement.classList.remove('dark')
+  localStorage.setItem('theme', 'light')
+})
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden bg-gray-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans transition-colors duration-300">
+  <div class="admin-shell">
     <!-- Sidebar -->
-    <aside class="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transition-colors duration-300 shadow-sm z-20">
-      <div class="p-6 cursor-pointer border-b border-slate-100 dark:border-slate-700 flex items-center justify-center h-[88px]" @click="router.push('/dashboard')">
-        <img src="/images/logo.png" alt="Logo" class="h-14 object-contain" />
-      </div>
-      
-      <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-thin">
-        <router-link 
-          v-for="item in currentMenu" 
-          :key="item.path"
-          :to="item.path"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-          active-class="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400"
-        >
-          <component :is="item.icon" size="18" />
-          {{ item.name }}
-        </router-link>
-      </nav>
-      
-      <div class="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
-        <div class="flex items-center gap-3 mb-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-600">
-          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white flex items-center justify-center font-bold shadow-md">
-            {{ authStore.user?.full_name ? authStore.user.full_name.charAt(0).toUpperCase() : 'R' }}
-          </div>
-          <div class="overflow-hidden flex-1">
-            <div class="text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis text-slate-800 dark:text-slate-200">
-              {{ authStore.user?.full_name || 'Admin User' }}
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis">
-              System Administrator
-            </div>
+    <aside class="admin-sidebar" :class="{ 'is-collapsed': isCollapsed }">
+      <!-- Logo & Toggle -->
+      <div class="admin-brand">
+        <div v-if="!isCollapsed" class="brand-id" @click="router.push('/admin/dashboard')">
+          <div class="brand-mark">{{ platformStore.brandName ? platformStore.brandName[0] : 'V' }}</div>
+          <div class="brand-text">
+            <span class="brand-name">{{ platformStore.brandName }} <span class="brand-accent">Admin</span></span>
+            <span class="brand-sub">{{ platformStore.brandBadge }} System Portal</span>
           </div>
         </div>
-        <button @click="handleLogout" class="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors">
-          <LogOut size="18" />
-          Đăng xuất
+        <button class="collapse-btn" :class="{ 'mx-auto': isCollapsed }" @click="isCollapsed = !isCollapsed" :title="isCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'">
+          <ChevronLeft v-if="!isCollapsed" :size="18" />
+          <ChevronRight v-else :size="18" />
+        </button>
+      </div>
+
+      <!-- Nav Items -->
+      <nav class="admin-nav custom-scrollbar">
+        <div v-if="!isCollapsed" class="nav-group-label">Quản trị viên</div>
+        <router-link
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="admin-nav-item"
+          :class="{ 'is-active': isActive(item.path), 'is-collapsed': isCollapsed }"
+          :title="isCollapsed ? item.name : ''"
+        >
+          <component :is="item.icon" :size="19" class="shrink-0" />
+          <span v-if="!isCollapsed" class="truncate">{{ item.name }}</span>
+        </router-link>
+      </nav>
+
+      <!-- Admin Profile & Logout -->
+      <div class="admin-foot" :class="{ 'is-collapsed': isCollapsed }">
+        <div class="admin-profile" :class="{ 'is-collapsed': isCollapsed }" :title="isCollapsed ? (authStore.user?.full_name || 'Super Admin') : ''">
+          <div class="admin-avatar"><ShieldCheck :size="20" /></div>
+          <div v-if="!isCollapsed" class="overflow-hidden flex-1">
+            <div class="admin-name truncate">{{ authStore.user?.full_name || 'Super Admin' }}</div>
+            <div class="admin-role"><span class="dot-live"></span> Toàn quyền hệ thống</div>
+          </div>
+        </div>
+        <button @click="handleLogout" :title="isCollapsed ? 'Đăng xuất' : ''" class="logout-btn" :class="{ 'is-collapsed': isCollapsed }">
+          <LogOut :size="16" class="shrink-0" />
+          <span v-if="!isCollapsed">Đăng xuất</span>
         </button>
       </div>
     </aside>
-    
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col h-screen overflow-y-auto transition-colors duration-300 bg-slate-50 dark:bg-slate-900 scrollbar-thin">
-      <header class="sticky top-0 h-[72px] flex justify-end items-center px-8 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md transition-colors duration-300 gap-4 shrink-0 z-40">
 
-        <!-- Notifications -->
-        <div class="relative cursor-pointer" @click="showNotifications = !showNotifications">
-          <div class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400">
-            <Bell size="20" />
+    <!-- Main Content Area -->
+    <main class="admin-main custom-scrollbar">
+      <header class="admin-header">
+        <div class="flex items-center gap-4">
+          <div class="admin-search">
+            <Search :size="15" />
+            <span>Tìm kiếm nhà tuyển dụng, user, log... (Ctrl + K)</span>
           </div>
-          <div v-if="unreadCount > 0" class="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white dark:border-slate-800 flex items-center justify-center text-[9px] text-white font-bold">
-            {{ unreadCount }}
-          </div>
-          
-          <!-- Notifications Dropdown -->
-          <div v-if="showNotifications" class="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden" @click.stop>
-            <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-              <span class="font-semibold text-slate-800 dark:text-slate-200">Thông báo</span>
-              <span class="text-xs text-indigo-600 dark:text-indigo-400 font-medium cursor-pointer hover:underline" @click="handleMarkAllAsRead">Đánh dấu đã đọc</span>
-            </div>
-            
-            <div class="max-h-[400px] overflow-y-auto">
-              <div v-if="notifications.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
-                Chưa có thông báo nào.
-              </div>
-              <div v-for="n in notifications" :key="n.id" 
-                   class="p-4 border-b border-slate-100 dark:border-slate-700 transition-colors relative hover:bg-slate-50 dark:hover:bg-slate-700/50" 
-                   :class="{ 'bg-indigo-50/50 dark:bg-indigo-500/5': !n.is_read }">
-                <div class="flex justify-between items-start mb-1">
-                  <div class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ n.title }}</div>
-                  <div v-if="!n.is_read" class="w-2 h-2 bg-indigo-500 rounded-full shrink-0 cursor-pointer" title="Đánh dấu đã đọc" @click="handleMarkAsRead($event, n.id)"></div>
-                </div>
-                <div class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-2">
-                  {{ n.content || n.message }}
-                </div>
-                <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ formatTimeAgo(n.created_at) }}</div>
-              </div>
-            </div>
+        </div>
 
-            <div class="p-3 text-center text-indigo-600 dark:text-indigo-400 text-xs font-medium cursor-pointer bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 transition-colors">
-              Xem tất cả thông báo
-            </div>
+        <div class="flex items-center gap-4">
+          <div class="system-badge">
+            <span class="dot-ping"></span>
+            <span>System Normal</span>
+          </div>
+          <div class="relative cursor-pointer" @click="showNotifications = !showNotifications">
+            <div class="icon-btn"><Bell :size="20" /></div>
           </div>
         </div>
       </header>
-      
-      <!-- Page Content -->
-      <div class="flex-1 p-6 lg:p-8">
+
+      <div class="admin-content">
         <div class="max-w-7xl mx-auto">
-          <router-view />
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
         </div>
       </div>
     </main>
   </div>
 </template>
+
+<style scoped>
+.admin-shell { display: flex; height: 100vh; overflow: hidden; background: var(--background); color: var(--text-main); font-family: var(--sans); }
+
+.admin-sidebar { width: 256px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: width 0.25s ease; box-shadow: var(--shadow-sm); z-index: 20; flex-shrink: 0; }
+.admin-sidebar.is-collapsed { width: 68px; }
+
+.admin-brand { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.brand-id { display: flex; align-items: center; gap: 12px; cursor: pointer; overflow: hidden; }
+.brand-mark { width: 36px; height: 36px; border-radius: var(--radius); background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; flex-shrink: 0; }
+.brand-name { font-weight: 700; font-size: 15px; color: var(--text-main); white-space: nowrap; }
+.brand-accent { color: var(--primary); font-weight: 800; }
+.brand-sub { display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.collapse-btn { display: flex; align-items: center; justify-content: center; padding: 7px; border: none; background: transparent; border-radius: var(--radius); color: var(--text-muted); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0; }
+.collapse-btn:hover { background: var(--surface-soft); color: var(--text-main); }
+
+.admin-nav { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.nav-group-label { padding: 4px 12px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.admin-nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 600; color: var(--text-main); transition: all 0.18s ease; }
+.admin-nav-item.is-collapsed { justify-content: center; padding: 10px 0; }
+.admin-nav-item :deep(svg) { color: var(--text-secondary); transition: color 0.18s ease; flex-shrink: 0; }
+.admin-nav-item:hover { background: var(--surface-soft); color: var(--primary); font-weight: 600; }
+.admin-nav-item:hover :deep(svg) { color: var(--primary); }
+.admin-nav-item.is-active { background: var(--primary); color: #fff; font-weight: 700; box-shadow: var(--shadow-sm); }
+.admin-nav-item.is-active :deep(svg) { color: #fff; }
+
+.admin-foot { border-top: 1px solid var(--border); background: var(--surface-soft); padding: 16px; }
+.admin-foot.is-collapsed { padding: 8px; }
+.admin-profile { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.2s ease; }
+.admin-profile.is-collapsed { justify-content: center; padding: 4px; }
+.admin-profile:hover { background: var(--surface); border-color: var(--border); }
+.admin-avatar { width: 40px; height: 40px; border-radius: var(--radius); background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.admin-name { font-size: 14px; font-weight: 600; color: var(--text-main); }
+.admin-role { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.dot-live { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.logout-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: none; background: transparent; border-radius: var(--radius); font-size: 14px; font-weight: 500; color: var(--danger); cursor: pointer; transition: background 0.2s ease; }
+.logout-btn.is-collapsed { justify-content: center; padding: 9px 0; }
+.logout-btn:hover { background: rgba(220,38,38,0.08); }
+
+.admin-main { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow-y: auto; background: var(--background); }
+.admin-header { position: sticky; top: 0; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 32px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); z-index: 40; flex-shrink: 0; }
+.icon-btn { display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 50%; color: var(--text-secondary); cursor: pointer; transition: background 0.2s ease; border: none; background: transparent; }
+.icon-btn:hover { background: var(--surface-soft); color: var(--text-main); }
+.admin-search { display: none; align-items: center; gap: 8px; padding: 7px 14px; border-radius: var(--radius); background: var(--surface-soft); border: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
+.system-badge { display: none; align-items: center; gap: 8px; padding: 5px 12px; border-radius: var(--radius-full); background: rgba(22,163,74,0.1); border: 1px solid rgba(22,163,74,0.2); font-size: 12px; font-weight: 600; color: var(--success); }
+.dot-ping { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pingDot 1.8s ease-out infinite; }
+@keyframes pingDot { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,0.4); } 100% { box-shadow: 0 0 0 6px rgba(22,163,74,0); } }
+@media (min-width: 640px) { .admin-search { display: flex; } }
+@media (min-width: 768px) { .system-badge { display: flex; } }
+
+.admin-content { flex: 1; padding: 24px; }
+@media (min-width: 1024px) { .admin-content { padding: 32px; } }
+
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .dot-ping { animation: none !important; } }
+</style>

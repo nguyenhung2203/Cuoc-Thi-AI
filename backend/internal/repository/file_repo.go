@@ -72,12 +72,23 @@ func (r *FileRepository) GetByIDAndOwner(ctx context.Context, fileID, ownerUserI
 	return &f, nil
 }
 
-// GetByIDAndCompany returns a file only when company_id matches.
-// Returns nil, nil when not found or company mismatch.
+// GetByIDAndCompany returns a file when it belongs to the company directly
+// or is the CV attached to a candidate belonging to that company. Portal CVs
+// are owner-scoped at upload time and become visible through the candidate
+// relationship when that candidate applies to a company's job.
 func (r *FileRepository) GetByIDAndCompany(ctx context.Context, fileID, companyID string) (*models.File, error) {
 	const q = `
-		SELECT * FROM files
-		WHERE id = $1::uuid AND company_id = $2::uuid`
+		SELECT f.* FROM files f
+		WHERE f.id = $1::uuid
+		  AND (
+			f.company_id = $2::uuid
+			OR EXISTS (
+				SELECT 1 FROM candidates c
+				WHERE c.cv_file_id = f.id
+				  AND c.company_id = $2::uuid
+				  AND c.deleted_at IS NULL
+			)
+		  )`
 
 	var f models.File
 	if err := r.db.GetContext(ctx, &f, q, fileID, companyID); err != nil {
@@ -96,4 +107,98 @@ func (r *FileRepository) FindByChecksum(ctx context.Context, checksum string) (*
 		return nil, err
 	}
 	return &file, nil
+}
+
+// DeleteOwnedCV deletes a CV file row when it belongs to ownerUserID.
+// Returns false when the file is missing or not owned by the user.
+func (r *FileRepository) DeleteOwnedCV(ctx context.Context, fileID, ownerUserID string) (bool, error) {
+	const q = `
+		DELETE FROM files
+		WHERE id = $1::uuid
+		  AND owner_user_id = $2::uuid
+		  AND file_type = 'cv'`
+	res, err := r.db.ExecContext(ctx, q, fileID, ownerUserID)
+	if err != nil {
+		return false, fmt.Errorf("file delete owned cv: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// ListOwnedCVs returns CV file metadata owned by the user (newest first).
+func (r *FileRepository) ListOwnedCVs(ctx context.Context, ownerUserID string) ([]models.File, error) {
+	const q = `
+		SELECT * FROM files
+		WHERE owner_user_id = $1::uuid AND file_type = 'cv'
+		ORDER BY created_at DESC`
+	var files []models.File
+	if err := r.db.SelectContext(ctx, &files, q, ownerUserID); err != nil {
+		return nil, fmt.Errorf("list owned cvs: %w", err)
+	}
+	return files, nil
+}
+
+// SaveCVParse stores AI-parsed CV JSON on the owning file row.
+func (r *FileRepository) SaveCVParse(ctx context.Context, fileID, ownerUserID, parsedJSON, summary string) (bool, error) {
+	const q = `
+		UPDATE files
+		SET parsed_json = $1::jsonb,
+		    ai_summary = $2,
+		    parse_status = 'ready',
+		    parse_error = NULL,
+		    parsed_at = NOW()
+		WHERE id = $3::uuid
+		  AND owner_user_id = $4::uuid
+		  AND file_type = 'cv'`
+	res, err := r.db.ExecContext(ctx, q, parsedJSON, summary, fileID, ownerUserID)
+	if err != nil {
+		return false, fmt.Errorf("file save cv parse: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// UpdateCVParseStatus sets parse lifecycle fields on an owned CV file.
+func (r *FileRepository) UpdateCVParseStatus(ctx context.Context, fileID, ownerUserID, status string, parseErr error) error {
+	var errorText any
+	if parseErr != nil {
+		errorText = parseErr.Error()
+	}
+	const q = `
+		UPDATE files
+		SET parse_status = $1,
+		    parse_error = $2,
+		    parsed_at = CASE WHEN $1 IN ('ready', 'failed') THEN NOW() ELSE parsed_at END
+		WHERE id = $3::uuid
+		  AND owner_user_id = $4::uuid
+		  AND file_type = 'cv'`
+	_, err := r.db.ExecContext(ctx, q, status, errorText, fileID, ownerUserID)
+	if err != nil {
+		return fmt.Errorf("file update cv parse status: %w", err)
+	}
+	return nil
+}
+
+// GetLatestOwnedCVParse returns parse_status + parsed_json for the newest owned CV.
+func (r *FileRepository) GetLatestOwnedCVParse(ctx context.Context, ownerUserID string) (status string, parsedJSON string, err error) {
+	const q = `
+		SELECT coalesce(parse_status, ''), coalesce(parsed_json::text, '')
+		FROM files
+		WHERE owner_user_id = $1::uuid AND file_type = 'cv'
+		ORDER BY created_at DESC
+		LIMIT 1`
+	err = r.db.QueryRowContext(ctx, q, ownerUserID).Scan(&status, &parsedJSON)
+	if err == sql.ErrNoRows {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("file get latest cv parse: %w", err)
+	}
+	return status, parsedJSON, nil
 }

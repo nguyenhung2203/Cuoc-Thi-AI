@@ -11,6 +11,8 @@ import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-vue-next'
 import { candidateService } from '../../services/candidate.service'
 import { jobService } from '../../services/job.service'
 import { authStore } from '../../stores/auth.store'
+import { maxLength, normalizeText, isOneOf } from '../../utils/validators.js'
+import { CANDIDATE_STATUSES } from '../../utils/constants.js'
 
 const router = useRouter()
 const candidates = ref([])
@@ -20,30 +22,79 @@ const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
 const localToast = ref(null)
+const filters = ref({ keyword: '', job_id: '', status: '' })
+const currentPage = ref(1)
+const pageSize = ref(10)
+const totalPages = ref(1)
+const filters = ref({
+  keyword: '',
+  job_id: '',
+  status: ''
+})
 
 const jobs = ref([])
-const filters = ref({ job_id: '', status: '', keyword: '' })
+const isValidId = (value) => typeof value === 'string' || typeof value === 'number'
+const validateFilters = () => {
+  filters.value.keyword = normalizeText(filters.value.keyword).slice(0, 255)
+  if (filters.value.status && !CANDIDATE_STATUSES.includes(String(filters.value.status).toLowerCase())) {
+    filters.value.status = ''
+    localToast.value = { type: 'error', message: 'Bộ lọc trạng thái không hợp lệ.' }
+    return false
+  }
+  if (filters.value.job_id && !jobs.value.some(job => String(job?.id) === String(filters.value.job_id))) {
+    filters.value.job_id = ''
+    localToast.value = { type: 'error', message: 'Bộ lọc công việc không hợp lệ.' }
+    return false
+  }
+  return true
+}
 
 const fetchCandidates = async () => {
+  if (!validateFilters()) return
   loading.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) return
-    
+    if (!companyId) {
+      candidates.value = []
+      totalPages.value = 1
+      localToast.value = { type: 'error', message: 'Không tìm thấy company ID. Vui lòng đăng nhập đúng tài khoản recruiter/admin có công ty.' }
+      return
+    }
+
     // Clean up empty filters
-    const params = {}
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize.value
+    }
     if (filters.value.job_id) params.job_id = filters.value.job_id
     if (filters.value.status) params.status = filters.value.status
     if (filters.value.keyword) params.keyword = filters.value.keyword
 
     const response = await candidateService.getCandidates(companyId, params)
-    candidates.value = response.map(c => ({
-      id: c.id,
-      name: c.full_name,
-      email: c.email,
-      appliedJob: c.latest_job?.title || 'Chưa ứng tuyển',
-      status: c.status || 'New'
-    }))
+
+    // Handle both array and paginated response
+    if (Array.isArray(response)) {
+      candidates.value = response.map(c => ({
+        id: c?.id,
+        name: c?.full_name || c?.name || 'Chưa cập nhật',
+        email: c?.email || 'Chưa cập nhật',
+        appliedJob: c?.latest_job?.title || 'Chưa ứng tuyển',
+        status: c?.status || 'New'
+      }))
+      totalPages.value = 1
+    } else if (response && Array.isArray(response.data)) {
+      candidates.value = response.data.map(c => ({
+        id: c?.id,
+        name: c?.full_name || c?.name || 'Chưa cập nhật',
+        email: c?.email || 'Chưa cập nhật',
+        appliedJob: c?.latest_job?.title || 'Chưa ứng tuyển',
+        status: c?.status || 'New'
+      }))
+      totalPages.value = Math.max(1, Math.ceil((response.meta?.total || 0) / pageSize.value))
+    } else {
+      candidates.value = []
+      totalPages.value = 1
+    }
   } catch (error) {
     localToast.value = { type: 'error', message: 'Lỗi tải danh sách ứng viên: ' + (error.message || 'Không xác định') }
     candidates.value = []
@@ -55,8 +106,19 @@ const fetchCandidates = async () => {
 onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) throw new Error('Không tìm thấy company ID')
-    
+    if (!companyId) {
+
+      loading.value = false
+      candidates.value = []
+      totalPages.value = 1
+      localToast.value = {
+        type: 'error',
+        message: 'Không tìm thấy company ID. Vui lòng đăng nhập đúng tài khoản recruiter có công ty.'
+      }
+      return
+    }
+
+
     // Fetch both jobs for dropdown and initial candidates
     const [jobsRes] = await Promise.all([
       jobService.getJobs(companyId),
@@ -65,6 +127,11 @@ onMounted(async () => {
     jobs.value = jobsRes
   } catch (error) {
     console.error(error)
+    loading.value = false
+    localToast.value = {
+      type: 'error',
+      message: 'Không thể tải danh sách ứng viên.'
+    }
   }
 })
 
@@ -77,6 +144,7 @@ const applyFilter = () => {
 const clearFilter = () => {
   filters.value.job_id = ''
   filters.value.status = ''
+  filters.value.keyword = ''
   showFilterModal.value = false
   fetchCandidates()
 }
@@ -90,6 +158,10 @@ const getStatusType = (status) => {
 }
 
 const confirmDelete = async () => {
+  if (!isValidId(deletingId.value)) {
+    localToast.value = { type: 'error', message: 'Không xác định được ứng viên cần xóa.' }
+    return
+  }
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     await candidateService.updateCandidate(companyId, deletingId.value, { status: 'deleted' }) // Hoặc gọi API delete nếu có
@@ -114,37 +186,37 @@ const columns = [
   <div class="animate-fade-in space-y-6">
     <Toast v-if="routeMessage" type="success" :message="routeMessage" @close="routeMessage = ''" />
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
-    
+
     <!-- Page Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Ứng viên</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm">Theo dõi ứng viên, điểm phù hợp và lịch sử phỏng vấn.</p>
       </div>
-      <Button @click="router.push('/candidates/new')" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">
+      <Button @click="router.push('/candidates/new')" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">
         <Plus size="16" class="mr-1" /> Thêm ứng viên
       </Button>
-    </div>
+    </Card>
 
     <!-- Main Content Card -->
-    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <Card class="rounded-2xl shadow-sm overflow-hidden">
       <!-- Toolbar -->
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
-          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Tìm tên, email..." 
-            class="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+          <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+          <input
+            type="text"
+            placeholder="Tìm tên, email..."
+            class="w-full pl-10 pr-4 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             v-model="filters.keyword"
             @keyup.enter="fetchCandidates"
           />
         </div>
         <div class="flex gap-2">
-          <Button variant="secondary" @click="showFilterModal = true" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <Button variant="secondary" @click="showFilterModal = true" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
             Lọc theo Job
           </Button>
-          <Button variant="secondary" @click="showFilterModal = true" class="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700">
+          <Button variant="secondary" @click="showFilterModal = true" class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)]">
             Lọc theo trạng thái
           </Button>
         </div>
@@ -152,43 +224,43 @@ const columns = [
 
       <!-- Table Section -->
       <div v-if="loading" class="p-12 text-center text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-3">
-        <div class="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải dữ liệu...</span>
       </div>
-      
+
       <div v-else class="w-full overflow-x-auto">
         <Table :columns="columns" :data="candidates" class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
           <template #candidate="{ row }">
             <div class="cursor-pointer group flex flex-col" @click="router.push(`/candidates/${row.id}`)">
-              <div class="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              <div class="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                 {{ row.name }}
               </div>
               <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ row.email }}</div>
             </div>
           </template>
-          
+
           <template #appliedJob="{ row }">
             <span class="text-slate-600 dark:text-slate-300 font-medium">{{ row.appliedJob }}</span>
           </template>
-          
+
           <template #status="{ row }">
-            <span 
+            <span
               class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border"
               :class="[
-                row.status === 'New' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' : 
-                row.status === 'Interviewing' ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 
-                row.status === 'Offered' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
-                row.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' : 
+                row.status === 'New' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                row.status === 'Interviewing' ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' :
+                row.status === 'Offered' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                row.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' :
                 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
               ]"
             >
               {{ row.status }}
             </span>
           </template>
-          
+
           <template #action="{ row }">
             <div class="flex items-center gap-1">
-              <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg transition-colors" title="Xem chi tiết">
+              <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
                 <Eye size="18" />
               </button>
               <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Chỉnh sửa">
@@ -201,7 +273,32 @@ const columns = [
           </template>
         </Table>
       </div>
-    </div>
+
+      <!-- Pagination -->
+      <div v-if="!loading && candidates.length > 0" class="p-6 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+        <div class="text-sm text-slate-600 dark:text-slate-400">
+          Trang {{ currentPage }} / {{ totalPages || 1 }}
+        </div>
+        <div class="flex gap-2">
+          <Button
+            :disabled="currentPage <= 1"
+            variant="secondary"
+            @click="currentPage > 1 && (currentPage--, fetchCandidates())"
+            class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ← Trước
+          </Button>
+          <Button
+            :disabled="currentPage >= totalPages"
+            variant="secondary"
+            @click="currentPage < totalPages && (currentPage++, fetchCandidates())"
+            class="bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Tiếp →
+          </Button>
+        </div>
+      </div>
+    </Card>
 
     <!-- Modals -->
     <Modal :isOpen="showDeleteModal" @close="showDeleteModal = false" title="Xác nhận xóa">
@@ -218,8 +315,8 @@ const columns = [
       <div class="flex flex-col gap-5 mb-6 p-1">
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí ứng tuyển (Job)</label>
-          <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+          <select
+            class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.job_id"
           >
             <option value="">Tất cả vị trí</option>
@@ -228,8 +325,8 @@ const columns = [
         </div>
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái hồ sơ</label>
-          <select 
-            class="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-700 dark:text-slate-200"
+          <select
+            class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.status"
           >
             <option value="">Tất cả trạng thái</option>
@@ -242,7 +339,7 @@ const columns = [
       </div>
       <div class="flex justify-end gap-3 p-1">
         <Button variant="ghost" @click="clearFilter" class="text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Xóa bộ lọc</Button>
-        <Button variant="primary" @click="applyFilter" class="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md shadow-indigo-500/20">Áp dụng</Button>
+        <Button variant="primary" @click="applyFilter" class="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-md shadow-blue-500/20">Áp dụng</Button>
       </div>
     </Modal>
   </div>

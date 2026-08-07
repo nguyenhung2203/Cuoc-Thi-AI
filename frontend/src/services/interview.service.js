@@ -65,8 +65,27 @@ export const interviewService = {
   },
 
   /**
+   * Lưu ghi chú nội bộ của recruiter cho buổi phỏng vấn
+   * @param {String} companyId
+   * @param {String} interviewId
+   * @param {String} notes
+   */
+  updateNotes: (companyId, interviewId, notes) => {
+    return apiService.put(`/companies/${companyId}/interviews/${interviewId}/notes`, { notes });
+  },
+
+  /**
+   * Gửi email nhắc nhở cho ứng viên
+   * @param {String} companyId
+   * @param {String} interviewId
+   */
+  sendReminder: (companyId, interviewId) => {
+    return apiService.post(`/companies/${companyId}/interviews/${interviewId}/send-reminder`, {});
+  },
+
+  /**
    * API dành cho Candidate tham gia vào phòng (KHÔNG CẦN companyId, chỉ cần invite_token)
-   * @param {String} inviteToken 
+   * @param {String} inviteToken
    */
   joinByToken: (inviteToken) => {
     return apiService.get(`/interviews/join/${inviteToken}`);

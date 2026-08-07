@@ -13,5 +13,4 @@ type Notification struct {
 	IsRead    bool      `db:"is_read" json:"is_read"`
 	Link      string    `db:"link" json:"link"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
-
 }

@@ -6,6 +6,7 @@ import "time"
 
 // ChatSendPayload is sent by any participant to post a message.
 type ChatSendPayload struct {
+	MessageID  string         `json:"message_id,omitempty"`
 	Message    string         `json:"message"`
 	Visibility ChatVisibility `json:"visibility"` // "room" | "recruiter_only"
 }
@@ -33,4 +34,23 @@ type ChatMessagePayload struct {
 	Message             string          `json:"message"`
 	Visibility          ChatVisibility  `json:"visibility"`
 	CreatedAt           time.Time       `json:"created_at"`
+}
+
+// NoteCreatedPayload is broadcast (recruiters only) when a note is saved.
+type NoteCreatedPayload struct {
+	NoteID      string    `json:"note_id"`
+	AuthorID    string    `json:"author_id"`
+	AuthorName  string    `json:"author_name"`
+	Content     string    `json:"content"`
+	Tags        []string  `json:"tags,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// QuestionAskedPayload is broadcast (recruiters only) when a prepared question
+// is marked as asked.
+type QuestionAskedPayload struct {
+	QuestionID string    `json:"question_id"`
+	MarkedByID string    `json:"marked_by_id"`
+	AskedAtMs  int64     `json:"asked_at_ms"`
+	MarkedAt   time.Time `json:"marked_at"`
 }

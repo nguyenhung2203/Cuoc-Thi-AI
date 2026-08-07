@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,47 +18,96 @@ type TranscriptService struct {
 }
 
 func NewTranscriptService(repo *repository.TranscriptRepository, interviewRepo *repository.InterviewRepository) *TranscriptService {
-	return &TranscriptService{
-		repo:          repo,
-		interviewRepo: interviewRepo,
-	}
+	return &TranscriptService{repo: repo, interviewRepo: interviewRepo}
 }
 
 type PushTranscriptRequest struct {
-	SpeakerID   string  `json:"speaker_id"`
-	SpeakerRole string  `json:"speaker_role"`
-	StartTime   float64 `json:"start_time"`
-	EndTime     float64 `json:"end_time"`
-	Content     string  `json:"content"`
-	IsFinal     bool    `json:"is_final"`
-	Language    string  `json:"language"`
+	ParticipantID string  `json:"participant_id"`
+	SpeakerType   string  `json:"speaker_type"`
+	SpeakerName   string  `json:"speaker_name"`
+	Content       string  `json:"content"`
+	Language      string  `json:"language"`
+	StartTimeMs   int64   `json:"start_time_ms"`
+	EndTimeMs     int64   `json:"end_time_ms"`
+	Confidence    float64 `json:"confidence"`
+	Source        string  `json:"source"`
+	IsFinal       *bool   `json:"is_final"`
 }
 
 func (s *TranscriptService) PushTranscript(ctx context.Context, interviewID, companyID string, req PushTranscriptRequest) (*models.InterviewTranscript, error) {
+	if strings.TrimSpace(req.Content) == "" {
+		return nil, errors.NewValidation("content", []string{"content is required"})
+	}
+	if !validSpeakerType(req.SpeakerType) {
+		return nil, errors.NewValidation("speaker_type", []string{"must be recruiter, candidate, ai, or system"})
+	}
+	if req.Source == "" {
+		req.Source = "manual"
+	}
+	if !validTranscriptSource(req.Source) {
+		return nil, errors.NewValidation("source", []string{"must be audio, chat, manual, or ai"})
+	}
+
 	_, err := s.interviewRepo.GetByIDAndCompany(ctx, interviewID, companyID)
 	if err != nil {
 		return nil, errors.NewNotFound("interview not found or access denied")
 	}
 
-	t := &models.InterviewTranscript{
+	now := time.Now().UTC()
+	isFinal := true
+	if req.IsFinal != nil {
+		isFinal = *req.IsFinal
+	}
+	transcript := &models.InterviewTranscript{
 		ID:          uuid.NewString(),
 		InterviewID: interviewID,
-		SpeakerID:   req.SpeakerID,
-		SpeakerRole: req.SpeakerRole,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
+		SpeakerType: req.SpeakerType,
 		Content:     req.Content,
-		IsFinal:     req.IsFinal,
-		Language:    req.Language,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		Source:      req.Source,
+		IsFinal:     isFinal,
+		CreatedAt:   now,
+	}
+	if req.ParticipantID != "" {
+		transcript.ParticipantID = &req.ParticipantID
+	}
+	if req.SpeakerName != "" {
+		transcript.SpeakerName = &req.SpeakerName
+	}
+	if req.Language != "" {
+		transcript.Language = &req.Language
+	}
+	if req.StartTimeMs != 0 {
+		transcript.StartTimeMs = &req.StartTimeMs
+	}
+	if req.EndTimeMs != 0 {
+		transcript.EndTimeMs = &req.EndTimeMs
+	}
+	if req.Confidence != 0 {
+		transcript.Confidence = &req.Confidence
 	}
 
-	err = s.repo.Create(ctx, t)
-	if err != nil {
+	if err := s.repo.Create(ctx, transcript); err != nil {
 		return nil, err
 	}
-	return t, nil
+	return transcript, nil
+}
+
+func validSpeakerType(value string) bool {
+	switch value {
+	case "recruiter", "candidate", "ai", "system":
+		return true
+	default:
+		return false
+	}
+}
+
+func validTranscriptSource(value string) bool {
+	switch value {
+	case "audio", "chat", "manual", "ai":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *TranscriptService) ListTranscripts(ctx context.Context, interviewID, companyID string) ([]models.InterviewTranscript, error) {
@@ -69,6 +119,9 @@ func (s *TranscriptService) ListTranscripts(ctx context.Context, interviewID, co
 }
 
 func (s *TranscriptService) EditTranscript(ctx context.Context, transcriptID, interviewID, companyID, editedContent, editedBy string) error {
+	if strings.TrimSpace(editedContent) == "" {
+		return errors.NewValidation("edited_content", []string{"edited_content is required"})
+	}
 	_, err := s.interviewRepo.GetByIDAndCompany(ctx, interviewID, companyID)
 	if err != nil {
 		return errors.NewNotFound("interview not found or access denied")

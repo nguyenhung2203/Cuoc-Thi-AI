@@ -243,6 +243,16 @@ func (rm *RoomManager) SaveChatMessage(roomID string, msg events.ChatMessagePayl
 		rm.simulatedChat = make(map[string][]events.ChatMessagePayload)
 	}
 	rm.simulatedChat[roomID] = append(rm.simulatedChat[roomID], msg)
+	// Dev-only multi-tab demo mirror (REALTIME_DEV_BROADCAST_ALL=true, never
+	// in production) — must match the broadcast gate in chat_handler.go so a
+	// reconnect replay can't leak history a live client never received.
+	if devBroadcastAllRooms() {
+		for id := range rm.rooms {
+			if id != roomID {
+				rm.simulatedChat[id] = append(rm.simulatedChat[id], msg)
+			}
+		}
+	}
 }
 
 // GetChatHistory retrieves historical chat messages for a room.
@@ -257,4 +267,13 @@ func (rm *RoomManager) GetChatHistory(roomID string) []events.ChatMessagePayload
 	out := make([]events.ChatMessagePayload, len(history))
 	copy(out, history)
 	return out
+}
+
+// BroadcastToAllRooms broadcasts raw JSON to every active room in the registry (used in mock dev environment).
+func (rm *RoomManager) BroadcastToAllRooms(data []byte) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	for _, r := range rm.rooms {
+		r.BroadcastAll(data)
+	}
 }

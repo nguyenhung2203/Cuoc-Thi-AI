@@ -1,0 +1,29 @@
+UBND TỈNH ĐẮK LẮK
+BAN TỔ CHỨC CUỘC THI “ỨNG DỤNG TRÍ TUỆ NHÂN TẠO VÀO CUỘC SỐNG - AI FOR LIFE” TRÊN ĐỊA BÀN TỈNH ĐẮK LẮK NĂM 2026
+CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập – Tự do – Hạnh phúc
+Đắk Lắk, ngày          tháng 7 năm 2026
+ĐỀ CƯƠNG
+Thuyết minh chi tiết sản phẩm tham gia Cuộc thi “Ứng dụng trí tuệ nhân tạo
+vào cuộc sống – AI for Life” tỉnh Đắk Lắk năm 2026
+Thí sinh viết theo từng mục dưới đây thành văn bản hoàn chỉnh (không điền dạng liệt kê sơ sài), có hình ảnh minh hoạ kèm theo từng phần; riêng Mục IV (Chức năng sản phẩm) là nội dung trọng tâm, cần trình bày chi tiết, đầy đủ nhất. Thuyết minh phải đảm bảo tối thiểu các nội dung cơ bản sau:
+I. THÔNG TIN CHUNG
+Gợi ý: Nêu tên sản phẩm/giải pháp, lĩnh vực dự thi, tác giả hoặc nhóm tác giả (họ tên, vai trò từng thành viên nếu là nhóm) bằng một đoạn giới thiệu ngắn gọn.
+II. VẤN ĐỀ VÀ MỤC TIÊU GIẢI PHÁP
+Gợi ý: Viết thành đoạn văn hoàn chỉnh: vấn đề thực tiễn xuất phát từ đâu, ai/lĩnh vực nào đang gặp phải; sản phẩm hướng tới giải quyết mục tiêu, yêu cầu gì.
+III. TỔNG QUAN GIẢI PHÁP
+Gợi ý: Trình bày ý tưởng cốt lõi, cách tiếp cận; điểm mới, khác biệt so với giải pháp đã có (nếu trùng ý tưởng đang có trên thị trường, phải nêu rõ điểm riêng theo đúng yêu cầu bắt buộc của Thể lệ Cuộc thi)
+IV. CHỨC NĂNG SẢN PHẨM (nội dung trọng tâm)
+Gợi ý: Liệt kê từng chức năng một, mỗi chức năng trình bày đầy đủ theo khung dưới đây: tên chức năng, mục đích/giá trị mang lại, cách hoạt động (đầu vào → xử lý → đầu ra, vai trò AI trong chức năng đó), tình huống sử dụng thực tế minh hoạ, kèm ảnh chụp màn hình giao diện
+1. Nhóm chức năng chính
+(tên – mục đích – cách hoạt động – vai trò AI)
+2. Nhóm chức năng nổi bật, ưu việt
+(tên – mục đích – cách hoạt động – vai trò AI)
+V. CÔNG NGHỆ, NỀN TẢNG VÀ CÁCH VẬN HÀNH
+Gợi ý: Nêu nền tảng/công nghệ sử dụng (ngôn ngữ lập trình, framework, mô hình/API AI, hạ tầng triển khai); dữ liệu sử dụng (loại, nguồn, quy mô, cách xử lý/huấn luyện); kèm sơ đồ quy trình vận hành, luồng dữ liệu.
+VI. BẢO MẬT VÀ PHÂN QUYỀN
+Gợi ý: Mô tả cơ chế bảo mật hệ thống, xác thực, mã hoá, bảo vệ dữ liệu cá nhân
+VII. MỨC ĐỘ HOÀN THIỆN VÀ KẾT QUẢ THỬ NGHIỆM
+Gợi ý: Nêu hiện trạng hoàn thiện sản phẩm (bản demo/thử nghiệm/đã vận hành chính thức), kết quả thử nghiệm thực tế, kèm ảnh/video/đường link minh chứng.
+VIII. TÍNH KHẢ THI VÀ HIỆU QUẢ
+Gợi ý: Nêu khả năng triển khai về kỹ thuật, nhân lực, chi phí; khả năng mở rộng, tích hợp, nhân rộng; hiệu quả kinh tế – xã hội dự kiến.

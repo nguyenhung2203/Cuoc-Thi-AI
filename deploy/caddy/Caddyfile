@@ -1,0 +1,28 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	@realtime_ws path /ws/*
+	reverse_proxy @realtime_ws backend-realtime:8081
+
+	@room_chat path /api/v1/rooms/*
+	reverse_proxy @room_chat backend-realtime:8081
+
+	@room_token path_regexp room_token ^/api/v1/companies/[^/]+/interviews/[^/]+/room/token$
+	reverse_proxy @room_token backend-realtime:8081
+
+	@candidate_join path /api/v1/interviews/join/*
+	reverse_proxy @candidate_join backend-realtime:8081
+
+	@api path /api/* /uploads/* /health
+	reverse_proxy @api backend-api:8080
+
+	reverse_proxy frontend:80
+}
+
+{$LIVEKIT_DOMAIN} {
+	reverse_proxy livekit:7880
+}

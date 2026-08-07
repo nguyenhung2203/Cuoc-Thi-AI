@@ -13,15 +13,22 @@ build/
 *.dll
 *.so
 *.dylib
+api_server_linux
+realtime_server
+realtime_server.exe
 
 # Environment
 .env
-.env.local
-.env.production
+.env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
+!frontend/.env.development
 
 # IDE
 .vscode/
+.claude/
 .idea/
 *.swp
 *.swo
@@ -44,6 +51,9 @@ htmlcov/
 
 # Docker
 docker-compose.override.yml
+
+# Runtime uploads (candidate CVs, etc. — not source)
+backend/uploads/
 
 # Temp
 tmp/

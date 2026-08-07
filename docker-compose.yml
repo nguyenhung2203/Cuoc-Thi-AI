@@ -1,31 +1,19 @@
-version: '3.8'
-
 services:
-  # ===== CACHE =====
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.5-alpine
     container_name: ai-interview-redis
     ports:
       - "16379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # ===== DATABASE =====
-  postgres:
-    image: postgres:15-alpine
-    container_name: ai-interview-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: ai_interview
-    ports:
-      - "15432:5432"
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-  # ===== LIVEKIT =====
   livekit:
-    image: livekit/livekit-server:latest
+    image: livekit/livekit-server:v1.9.0
     container_name: ai-interview-livekit
     command: --config /etc/livekit.yaml --dev
     ports:
@@ -33,23 +21,9 @@ services:
       - "17881:7881"
       - "17882:7882/udp"
     volumes:
-      - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml
+      - ./deploy/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    restart: unless-stopped
 
-  # ===== MINIO (S3) =====
-  minio:
-    image: minio/minio:latest
-    container_name: ai-interview-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "19000:9000"
-      - "19001:9001"
-    volumes:
-      - minio_data:/data
-
-  # ===== BACKEND API =====
   backend-api:
     build:
       context: ./backend
@@ -59,15 +33,20 @@ services:
       - "18080:8080"
     env_file:
       - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AI_SERVICE_URL: http://ai-service:8000
+      LIVEKIT_HOST: livekit
+      LIVEKIT_PORT: 7880
+      LIVEKIT_URL: ws://localhost:17880
     depends_on:
       redis:
-        condition: service_started
-      postgres:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+    restart: unless-stopped
 
-  # ===== BACKEND REALTIME =====
   backend-realtime:
     build:
       context: ./backend
@@ -77,13 +56,17 @@ services:
       - "18081:8081"
     env_file:
       - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LIVEKIT_HOST: livekit
+      LIVEKIT_PORT: 7880
+      LIVEKIT_URL: ws://localhost:17880
     depends_on:
       redis:
-        condition: service_started
-      postgres:
-        condition: service_started
+        condition: service_healthy
+    restart: unless-stopped
 
-  # ===== AI SERVICE =====
   ai-service:
     build:
       context: ./ai-service
@@ -93,10 +76,14 @@ services:
       - "18000:5000"
     env_file:
       - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
-  # ===== FRONTEND =====
   frontend:
     build:
       context: ./frontend
@@ -106,9 +93,8 @@ services:
       - "13000:80"
     depends_on:
       - backend-api
+    restart: unless-stopped
 
 volumes:
   redis_data:
-  minio_data:
-  pg_data:
   uploads_data:

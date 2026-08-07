@@ -1,2 +1,0 @@
-class CvAnalyzer:
-    pass

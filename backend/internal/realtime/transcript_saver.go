@@ -1,12 +1,16 @@
 package realtime
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 // TranscriptRecord represents a final transcript row to be batch-inserted into interview_transcripts.
@@ -31,6 +35,7 @@ type TranscriptRecord struct {
 // blocking WebSocket and STT pipelines.
 type TranscriptBatchSaver struct {
 	mu             sync.Mutex
+	db             *sqlx.DB
 	records        []TranscriptRecord
 	batchSize      int
 	flushInterval  time.Duration
@@ -40,7 +45,9 @@ type TranscriptBatchSaver struct {
 }
 
 // NewTranscriptBatchSaver creates and starts a new async batch saver.
-func NewTranscriptBatchSaver(batchSize int, flushInterval time.Duration) *TranscriptBatchSaver {
+// db may be nil in tests; when nil, records are buffered in memory only
+// (flushedRecords) and no SQL is executed.
+func NewTranscriptBatchSaver(db *sqlx.DB, batchSize int, flushInterval time.Duration) *TranscriptBatchSaver {
 	if batchSize <= 0 {
 		batchSize = 100
 	}
@@ -48,6 +55,7 @@ func NewTranscriptBatchSaver(batchSize int, flushInterval time.Duration) *Transc
 		flushInterval = 5 * time.Second
 	}
 	s := &TranscriptBatchSaver{
+		db:             db,
 		records:        make([]TranscriptRecord, 0, batchSize),
 		batchSize:      batchSize,
 		flushInterval:  flushInterval,
@@ -97,17 +105,54 @@ func (s *TranscriptBatchSaver) flushLocked() {
 		return
 	}
 
-	// Simulate batch database SQL query logging
-	var valueTuples []string
-	for _, r := range s.records {
-		valueTuples = append(valueTuples, fmt.Sprintf("('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d, %f, '%s', true, '%s')",
-			r.ID, r.InterviewID, r.ParticipantID, r.SpeakerType, r.SpeakerName, r.Content, r.Language, r.StartTimeMs, r.EndTimeMs, r.Confidence, r.Source, r.CreatedAt.Format(time.RFC3339)))
-	}
-	log.Printf("[db-batch] INSERT INTO interview_transcripts (id, interview_id, participant_id, speaker_type, speaker_name, content, language, start_time_ms, end_time_ms, confidence, source, is_final, created_at) VALUES %s",
-		strings.Join(valueTuples, ", "))
-
-	s.flushedRecords = append(s.flushedRecords, s.records...)
+	batch := s.records
 	s.records = make([]TranscriptRecord, 0, s.batchSize)
+
+	// Keep an in-memory copy for the chat-history read path and tests.
+	s.flushedRecords = append(s.flushedRecords, batch...)
+
+	// No DB (tests / dev without Postgres): memory-only, nothing to persist.
+	if s.db == nil {
+		return
+	}
+
+	// Build a single multi-row INSERT. participant_id is a nullable UUID FK to
+	// interview_participants; the realtime layer doesn't create those rows, so
+	// we insert NULL rather than a bogus id that would violate the FK.
+	var (
+		placeholders []string
+		args         []interface{}
+	)
+	col := 1
+	for _, r := range batch {
+		placeholders = append(placeholders, fmt.Sprintf(
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			col, col+1, col+2, col+3, col+4, col+5, col+6, col+7, col+8, col+9, col+10, col+11,
+		))
+		var participantID interface{}
+		if _, err := uuid.Parse(r.ParticipantID); err == nil {
+			participantID = r.ParticipantID
+		} else {
+			participantID = nil
+		}
+		args = append(args,
+			r.ID, r.InterviewID, participantID, r.SpeakerType, r.SpeakerName,
+			r.Content, r.Language, r.StartTimeMs, r.EndTimeMs, r.Confidence,
+			r.Source, r.IsFinal,
+		)
+		col += 12
+	}
+
+	q := `INSERT INTO interview_transcripts
+		(id, interview_id, participant_id, speaker_type, speaker_name, content, language, start_time_ms, end_time_ms, confidence, source, is_final)
+		VALUES ` + strings.Join(placeholders, ", ") + `
+		ON CONFLICT (id) DO NOTHING`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := s.db.ExecContext(ctx, q, args...); err != nil {
+		log.Printf("[transcript-saver] batch insert failed (%d rows): %v", len(batch), err)
+	}
 }
 
 func (s *TranscriptBatchSaver) worker() {

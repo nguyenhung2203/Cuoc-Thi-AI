@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -74,6 +75,32 @@ func TestInterview_Scheduled(t *testing.T) {
 	}
 	if !iv.ScheduledAt.Valid {
 		t.Fatal("ScheduledAt should be valid")
+	}
+}
+
+func TestInterviewTranscript_DBColumnsMatchMigration(t *testing.T) {
+	typeOfTranscript := reflect.TypeOf(InterviewTranscript{})
+	got := make(map[string]bool, typeOfTranscript.NumField())
+	for i := 0; i < typeOfTranscript.NumField(); i++ {
+		got[typeOfTranscript.Field(i).Tag.Get("db")] = true
+	}
+
+	expected := []string{
+		"id", "interview_id", "participant_id", "speaker_type", "speaker_name",
+		"content", "language", "start_time_ms", "end_time_ms", "confidence",
+		"source", "is_final", "edited_content", "edited_by", "edited_at", "created_at",
+	}
+	for _, column := range expected {
+		if !got[column] {
+			t.Errorf("InterviewTranscript is missing db mapping for %q", column)
+		}
+	}
+
+	legacy := []string{"speaker_id", "speaker_role", "start_time", "end_time", "updated_at"}
+	for _, column := range legacy {
+		if got[column] {
+			t.Errorf("InterviewTranscript must not map legacy column %q", column)
+		}
 	}
 }
 

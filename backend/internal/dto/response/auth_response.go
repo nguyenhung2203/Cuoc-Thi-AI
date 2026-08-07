@@ -1,5 +1,7 @@
 package response
 
+import "time"
+
 type AuthTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"-"`
@@ -26,12 +28,15 @@ type LogoutAllResponse struct {
 }
 
 type UserMeResponse struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	FullName  string `json:"full_name"`
-	Role      string `json:"role"`
-	AvatarURL string `json:"avatar_url"`
-	Companies []CompanyRole `json:"companies"`
+	ID                 string        `json:"id"`
+	Email              string        `json:"email"`
+	FullName           string        `json:"full_name"`
+	Role               string        `json:"role"`
+	Status             string        `json:"status"`
+	AvatarURL          string        `json:"avatar_url,omitempty"`
+	VerificationFileID string        `json:"verification_file_id,omitempty"`
+	CreatedAt          time.Time     `json:"created_at"`
+	Companies          []CompanyRole `json:"companies,omitempty"`
 }
 
 type CompanyRole struct {

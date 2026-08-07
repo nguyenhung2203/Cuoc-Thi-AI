@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 
 	"github.com/google/uuid"
@@ -21,14 +22,14 @@ func NewCompanyService(companyRepo *repository.CompanyRepository) *CompanyServic
 
 func (s *CompanyService) CreateCompany(ctx context.Context, userID, name, website, industry, size string) (*models.Company, error) {
 	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-")) + "-" + uuid.NewString()[:8]
-	
+
 	company := &models.Company{
 		ID:        uuid.NewString(),
 		Name:      name,
 		Slug:      slug,
-		Website:   website,
-		Industry:  industry,
-		Size:      size,
+		Website:   sql.NullString{String: website, Valid: website != ""},
+		Industry:  sql.NullString{String: industry, Valid: industry != ""},
+		Size:      sql.NullString{String: size, Valid: size != ""},
 		CreatedBy: userID,
 	}
 
@@ -56,16 +57,24 @@ func (s *CompanyService) ListCompanies(ctx context.Context, userID string) ([]mo
 	return companies, nil
 }
 
+func (s *CompanyService) ListAllCompanies(ctx context.Context) ([]models.Company, error) {
+	companies, err := s.companyRepo.ListAll(ctx)
+	if err != nil {
+		return nil, errors.NewInternal("failed to list all companies")
+	}
+	return companies, nil
+}
+
 func (s *CompanyService) UpdateCompany(ctx context.Context, id, name, website, industry, size string) (*models.Company, error) {
 	company, err := s.companyRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.NewNotFound("company not found")
 	}
-	
+
 	company.Name = name
-	company.Website = website
-	company.Industry = industry
-	company.Size = size
+	company.Website = sql.NullString{String: website, Valid: website != ""}
+	company.Industry = sql.NullString{String: industry, Valid: industry != ""}
+	company.Size = sql.NullString{String: size, Valid: size != ""}
 
 	if err := s.companyRepo.Update(ctx, company); err != nil {
 		return nil, errors.NewInternal("failed to update company")

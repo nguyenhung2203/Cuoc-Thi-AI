@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/pkg/pagination"
 	"backend/internal/pkg/response"
 	"backend/internal/service"
 )
@@ -30,16 +32,48 @@ func (h *InterviewHandler) ProtectedRoutes(r chi.Router) {
 	r.With(middleware.RequirePermission("interview:create")).Post("/", h.CreateInterview)
 	r.With(middleware.RequirePermission("interview:read")).Get("/", h.ListInterviews)
 	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}", h.GetInterview)
+	r.With(middleware.RequirePermission("interview:update")).Put("/{interview_id}", h.RescheduleInterview)
+	r.With(middleware.RequirePermission("interview:update")).Put("/{interview_id}/notes", h.UpdateNotes)
+	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/send-reminder", h.SendReminder)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/start", h.StartInterview)
 	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/end", h.EndInterview)
-	r.Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
+	r.With(middleware.RequirePermission("interview:update")).Post("/{interview_id}/cancel", h.CancelInterview)
+	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room", h.GetRoom)
+	r.With(middleware.RequirePermission("interview:read")).Get("/{interview_id}/room/access-token", h.GetRoomAccessToken)
+	r.With(middleware.RequirePermission("interview:read")).Post("/{interview_id}/room/token", h.GetRecruiterRoomToken)
+}
+
+func (h *InterviewHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	room, err := h.svc.GetRoom(r.Context(), interviewID, companyID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, room, nil, requestID)
+}
+
+func (h *InterviewHandler) CancelInterview(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	if err := h.svc.CancelInterview(r.Context(), interviewID, companyID); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "cancelled"}, nil, requestID)
 }
 
 func (h *InterviewHandler) ListInterviews(w http.ResponseWriter, r *http.Request) {
 	companyID := chi.URLParam(r, "company_id")
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	items, err := h.svc.ListInterviews(r.Context(), companyID, 100, 0) // stub pagination
+	p := pagination.FromRequest(r)
+	items, err := h.svc.ListInterviews(r.Context(), companyID, p.PageSize, p.Offset())
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -58,6 +92,74 @@ func (h *InterviewHandler) GetInterview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	response.JSON(w, http.StatusOK, item, nil, requestID)
+}
+
+// SendReminder emails the candidate a reminder for the interview.
+func (h *InterviewHandler) SendReminder(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	toEmail, err := h.svc.SendReminder(r.Context(), interviewID, companyID)
+	if err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "sent", "to": toEmail}, nil, requestID)
+}
+
+// UpdateNotes saves recruiter internal notes for an interview.
+func (h *InterviewHandler) UpdateNotes(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var body struct {
+		Notes string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeServiceError(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+
+	if err := h.svc.UpdateNotes(r.Context(), interviewID, companyID, body.Notes); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+	response.JSON(w, http.StatusOK, map[string]string{"status": "saved"}, nil, requestID)
+}
+
+// RescheduleInterview changes the scheduled time (only while status=scheduled).
+func (h *InterviewHandler) RescheduleInterview(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	var body struct {
+		ScheduledAt time.Time `json:"scheduled_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeServiceError(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
+		return
+	}
+	if body.ScheduledAt.IsZero() {
+		writeServiceError(w, apierrors.NewValidation("scheduled_at", []string{"scheduled_at is required"}), requestID)
+		return
+	}
+
+	if err := h.svc.RescheduleInterview(r.Context(), interviewID, companyID, body.ScheduledAt); err != nil {
+		writeServiceError(w, err, requestID)
+		return
+	}
+
+	// Audit log reschedule
+	if ah := middleware.GetAuditHelper(r); ah != nil {
+		ah.Log("interview:reschedule", "interview", interviewID, companyID, nil, map[string]interface{}{
+			"scheduled_at": body.ScheduledAt,
+		})
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{"status": "rescheduled"}, nil, requestID)
 }
 
 func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
@@ -155,11 +257,31 @@ func (h *InterviewHandler) GetRoomAccessToken(w http.ResponseWriter, r *http.Req
 	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
 	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
-	token, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
+	token, _, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
 	}
 
 	response.JSON(w, http.StatusOK, map[string]string{"access_token": token}, nil, requestID)
+}
+
+func (h *InterviewHandler) GetRecruiterRoomToken(w http.ResponseWriter, r *http.Request) {
+	companyID := chi.URLParam(r, "company_id")
+	interviewID := chi.URLParam(r, "interview_id")
+	userID, _ := r.Context().Value(middleware.CtxUserID).(string)
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
+
+	tokenString, roomName, err := h.svc.GenerateRoomAccessToken(r.Context(), interviewID, companyID, userID)
+	if err != nil {
+		response.Error(w, apierrors.NewInternal("Failed to generate token"), requestID)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"token":             tokenString,
+		"livekit_token":     tokenString,
+		"room_access_token": tokenString,
+		"room_id":           roomName,
+	}, nil, requestID)
 }

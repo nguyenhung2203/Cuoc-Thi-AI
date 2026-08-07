@@ -179,7 +179,7 @@ func (s *JobService) Delete(ctx context.Context, companyID, jobID string) error 
 	if _, err := s.GetByID(ctx, companyID, jobID); err != nil {
 		return err
 	}
-	
+
 	// Check if there are active candidates
 	count, err := s.jobRepo.CountCandidates(ctx, jobID)
 	if err != nil {
@@ -224,6 +224,18 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 	safeDescription := utils.TruncateText(job.Description, 15000)
 
 	result, err := s.jdAnalyzer.AnalyzeJD(ctx, safeDescription, job.Title, job.Level.String, job.Department.String, companyID)
+	if err != nil {
+		// Preserve upstream AppErrors (502 circuit breaker, 422 insufficient
+		// data); everything else is an AI outage → 502, not a raw 500.
+		if appErr, ok := errors.IsAppError(err); ok {
+			return appErr
+		}
+		return errors.NewAIServiceError("AI phân tích JD thất bại: " + err.Error())
+	}
+	if result == nil {
+		return errors.NewAIServiceError("AI phân tích JD không trả về kết quả")
+	}
+
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		return errors.NewInternal(fmt.Sprintf("failed to marshal AI analysis result: %v", err))
@@ -242,7 +254,7 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 			TotalWeight: 100,
 			CreatedBy:   job.CreatedBy,
 		}
-		
+
 		for i, c := range result.SuggestedRubric {
 			criteria = append(criteria, models.RubricCriteria{
 				ID:          uuid.NewString(),
@@ -294,60 +306,82 @@ func (s *JobService) Analyze(ctx context.Context, companyID, jobID string) error
 	return nil
 }
 
-// GenerateQuestions triggers AI to generate new interview questions for the job and saves them to question_bank.
+// GenerateQuestions uses AI to generate interview questions for a job.
 func (s *JobService) GenerateQuestions(ctx context.Context, companyID, jobID string, req *request.GenerateQuestionsRequest) ([]models.QuestionBank, error) {
 	job, err := s.GetByID(ctx, companyID, jobID)
 	if err != nil {
 		return nil, err
 	}
 
-	// For simplicity, passing basic arguments. You could fetch the actual candidate CV summary or Rubric if needed.
-	candidateSummary := ""
-	rubricText := ""
-	
-	// Convert slice of types to comma separated string
-	qTypes := strings.Join(req.QuestionTypes, ", ")
+	if req.Count <= 0 || req.Count > 20 {
+		return nil, errors.NewValidation("count", []string{"count must be between 1 and 20"})
+	}
+	count := req.Count
+	safeDescription := utils.TruncateText(job.Description, 15000)
 
-	result, err := s.qGenerator.GenerateQuestions(
-		ctx,
-		job.Title+" - "+job.Description,
-		candidateSummary,
-		rubricText,
-		req.Difficulty,
-		fmt.Sprintf("%d", req.Count),
-		qTypes,
-		companyID,
-	)
+	level := strings.ToLower(strings.TrimSpace(req.Level))
+	if level == "mid" {
+		level = "middle"
+	}
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "" {
+		mode = "real"
+	}
+	result, err := s.qGenerator.GenerateStructuredQuestions(ctx, companyID, ai.StructuredQuestionRequest{
+		JobTitle:       job.Title,
+		JobDescription: safeDescription,
+		Requirements:   []string{job.Requirements.String},
+		Level:          level,
+		Mode:           mode,
+		Language:       "vi",
+		QuestionCount:  count,
+	})
 	if err != nil {
-		return nil, errors.NewInternal(fmt.Sprintf("failed to generate questions with AI: %v", err))
+		if appErr, ok := errors.IsAppError(err); ok {
+			return nil, appErr
+		}
+		return nil, errors.NewAIServiceError("AI sinh câu hỏi thất bại: " + err.Error())
+	}
+	if result == nil {
+		return nil, errors.NewAIServiceError("AI sinh câu hỏi không trả về kết quả")
 	}
 
 	var questions []models.QuestionBank
-	now := time.Now()
-	for _, q := range result.Questions {
-		tagsBytes, _ := json.Marshal([]string{q.TargetSkill})
-		signalsBytes, _ := json.Marshal(q.ExpectedSignals)
-
+	for _, sq := range result.Questions {
+		tags := sq.SkillTags
+		if len(tags) == 0 && sq.TargetSkill != "" {
+			tags = []string{sq.TargetSkill}
+		}
+		tagsBytes, _ := json.Marshal(tags)
+		signalsBytes, _ := json.Marshal(sq.ExpectedSignals)
+		followupBytes, _ := json.Marshal(sq.FollowUpPrompts)
+		metadataBytes, _ := json.Marshal(map[string]any{"warnings": result.Warnings, "coverage": result.Coverage, "confidence": result.Confidence})
+		questionType := sq.Category
+		if questionType == "" {
+			questionType = sq.QuestionType
+		}
 		questions = append(questions, models.QuestionBank{
-			ID:              uuid.NewString(),
-			CompanyID:       sql.NullString{String: companyID, Valid: true},
-			JobID:           sql.NullString{String: jobID, Valid: true},
-			CreatedBy:       sql.NullString{String: job.CreatedBy, Valid: true},
-			QuestionText:    q.QuestionText,
-			QuestionType:    q.QuestionType,
-			SkillTags:       models.JSONB(tagsBytes),
-			Level:           sql.NullString{String: q.Difficulty, Valid: true},
-			ExpectedSignals: models.JSONB(signalsBytes),
-			IsAIGenerated:   true,
-			CreatedAt:       now,
-			UpdatedAt:       now,
+			ID:               uuid.NewString(),
+			CompanyID:        sql.NullString{String: companyID, Valid: true},
+			JobID:            sql.NullString{String: jobID, Valid: true},
+			CreatedBy:        sql.NullString{String: job.CreatedBy, Valid: true},
+			QuestionText:     sq.QuestionText,
+			QuestionType:     questionType,
+			SkillTags:        models.JSONB(tagsBytes),
+			Level:            sql.NullString{String: sq.Difficulty, Valid: true},
+			ExpectedSignals:  models.JSONB(signalsBytes),
+			FollowUpPrompts:  models.JSONB(followupBytes),
+			TimeboxMinutes:   sq.TimeboxMinutes,
+			EvidenceRequired: sq.EvidenceRequired,
+			GenerationMode:   sql.NullString{String: result.Mode, Valid: result.Mode != ""},
+			PromptVersion:    sql.NullString{String: result.PromptVersion, Valid: result.PromptVersion != ""},
+			AIMetadata:       models.JSONB(metadataBytes),
+			IsAIGenerated:    true,
 		})
 	}
 
-	if len(questions) > 0 {
-		if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
-			return nil, errors.NewInternal("failed to save generated questions to bank")
-		}
+	if err := s.questionRepo.CreateQuestions(ctx, questions); err != nil {
+		return nil, errors.NewInternal("failed to save generated questions")
 	}
 
 	return questions, nil

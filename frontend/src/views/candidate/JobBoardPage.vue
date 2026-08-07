@@ -1,83 +1,252 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiService } from '../../services/api.service'
-import { candidatePortalService } from '../../services/candidate-portal.service'
-import { authStore } from '../../stores/auth.store'
-import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
-import Badge from '../../components/common/AppBadge.vue'
-import { Briefcase, MapPin, Clock, Building2, Search, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Briefcase, MapPin, ChevronLeft, ChevronRight, Sparkles, Heart, Banknote, Filter, ChevronDown, Info, AlertCircle } from 'lucide-vue-next'
+import { langStore } from '../../stores/lang.store'
+import { loadSavedJobIds, toggleSavedJob } from '../../utils/savedJobs'
+import { formatSalaryTrieu, formatExperience, experienceFilterOptions } from '../../utils/formatters'
 
 const router = useRouter()
-const jobs = ref([])
-const loading = ref(true)
-const keyword = ref('')
-const appliedJobIds = ref(new Set())
+const PAGE_SIZE = 12
 
+const allJobs = ref([])
+const loading = ref(true)
+const loadError = ref('')
+const keyword = ref('')
 const currentPage = ref(1)
-const totalPages = ref(1)
+
+const selectedLocation = ref('')
+const selectedSalary = ref('')
+const selectedDepartment = ref('')
+const selectedExperience = ref('')
+const selectedWorkType = ref('')
+const quickFilterActive = ref('Ngẫu nhiên')
+
+const WORK_TYPE_LABELS = {
+  full_time: 'Toàn thời gian',
+  part_time: 'Bán thời gian',
+  contract: 'Hợp đồng',
+  intern: 'Thực tập',
+  freelance: 'Freelance',
+}
+
+/** Chuẩn hóa địa điểm tin → cấp tỉnh/thành (không hiện huyện/xã). */
+const PROVINCE_ALIASES = [
+  // Gồm cả biến thể thiếu dấu: "Dăk Lăk", "Dak Lak", ...
+  { match: /[đd][aăắấầậẫàáạãâằặẵ]k\s*l[aăắấầậẫàáạãâằặẵ]k|buôn\s*ma\s*thuột|buon\s*ma\s*thuot/i, name: 'Đắk Lắk' },
+  { match: /lâm\s*đồng|lam\s*dong|da\s*lat|đà\s*lạt/i, name: 'Lâm Đồng' },
+  { match: /gia\s*lai|pleiku/i, name: 'Gia Lai' },
+  { match: /khánh\s*hòa|khanh\s*hoa|nha\s*trang/i, name: 'Khánh Hòa' },
+  { match: /phú\s*yên|phu\s*yen|tuy\s*hòa/i, name: 'Phú Yên' },
+  { match: /[đd][aăắấầậẫàáạãâằặẵ]k\s*n[oôóòọõơờớợỡ]ng/i, name: 'Đắk Nông' },
+  { match: /kon\s*tum/i, name: 'Kon Tum' },
+  { match: /hồ\s*chí\s*minh|tp\.?\s*hcm|ho\s*chi\s*minh|sài\s*gòn|sai\s*gon/i, name: 'TP. Hồ Chí Minh' },
+  { match: /hà\s*nội|ha\s*noi/i, name: 'Hà Nội' },
+  { match: /đà\s*nẵng|da\s*nang/i, name: 'Đà Nẵng' },
+  { match: /cần\s*thơ|can\s*tho/i, name: 'Cần Thơ' },
+  { match: /hải\s*phòng|hai\s*phong/i, name: 'Hải Phòng' },
+  { match: /bình\s*định|binh\s*dinh/i, name: 'Bình Định' },
+  { match: /quảng\s*nam|quang\s*nam/i, name: 'Quảng Nam' },
+  { match: /quảng\s*ngãi|quang\s*ngai/i, name: 'Quảng Ngãi' },
+]
+
+const matchProvinceAlias = (text) => {
+  const raw = String(text || '').normalize('NFC').trim()
+  if (!raw) return ''
+  for (const item of PROVINCE_ALIASES) {
+    if (item.match.test(raw)) return item.name
+  }
+  return ''
+}
+
+const toProvince = (location) => {
+  const raw = String(location || '').normalize('NFC').trim()
+  if (!raw) return ''
+  const direct = matchProvinceAlias(raw)
+  if (direct) return direct
+  // "Huyện X, Tỉnh Y" → lấy phần sau dấu phẩy cuối, rồi chuẩn hóa lại
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length >= 2) {
+    const tail = parts[parts.length - 1]
+    return matchProvinceAlias(tail) || tail
+  }
+  return raw
+}
 
 const unwrap = (val) => {
-  if (!val) return ''
-  if (typeof val === 'object' && 'String' in val) {
-    return val.Valid ? val.String : ''
+  if (!val && val !== 0) return ''
+  if (typeof val === 'object') {
+    if ('String' in val) return val.Valid ? val.String : ''
+    if ('Int64' in val) return val.Valid ? val.Int64 : ''
+    if ('Float64' in val) return val.Valid ? val.Float64 : ''
+    if ('Int32' in val) return val.Valid ? val.Int32 : ''
+    if ('Bool' in val) return val.Valid ? val.Bool : ''
   }
   return val
 }
 
-const fetchJobs = async (page = 1) => {
+const normalizeJob = (j) => {
+  const location = unwrap(j.location)
+  return {
+    ...j,
+    company_name: unwrap(j.company_name),
+    company_logo_url: unwrap(j.company_logo_url),
+    location,
+    province: toProvince(location),
+    employment_type: unwrap(j.employment_type),
+    department: unwrap(j.department),
+    level: String(unwrap(j.level) || '').toLowerCase(),
+    salary_min: Number(unwrap(j.salary_min) || 0) || 0,
+    salary_max: Number(unwrap(j.salary_max) || 0) || 0,
+    currency: unwrap(j.currency),
+  }
+}
+
+const countBy = (list, getter) => {
+  const counts = {}
+  list.forEach((job) => {
+    const key = getter(job)
+    if (!key) return
+    counts[key] = (counts[key] || 0) + 1
+  })
+  return Object.keys(counts)
+    .map((name) => ({ name, count: counts[name] }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'vi'))
+}
+
+const matchesSalary = (job, bucket) => {
+  const min = job.salary_min
+  const max = job.salary_max
+  const hasSalary = min > 0 || max > 0
+  if (bucket === 'Thỏa thuận') return !hasSalary
+  if (!hasSalary) return false
+  const lo = min > 0 ? min : max
+  const hi = max > 0 ? max : min
+  if (bucket === 'Dưới 10 triệu') return hi > 0 && hi < 10_000_000
+  if (bucket === '10 - 15 triệu') return lo < 15_000_000 && hi >= 10_000_000
+  if (bucket === '15 - 20 triệu') return lo < 20_000_000 && hi >= 15_000_000
+  if (bucket === 'Trên 20 triệu') return hi >= 20_000_000
+  return true
+}
+
+/** Facets tỉnh/thành — gộp huyện/xã vào cùng tỉnh. */
+const locationStats = computed(() => countBy(allJobs.value, (j) => j.province))
+const departmentStats = computed(() => countBy(allJobs.value, (j) => j.department))
+const experiences = experienceFilterOptions()
+const workTypeStats = computed(() =>
+  countBy(allJobs.value, (j) => j.employment_type).map((item) => ({
+    ...item,
+    label: WORK_TYPE_LABELS[item.name] || item.name,
+  }))
+)
+
+/** Đẩy tin Sơn TOA xuống cuối danh sách (tránh chiếm hết trang đầu). */
+const isSonToaJob = (job) => /s[ơo]n\s*toa/i.test(String(job.company_name || ''))
+
+const filteredJobs = computed(() => {
+  const q = keyword.value.trim().toLowerCase()
+  return allJobs.value
+    .filter((job) => {
+      if (selectedLocation.value && job.province !== selectedLocation.value) return false
+      if (selectedDepartment.value && job.department !== selectedDepartment.value) return false
+      if (selectedExperience.value && job.level !== selectedExperience.value) return false
+      if (selectedWorkType.value && job.employment_type !== selectedWorkType.value) return false
+      if (selectedSalary.value && !matchesSalary(job, selectedSalary.value)) return false
+      if (q) {
+        const hay = `${job.title} ${job.company_name} ${job.location} ${job.province} ${job.department} ${job.description || ''}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+    .slice()
+    .sort((a, b) => Number(isSonToaJob(a)) - Number(isSonToaJob(b)))
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredJobs.value.length / PAGE_SIZE)))
+const jobs = computed(() => {
+  const page = Math.min(currentPage.value, totalPages.value)
+  const start = (page - 1) * PAGE_SIZE
+  return filteredJobs.value.slice(start, start + PAGE_SIZE)
+})
+
+const getSalaryDisplay = (job) => formatSalaryTrieu(job.salary_min, job.salary_max)
+const getExperienceDisplay = (job) => formatExperience(job.level)
+
+const loadCatalog = async () => {
   loading.value = true
-  currentPage.value = page
+  loadError.value = ''
   try {
-    const params = new URLSearchParams()
-    params.append('page', page)
-    params.append('page_size', 12)
-    if (keyword.value) params.append('keyword', keyword.value)
-    
-    const res = await apiService.getWithMeta(`/public/all-jobs?${params.toString()}`)
-    
-    // Map to unwrap sql.NullString objects
-    jobs.value = (res.data || []).map(j => ({
-      ...j,
-      company_name: unwrap(j.company_name),
-      location: unwrap(j.location),
-      employment_type: unwrap(j.employment_type),
-      department: unwrap(j.department),
-      level: unwrap(j.level),
-    }))
-    
-    if (res.meta) {
-      totalPages.value = res.meta.total_pages || 1
-    }
+    const collected = []
+    let page = 1
+    let pages = 1
+    do {
+      const res = await apiService.getWithMeta(`/public/all-jobs?page=${page}&page_size=100`)
+      collected.push(...(res.data || []).map(normalizeJob))
+      pages = res.meta?.total_pages || 1
+      page += 1
+    } while (page <= pages)
+    allJobs.value = collected
+    currentPage.value = 1
   } catch (error) {
     console.error('Failed to load jobs', error)
-    jobs.value = []
+    allJobs.value = []
+    loadError.value = error?.message || 'Không tải được danh sách việc làm. Vui lòng thử lại.'
   } finally {
     loading.value = false
   }
 }
 
-onMounted(async () => {
-  if (authStore.isAuthenticated) {
-    try {
-      if (!authStore.user) {
-        await authStore.init();
-      }
-      const apps = await candidatePortalService.getApplications();
-      if (apps && apps.length > 0) {
-        appliedJobIds.value = new Set(apps.map(a => a.job_id));
-      }
-    } catch (err) {
-      console.error('Failed to load applications', err);
-    }
-  }
-  fetchJobs(1);
-})
+const savedJobIds = ref([])
+const refreshSavedIds = () => {
+  savedJobIds.value = loadSavedJobIds()
+}
+
+const handleToggleSaveJob = (job) => {
+  const { list } = toggleSavedJob(job)
+  savedJobIds.value = list.map((j) => j.id)
+}
+
+const goPage = (page) => {
+  currentPage.value = Math.min(Math.max(1, page), totalPages.value)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const clearFilters = () => {
+  selectedLocation.value = ''
+  selectedSalary.value = ''
+  selectedDepartment.value = ''
+  selectedExperience.value = ''
+  selectedWorkType.value = ''
+  quickFilterActive.value = 'Ngẫu nhiên'
+  keyword.value = ''
+  currentPage.value = 1
+}
+
+const applyLocation = (name) => {
+  selectedLocation.value = name
+  quickFilterActive.value = name || 'Ngẫu nhiên'
+  currentPage.value = 1
+}
 
 const handleSearch = () => {
-  fetchJobs(1)
+  currentPage.value = 1
 }
+
+watch(
+  [selectedLocation, selectedDepartment, selectedSalary, selectedExperience, selectedWorkType],
+  () => {
+    currentPage.value = 1
+    if (selectedLocation.value) quickFilterActive.value = selectedLocation.value
+    else if (quickFilterActive.value !== 'Ngẫu nhiên') quickFilterActive.value = 'Ngẫu nhiên'
+  }
+)
+
+onMounted(() => {
+  loadCatalog()
+  refreshSavedIds()
+})
 
 const viewJob = (job) => {
   router.push(`/careers/${job.company_id}/jobs/${job.id}`)
@@ -85,132 +254,185 @@ const viewJob = (job) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in pb-12 max-w-7xl mx-auto">
-    <!-- Header with Gradient -->
-    <div class="relative bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-8 md:p-12 text-white shadow-xl overflow-hidden">
-      <!-- Decorative elements -->
-      <div class="absolute top-0 right-0 -mr-8 -mt-8 w-64 h-64 rounded-full bg-white opacity-10 blur-3xl"></div>
-      <div class="absolute bottom-0 left-0 -ml-8 -mb-8 w-48 h-48 rounded-full bg-blue-400 opacity-20 blur-2xl"></div>
-      
-      <div class="relative z-10 max-w-2xl">
-        <h1 class="text-4xl font-extrabold mb-4 tracking-tight">Khám phá cơ hội nghề nghiệp</h1>
-        <p class="text-blue-100 text-lg mb-8">Tìm kiếm hàng ngàn việc làm phù hợp với kỹ năng và định hướng phát triển của bạn.</p>
-        
-        <!-- Search Box inside Header -->
-        <div class="bg-white p-2 rounded-2xl shadow-lg flex flex-col md:flex-row gap-2 max-w-3xl focus-within:ring-4 focus-within:ring-blue-500/30 transition-shadow">
-          <div class="relative flex-1 flex items-center">
-            <Search class="absolute left-4 text-gray-400 w-5 h-5" />
-            <input 
-              v-model="keyword"
-              type="text"
-              placeholder="Nhập chức danh, từ khóa hoặc công ty..."
-              class="w-full bg-transparent border-none focus:ring-0 text-gray-800 placeholder-gray-400 py-3 pl-12 pr-4 outline-none font-medium"
-              @keydown.enter="handleSearch"
-            />
+  <div class="jb-page">
+    <!-- Hero -->
+    <div class="hero-container animate-rise">
+      <div class="hero-layout">
+        <div class="hero-content">
+          <h1 class="page-title text-h1" style="margin-bottom: 12px">Tìm việc cùng Trợ lý AI</h1>
+          <p class="page-subtitle" style="max-width: 500px; margin-bottom: 32px; font-size: 16px;">Trợ lý AI sẽ giúp bạn phân tích kỹ năng và tìm ra công việc phù hợp nhất với định hướng của bạn.</p>
+  
+          <div class="search-box">
+            <div class="search-input-wrap">
+              <Sparkles class="search-icon text-accent" :size="20" />
+              <input type="text" v-model="keyword" class="search-input" placeholder="Hỏi AI việc làm (VD: Frontend ít áp lực)..." @keyup.enter="handleSearch" />
+            </div>
+            <button class="search-btn sheen" @click="handleSearch">Tìm kiếm thông minh</button>
           </div>
-          <button @click="handleSearch" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-md hover:shadow-lg whitespace-nowrap">
-            Tìm việc ngay
-          </button>
+        </div>
+        <div class="hero-image-wrapper">
+          <img src="/images/hero_network.png" alt="AI Match" class="hero-illustration tilt-3d" />
         </div>
       </div>
     </div>
 
+    <!-- Filter Bar & Quick Pills -->
+    <div class="jb-filter-bar">
+      <div class="jb-filter-row">
+        <!-- Dropdowns -->
+        <div class="jb-filter-label">
+          <Filter :size="16" class="text-muted" />
+          <span>Lọc theo:</span>
+        </div>
+        
+        <div class="jb-select-wrap">
+          <select v-model="selectedLocation" class="jb-select" @change="applyLocation(selectedLocation)">
+            <option value="">Tỉnh / Thành ({{ allJobs.length }})</option>
+            <option v-for="loc in locationStats" :key="loc.name" :value="loc.name">{{ loc.name }} ({{ loc.count }})</option>
+          </select>
+          <ChevronDown :size="16" class="jb-select-icon" />
+        </div>
+
+        <div class="jb-select-wrap">
+          <select v-model="selectedDepartment" class="jb-select">
+            <option value="">Ngành nghề</option>
+            <option v-for="dep in departmentStats" :key="dep.name" :value="dep.name">{{ dep.name }} ({{ dep.count }})</option>
+          </select>
+          <ChevronDown :size="16" class="jb-select-icon" />
+        </div>
+
+        <div class="jb-select-wrap">
+          <select v-model="selectedSalary" class="jb-select">
+            <option value="">Mức lương</option>
+            <option value="Dưới 10 triệu">Dưới 10 triệu</option>
+            <option value="10 - 15 triệu">10 - 15 triệu</option>
+            <option value="15 - 20 triệu">15 - 20 triệu</option>
+            <option value="Trên 20 triệu">Trên 20 triệu</option>
+            <option value="Thỏa thuận">Thỏa thuận</option>
+          </select>
+          <ChevronDown :size="16" class="jb-select-icon" />
+        </div>
+
+        <div class="jb-select-wrap">
+          <select v-model="selectedExperience" class="jb-select">
+            <option value="">Kinh nghiệm</option>
+            <option v-for="exp in experiences" :key="exp.value" :value="exp.value">{{ exp.label }}</option>
+          </select>
+          <ChevronDown :size="16" class="jb-select-icon" />
+        </div>
+
+        <div class="jb-select-wrap">
+          <select v-model="selectedWorkType" class="jb-select">
+            <option value="">Hình thức</option>
+            <option v-for="type in workTypeStats" :key="type.name" :value="type.name">{{ type.label }} ({{ type.count }})</option>
+          </select>
+          <ChevronDown :size="16" class="jb-select-icon" />
+        </div>
+      </div>
+
+      <!-- Quick Pills -->
+      <div class="jb-quick-pills">
+        <button 
+          type="button"
+          @click="clearFilters()"
+          :class="['jb-pill', quickFilterActive === 'Ngẫu nhiên' && !selectedLocation ? 'active' : '']">
+          Tất cả ({{ allJobs.length }})
+        </button>
+        <button 
+          type="button"
+          v-for="loc in locationStats.slice(0, 10)" :key="loc.name"
+          @click="applyLocation(loc.name)"
+          :class="['jb-pill', quickFilterActive === loc.name ? 'active' : '']">
+          <span :title="`${loc.name} (${loc.count})`">{{ loc.name }} ({{ loc.count }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hint Bar -->
+    <div class="jb-hint-bar">
+      <Info :size="16" class="hint-icon" /> Gợi ý: Bấm vào xem công việc để Trợ lý AI phân tích chi tiết mức độ phù hợp của bạn!
+    </div>
+
     <!-- Loading State -->
     <div v-if="loading" class="flex flex-col items-center justify-center py-20">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-      <p class="text-gray-500 font-medium animate-pulse">Đang tìm kiếm việc làm phù hợp...</p>
+      <div class="jb-spinner mb-4"></div>
+      <p class="text-helper">{{ langStore.t('jobs', 'loadingText') }}</p>
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="jobs.length === 0" class="flex flex-col items-center justify-center py-24 px-4 text-center bg-white rounded-3xl shadow-sm border border-gray-100">
-      <div class="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6 shadow-inner">
-        <Briefcase class="w-12 h-12 text-gray-300" />
-      </div>
-      <h3 class="text-2xl font-bold text-gray-800 mb-2">Chưa tìm thấy kết quả</h3>
-      <p class="text-gray-500 max-w-md">Rất tiếc, chúng tôi không tìm thấy vị trí nào phù hợp với từ khóa của bạn lúc này. Vui lòng thử lại với từ khóa khác.</p>
-      <button @click="keyword = ''; handleSearch()" class="mt-6 text-blue-600 font-medium hover:text-blue-800 underline underline-offset-4">Xóa tìm kiếm</button>
+    <div v-else-if="loadError" class="jb-empty">
+      <div class="jb-empty-icon"><AlertCircle :size="42" /></div>
+      <h3 class="jb-empty-title">Không tải được việc làm</h3>
+      <p class="jb-empty-desc">{{ loadError }}</p>
+      <Button variant="primary" class="mt-4" @click="loadCatalog">Thử lại</Button>
+    </div>
+
+    <div v-else-if="filteredJobs.length === 0" class="jb-empty">
+      <div class="jb-empty-icon"><Briefcase :size="42" /></div>
+      <h3 class="jb-empty-title">Không có việc làm phù hợp bộ lọc</h3>
+      <p class="jb-empty-desc">Thử bỏ bớt điều kiện hoặc chọn địa điểm khác.</p>
+      <button @click="clearFilters()" class="link-more mt-5">Xóa bộ lọc</button>
     </div>
 
     <!-- Job List -->
-    <div v-else class="space-y-8">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Sparkles class="w-5 h-5 text-amber-500" v-if="!keyword" />
-          <span v-if="keyword">Kết quả tìm kiếm cho "<span class="text-blue-600">{{ keyword }}</span>"</span>
-          <span v-else>Việc làm đề xuất cho bạn</span>
+    <div v-else class="jb-list-wrap space-y-8">
+      <div class="flex items-center justify-between flex-wrap gap-3" style="min-width:0;max-width:100%">
+        <h2 class="list-heading text-h1" :title="keyword ? `Kết quả cho ${keyword}` : (selectedLocation ? `Việc làm tại ${selectedLocation}` : 'Việc làm tốt nhất')">
+          <span v-if="keyword">Kết quả cho "<span class="text-primary">{{ keyword }}</span>"</span>
+          <span v-else-if="selectedLocation">Việc làm tại <span class="text-primary">{{ selectedLocation }}</span></span>
+          <span v-else class="inline-flex items-center gap-2 min-w-0">Việc làm tốt nhất <span class="text-muted font-normal">|</span> Đề xuất bởi <Sparkles :size="18" class="text-accent" /> <span class="text-accent font-extrabold tracking-tight">ViệcLàmAI</span></span>
         </h2>
-        <span class="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full">Trang {{ currentPage }} / {{ totalPages }}</span>
+        <span class="page-chip">{{ filteredJobs.length }} việc làm · trang {{ currentPage }}/{{ totalPages }}</span>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="jb-grid stagger">
         <!-- Job Card -->
-        <div v-for="job in jobs" :key="job.id" 
+        <div v-for="job in jobs" :key="job.id"
           @click="viewJob(job)"
-          class="group bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 cursor-pointer flex flex-col h-full transform hover:-translate-y-1">
+          class="job-card-new">
           
-          <div class="flex justify-between items-start mb-4 gap-4">
-            <h3 class="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-tight flex-1">
-              {{ job.title }}
-            </h3>
-            <span v-if="job.department" class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-50 text-blue-700 whitespace-nowrap">
-              {{ job.department }}
+          <!-- Save Job Button -->
+          <button class="jb-save-btn" @click.stop="handleToggleSaveJob(job)" :class="{ 'is-saved': savedJobIds.includes(job.id) }">
+            <Heart :size="20" :fill="savedJobIds.includes(job.id) ? 'currentColor' : 'none'" />
+          </button>
+
+          <div class="jb-card-top">
+            <div class="jb-logo">
+              <img :src="job.company_logo_url || '/images/logo.png'" :alt="job.company_name || 'Company'" @error="(e) => { e.target.src = '/images/logo.png' }" />
+            </div>
+            <div class="jb-info">
+              <h3 class="jb-title" :title="job.title">
+                {{ job.title }}
+              </h3>
+              <div class="jb-company" :title="job.company_name || ''">
+                {{ job.company_name || 'Chưa cập nhật' }}
+              </div>
+            </div>
+          </div>
+
+          <div class="jb-tags">
+            <span class="jb-tag jb-tag-salary" :title="getSalaryDisplay(job)">
+              <Banknote :size="12" /><span class="jb-tag-text">{{ getSalaryDisplay(job) }}</span>
             </span>
-          </div>
-          
-          <div class="space-y-2.5 mb-6">
-            <div v-if="job.company_name" class="flex items-center text-gray-600 text-sm">
-              <Building2 class="w-4 h-4 mr-2.5 text-gray-400" />
-              <span class="font-medium truncate">{{ job.company_name }}</span>
-            </div>
-            <div class="flex items-center text-gray-500 text-sm">
-              <MapPin class="w-4 h-4 mr-2.5 text-gray-400" />
-              <span class="truncate">{{ job.location || 'Bất kỳ' }}</span>
-            </div>
-            <div class="flex items-center text-gray-500 text-sm">
-              <Clock class="w-4 h-4 mr-2.5 text-gray-400" />
-              <span class="truncate">{{ job.employment_type || 'Full-time' }}</span>
-            </div>
-          </div>
-          
-          <div class="mt-auto pt-5 border-t border-gray-100">
-            <p class="text-gray-600 text-sm line-clamp-2 leading-relaxed">
-              {{ job.description }}
-            </p>
-            <div v-if="appliedJobIds.has(job.id)" class="mt-4 flex items-center text-emerald-600 font-bold text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-              Đã ứng tuyển
-            </div>
-            <div v-else class="mt-4 flex items-center text-blue-600 font-semibold text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-              Xem chi tiết <ChevronRight class="w-4 h-4 ml-1" />
-            </div>
+            <span class="jb-tag jb-tag-loc" :title="job.location || job.province || ''">
+              <MapPin :size="12" /><span class="jb-tag-text">{{ job.province || job.location || 'Không xác định' }}</span>
+            </span>
+            <span class="jb-tag" :title="getExperienceDisplay(job)">
+              <Briefcase :size="12" /><span class="jb-tag-text">{{ getExperienceDisplay(job) }}</span>
+            </span>
           </div>
         </div>
       </div>
 
       <!-- Pagination -->
-      <div v-if="totalPages > 1" class="flex justify-center items-center gap-4 mt-12 pt-8">
-        <button 
-          :disabled="currentPage === 1" 
-          @click="fetchJobs(currentPage - 1)"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 hover:text-blue-600 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-700 transition-colors">
-          <ChevronLeft class="w-4 h-4" /> Trang trước
+      <div v-if="totalPages > 1" class="flex justify-center items-center gap-3 mt-12">
+        <button :disabled="currentPage === 1" @click="goPage(currentPage - 1)" class="page-btn">
+          <ChevronLeft :size="16" /> {{ langStore.t('jobs', 'prevPage') }}
         </button>
-        
-        <div class="flex gap-2">
-          <span class="px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold border border-blue-100">
-            {{ currentPage }}
-          </span>
-          <span class="px-4 py-2.5 text-gray-400">/</span>
-          <span class="px-4 py-2.5 rounded-xl text-gray-600 font-medium">
-            {{ totalPages }}
-          </span>
-        </div>
-
-        <button 
-          :disabled="currentPage === totalPages" 
-          @click="fetchJobs(currentPage + 1)"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 hover:text-blue-600 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-700 transition-colors">
-          Trang sau <ChevronRight class="w-4 h-4" />
+        <span class="page-current">{{ currentPage }}</span>
+        <span class="text-muted-sep">/ {{ totalPages }}</span>
+        <button :disabled="currentPage === totalPages" @click="goPage(currentPage + 1)" class="page-btn">
+          {{ langStore.t('jobs', 'nextPage') }} <ChevronRight :size="16" />
         </button>
       </div>
     </div>
@@ -218,11 +440,241 @@ const viewJob = (job) => {
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+.jb-page {
+  width: 100%;
+  max-width: 1120px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0 0 48px;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
-.animate-fade-in {
-  animation: fade-in 0.5s ease-out forwards;
+.jb-page *,
+.jb-page *::before,
+.jb-page *::after { box-sizing: border-box; }
+
+/* ---- New Hero Styles ---- */
+.hero-container { background: var(--surface-soft); border-radius: var(--radius-lg); padding: 40px 32px; margin-bottom: 32px; border: 1px solid var(--border); position: relative; overflow: hidden; }
+.hero-layout { display: flex; flex-direction: column; gap: 32px; align-items: center; }
+@media (min-width: 992px) { .hero-layout { flex-direction: row; justify-content: space-between; } }
+.hero-content { flex: 1; z-index: 10; position: relative; width: 100%; }
+.hero-image-wrapper { flex: 1; display: none; justify-content: center; position: relative; z-index: 1; max-width: 320px; }
+@media (min-width: 768px) { .hero-image-wrapper { display: flex; } }
+.hero-illustration { width: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 20px 30px rgba(8, 145, 178, 0.15)); }
+
+.search-box { display: flex; flex-wrap: wrap; gap: 12px; width: 100%; max-width: 700px; min-width: 0; background: var(--surface); padding: 8px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.search-input-wrap { position: relative; flex: 1 1 200px; min-width: 0; display: flex; align-items: center; }
+.search-icon { position: absolute; left: 14px; color: var(--text-muted); }
+.search-input { width: 100%; border: none; outline: none; background: transparent; padding: 12px 14px 12px 42px; font-size: 15px; color: var(--text-main); font-family: var(--sans); }
+.search-input::placeholder { color: var(--text-muted); }
+.search-btn { background: var(--primary); color: #fff; border: none; font-weight: 700; padding: 12px 28px; border-radius: var(--radius); cursor: pointer; white-space: nowrap; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }
+.search-btn:hover { background: var(--primary-hover); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+.jb-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--primary-light); border-top-color: var(--primary); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.jb-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 72px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.jb-empty-icon { display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 50%; background: var(--surface-soft); color: var(--text-muted); margin-bottom: 22px; }
+.jb-empty-title { font-size: 22px; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+.jb-empty-desc { color: var(--text-secondary); max-width: 30rem; }
+
+.list-heading { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--text-main); }
+.text-accent { color: var(--accent); }
+.text-primary { color: var(--primary); }
+.page-chip { font-size: 13px; color: var(--text-secondary); font-weight: 500; background: var(--surface-soft); padding: 5px 14px; border-radius: var(--radius-full); }
+
+.job-card { display: flex; flex-direction: column; height: 100%; padding: 22px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); cursor: pointer; }
+.job-title { font-size: 17px; font-weight: 700; color: var(--text-main); line-height: 1.35; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: color 0.2s ease; }
+.job-card:hover .job-title { color: var(--primary); }
+.job-meta { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.job-meta-row { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 14px; }
+.job-meta-row :deep(svg) { color: var(--text-muted); flex-shrink: 0; }
+.job-foot { margin-top: auto; padding-top: 18px; border-top: 1px solid var(--border); }
+.job-desc { color: var(--text-secondary); font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.job-link { display: flex; align-items: center; gap: 4px; margin-top: 14px; color: var(--primary); font-weight: 600; font-size: 14px; opacity: 0; transform: translateX(-4px); transition: all 0.25s ease; }
+.job-card:hover .job-link { opacity: 1; transform: translateX(0); }
+
+.page-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+.page-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.page-current { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: var(--radius); background: var(--primary-light); color: var(--primary); font-weight: 700; }
+.text-muted-sep { color: var(--text-muted); }
+
+/* ---- New Filter Bar Styles ---- */
+.jb-filter-bar {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
 }
+.jb-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.jb-filter-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text-main); flex-shrink: 0; }
+.jb-select-wrap { position: relative; min-width: 0; flex: 1 1 140px; max-width: 100%; }
+@media (min-width: 900px) { .jb-select-wrap { flex: 1 1 0; } }
+.jb-select {
+  width: 100%;
+  max-width: 100%;
+  appearance: none;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 14px;
+  border-radius: var(--radius);
+  padding: 10px 32px 10px 12px;
+  outline: none;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.jb-select:focus { border-color: var(--primary); }
+.jb-select-icon { position: absolute; right: 12px; top: 12px; color: var(--text-muted); pointer-events: none; }
+
+.jb-quick-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+}
+.jb-pill {
+  flex: 0 1 auto;
+  max-width: 11.5rem;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jb-pill:first-child { max-width: none; }
+.jb-pill:hover { background: var(--border); color: var(--text-main); }
+.jb-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: var(--shadow-sm); font-weight: 600; }
+
+.jb-hint-bar { display: flex; align-items: flex-start; gap: 8px; width: 100%; max-width: 100%; background: var(--surface-soft); border: 1px solid var(--border); color: var(--text-secondary); font-size: 13px; font-weight: 500; padding: 12px 16px; border-radius: var(--radius); margin-bottom: 32px; overflow: hidden; }
+.hint-icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.jb-hint-bar > :not(.hint-icon) { min-width: 0; }
+
+/* ---- New Job Card Styles ---- */
+.jb-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+@media (min-width: 768px) { .jb-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .jb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.job-card-new {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.job-card-new:hover { border-color: var(--primary); box-shadow: var(--shadow-md); }
+
+.jb-save-btn { position: absolute; bottom: 12px; right: 12px; color: var(--text-muted); cursor: pointer; transition: color 0.2s ease; background: transparent; border: none; z-index: 10; }
+.jb-save-btn:hover, .jb-save-btn.is-saved { color: var(--danger); }
+
+.jb-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.jb-logo { width: 52px; height: 52px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.jb-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.jb-info { flex: 1; min-width: 0; max-width: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.jb-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+  padding-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+.job-card-new:hover .jb-title { color: var(--primary); }
+.jb-company {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jb-tags {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding-right: 28px; /* chỗ cho nút tim */
+  overflow: hidden;
+}
+.jb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 0;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.jb-tag-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.jb-tag :deep(svg) { flex-shrink: 0; width: 11px; height: 11px; }
+.jb-tag-salary { color: #e11d48; background: #fff1f2; font-weight: 600; }
+.jb-tag.ai-tag { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(6,182,212,0.25); font-weight: 700; font-size: 11px; }
+.jb-ai-badge { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+
+.list-heading {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-chip { flex-shrink: 0; }
+.jb-list-wrap { width: 100%; min-width: 0; max-width: 100%; overflow: hidden; }
 </style>

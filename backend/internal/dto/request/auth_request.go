@@ -5,6 +5,7 @@ type RegisterRequest struct {
 	Password string `json:"password" validate:"required,min=6"`
 	FullName string `json:"full_name" validate:"required"`
 	Role     string `json:"role"`
+	OTP      string `json:"otp"`
 }
 
 type LoginRequest struct {
@@ -12,23 +13,12 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type ForgotPasswordRequest struct {
-	Email string `json:"email" validate:"required,email"`
-}
+// RefreshRequest không cần nữa — refresh token được đọc từ HttpOnly Cookie
 
-type ResetPasswordRequest struct {
-	Email       string `json:"email" validate:"required,email"`
-	OTP         string `json:"otp" validate:"required"`
-	NewPassword string `json:"new_password" validate:"required,min=6"`
+type GoogleLoginRequest struct {
+	IDToken  string `json:"id_token"`
+	Email    string `json:"email" validate:"required,email"`
+	FullName string `json:"full_name"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
 }
-
-type VerifyEmailRequest struct {
-	Email string `json:"email" validate:"required,email"`
-	OTP   string `json:"otp" validate:"required"`
-}
-
-type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" validate:"required"`
-	NewPassword string `json:"new_password" validate:"required,min=6"`
-}
-

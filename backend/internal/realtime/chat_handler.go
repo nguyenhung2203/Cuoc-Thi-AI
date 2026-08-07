@@ -9,10 +9,20 @@ import (
 	"backend/internal/realtime/events"
 )
 
+// targetRoomAllowed reports whether a message addressed to envRoom may be
+// processed on a connection bound to connRoom. An empty envRoom is allowed —
+// the FE can send room_id="" before its store hydrates, in which case the
+// connection's own room is used.
+func targetRoomAllowed(connRoom, envRoom string) bool {
+	return envRoom == "" || envRoom == connRoom
+}
+
 // handleChatSend handles the "chat:send" event from clients.
 func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envelope) {
-	// Block requests targetting a different room than authorized
-	if env.RoomID != conn.RoomID {
+	// Room check runs unconditionally — it used to be disabled whenever
+	// LIVEKIT_API_SECRET was the dev fallback, which leaked chat across rooms
+	// on any default-config deployment.
+	if !targetRoomAllowed(conn.RoomID, env.RoomID) {
 		log.Printf("[chat] send rejected: room ID mismatch client=%s message=%s", conn.RoomID, env.RoomID)
 		r.sendError(conn, env.RequestID, "FORBIDDEN", "Không có quyền truy cập phòng này")
 		return
@@ -40,7 +50,10 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	}
 
 	// 3. Build chat message payload
-	msgID := uuid.New().String()
+	msgID := payload.MessageID
+	if msgID == "" {
+		msgID = uuid.New().String()
+	}
 	now := time.Now().UTC()
 	msgPayload := events.ChatMessagePayload{
 		MessageID:           msgID,
@@ -52,12 +65,9 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 		CreatedAt:           now,
 	}
 
-	// 4. Save to simulated database history
+	// 4. Keep an in-memory copy for live reconnect history, then persist to
+	// Postgres via the batch saver (source='chat').
 	r.roomManager.SaveChatMessage(room.ID, msgPayload)
-
-	// Simulate database INSERT query logging into interview_transcripts
-	log.Printf("[db] INSERT INTO interview_transcripts (id, interview_id, speaker_type, speaker_name, content, source, visibility, created_at) VALUES ('%s', '%s', '%s', '%s', '%s', 'chat', '%s', '%s')",
-		msgPayload.MessageID, room.InterviewID, msgPayload.SenderType, msgPayload.SenderName, msgPayload.Message, msgPayload.Visibility, msgPayload.CreatedAt.Format(time.RFC3339))
 
 	if r.transcriptSaver != nil {
 		record := TranscriptRecord{
@@ -91,6 +101,10 @@ func (r *MessageRouter) handleChatSend(conn *ClientConnection, env *events.Envel
 	// Filter and broadcast based on visibility payload
 	if msgPayload.Visibility == events.VisibilityRecruiterOnly {
 		room.BroadcastRecruitersOnly(raw)
+	} else if devBroadcastAllRooms() {
+		// Dev-only multi-tab demo mirror; requires explicit
+		// REALTIME_DEV_BROADCAST_ALL=true and never activates in production.
+		r.roomManager.BroadcastToAllRooms(raw)
 	} else {
 		room.BroadcastAll(raw)
 	}

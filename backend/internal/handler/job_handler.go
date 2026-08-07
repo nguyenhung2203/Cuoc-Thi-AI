@@ -37,14 +37,17 @@ func NewJobHandler(svc *service.JobService) *JobHandler {
 //	DELETE /jobs/{job_id}     → Delete
 func (h *JobHandler) Routes(r chi.Router) {
 	r.Route("/jobs", func(r chi.Router) {
-		r.Get("/", h.List)
-		r.Post("/", h.Create)
+		r.With(middleware.RequirePermission("job:read")).Get("/", h.List)
+		r.With(middleware.RequirePermission("job:create")).Post("/", h.Create)
 		r.Route("/{job_id}", func(r chi.Router) {
-			r.Get("/", h.GetByID)
-			r.Put("/", h.Update)
-			r.Delete("/", h.Delete)
-			r.Post("/analyze", h.Analyze)
-			r.Post("/ai/generate-questions", h.GenerateQuestions)
+			r.With(middleware.RequirePermission("job:read")).Get("/", h.GetByID)
+			r.With(middleware.RequirePermission("job:update")).Put("/", h.Update)
+			r.With(middleware.RequirePermission("job:delete")).Delete("/", h.Delete)
+			// Analyze/generate write AI results and spend Gemini tokens.
+			r.With(middleware.RequirePermission("job:update")).Post("/analyze", h.Analyze)
+			r.Route("/ai", func(r chi.Router) {
+				r.With(middleware.RequirePermission("job:update")).Post("/generate-questions", h.GenerateQuestions)
+			})
 		})
 	})
 }
@@ -199,30 +202,32 @@ func (h *JobHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 
 // GenerateQuestions handles POST /companies/{company_id}/jobs/{job_id}/ai/generate-questions
 func (h *JobHandler) GenerateQuestions(w http.ResponseWriter, r *http.Request) {
-	requestID := getRequestID(r)
-	companyID, _ := r.Context().Value(middleware.CtxCompanyID).(string)
+	companyID := chi.URLParam(r, "company_id")
 	jobID := chi.URLParam(r, "job_id")
+	requestID, _ := r.Context().Value(middleware.CtxRequestID).(string)
 
 	var req request.GenerateQuestionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		pkgresponse.Error(w, apierrors.NewValidation("invalid JSON body", []string{err.Error()}), requestID)
-		return
-	}
-	if msgs := validator.Validate(&req); msgs != nil {
-		pkgresponse.Error(w, apierrors.NewValidation("validation failed", msgs), requestID)
+		pkgresponse.Error(w, apierrors.NewValidation("payload", []string{"invalid json payload"}), requestID)
 		return
 	}
 
 	questions, err := h.svc.GenerateQuestions(r.Context(), companyID, jobID, &req)
 	if err != nil {
-		println("ERROR GENERATING QUESTIONS: " + err.Error())
 		writeServiceError(w, err, requestID)
 		return
 	}
 
-	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{"questions": questions}, nil, requestID)
+	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
+		"status":          "complete",
+		"questions":       questions,
+		"count":           len(questions),
+		"requested_count": req.Count,
+		"actual_count":    len(questions),
+		"mode":            req.Mode,
+		"level":           req.Level,
+	}, nil, requestID)
 }
-
 
 // ---------------------------------------------------------------------------
 // Mapping helpers

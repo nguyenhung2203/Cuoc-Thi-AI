@@ -4,36 +4,98 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Primary Colors */
-  --primary: #2563EB;
-  --primary-hover: #1D4ED8;
-  --accent: #0891B2;
-  
-  /* Background & Surface */
-  --background: #F8FAFC;
-  --surface: #FFFFFF;
-  --surface-soft: #F1F5F9;
-  
-  /* Borders */
-  --border: #E2E8F0;
-  
-  /* Text */
-  --text-main: #0F172A;
-  --text-secondary: #475569;
-  --text-muted: #94A3B8;
+/* Global Scrollbar Prevention (Eliminate Double Scrollbars) */
+html {
+  overflow-y: auto !important;
+  overflow-x: clip !important;
+}
 
-  /* Status Colors */
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #2563EB;
+body, #app, .candidate-layout, .public-layout, .landing-page {
+  overflow-x: clip !important;
+}
+
+:root {
+  /* 1. Brand Colors (Core) */
+  --primary: #1E3A8A;        /* Navy — thương hiệu, header, nút chính */
+  --primary-hover: #1D4ED8;
+  --primary-light: #DBEAFE;
+  
+  --accent: #06B6D4;         /* Cyan — accent công nghệ/AI, link, icon nổi bật, border focus */
+  --accent-bg: #ECFEFF;
+
+  --highlight: #F59E0B;      /* Amber — CTA quan trọng, badge nổi bật */
+  --highlight-hover: #D97706;
+  --highlight-bg: #FEF3C7;
+
+  /* 2 & 4. Background layers & Neutral / Gray scale */
+  --background: #FFFFFF;     /* Background chính light */
+  --surface: #F8FAFC;        /* Background phụ gray-50 */
+  --surface-soft: #F1F5F9;   /* Background hover/active gray-100 */
+
+  /* 6. Border & Focus */
+  --border: #E2E8F0;         /* Border mặc định gray-200 */
+  --border-focus: #06B6D4;   /* Border focus Cyan */
+
+  /* 5. Text colors */
+  --text-main: #0F172A;      /* Text chính gray-900 */
+  --text-secondary: #475569; /* Text phụ/mô tả gray-600 — High contrast readable */
+  --text-muted: #64748B;     /* Text helper/icon gray-500 — Crisp & visible */
+
+  /* 3. Semantic colors (Trạng thái) */
+  --success: #10B981;        /* Match thành công, duyệt, hoàn thành */
+  --warning: #F97316;        /* Cảnh báo nhẹ */
+  --danger: #EF4444;         /* Lỗi validation, xóa, từ chối */
+  --info: #3B82F6;           /* Thông báo trung tính */
+
+  /* Typography */
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   /* Spacing & Layout */
   --radius: 12px;
   --radius-lg: 16px;
+  --radius-full: 9999px;
   --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+  --shadow-glow: 0 8px 24px -6px rgba(30, 58, 138, 0.35);
+
+  /* Brand gradients */
+  --gradient-brand: linear-gradient(135deg, var(--primary), var(--accent));
+  --gradient-brand-soft: linear-gradient(135deg, rgba(30,58,138,0.10), rgba(6,182,212,0.10));
+}
+
+/* Dark Theme Overrides — Flawless adaptation across all UI components */
+:root[data-theme='dark'], .dark {
+  /* 1. Brand Colors for Dark Mode */
+  --primary: #3B82F6;
+  --primary-hover: #60A5FA;
+  --primary-light: rgba(59, 130, 246, 0.18);
+  
+  --accent: #22D3EE;
+  --accent-bg: rgba(34, 211, 238, 0.15);
+
+  --highlight: #FBBF24;
+  --highlight-hover: #FCD34D;
+  --highlight-bg: rgba(245, 158, 11, 0.18);
+
+  /* 4. Background layers dark */
+  --background: #0F172A;     /* Background chính dark gray-900 */
+  --surface: #1E293B;        /* Background phụ dark gray-800 */
+  --surface-soft: #334155;   /* Background hover/active dark gray-700 */
+
+  /* 6. Border & Focus dark */
+  --border: #334155;         /* gray-700 */
+  --border-focus: #22D3EE;
+
+  /* 5. Text colors dark */
+  --text-main: #F8FAFC;      /* gray-50 */
+  --text-secondary: #CBD5E1; /* gray-300 */
+  --text-muted: #94A3B8;     /* gray-400 */
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 8px 24px -6px rgba(59, 130, 246, 0.45);
 }
 
 * {
@@ -48,6 +110,7 @@ body {
   color: var(--text-main);
   line-height: 1.5;
   font-size: 14px;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 a {
@@ -75,7 +138,7 @@ a {
 
 .text-helper {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* Button styles */
@@ -84,14 +147,15 @@ a {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 20px;
   height: 40px;
-  border-radius: var(--radius);
-  font-weight: 500;
+  border-radius: var(--radius-full);
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .btn:disabled {
@@ -288,7 +352,6 @@ textarea.input-field {
 .page-content {
   padding: 32px;
   flex: 1;
-  overflow-y: auto;
 }
 
 /* Dashboard specific */
@@ -345,6 +408,7 @@ textarea.input-field {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
+  text-align: left;
 }
 
 .table td {
@@ -352,6 +416,7 @@ textarea.input-field {
   height: 64px;
   font-size: 14px;
   border-bottom: 1px solid var(--border);
+  text-align: left;
 }
 
 .table th:first-child,
@@ -418,8 +483,12 @@ textarea.input-field {
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 20px 24px;
   overflow-y: auto;
+}
+
+.modal-xl .modal-body {
+  padding: 16px 20px;
 }
 
 .icon-btn {
@@ -498,3 +567,256 @@ textarea.input-field {
 .toast-error .toast-icon { color: var(--danger); }
 .toast-warning .toast-icon { color: var(--warning); }
 .toast-info .toast-icon { color: var(--info); }
+
+/* =====================================================================
+   PREMIUM VISUAL LAYER (candidate side) — token-based, reusable.
+   Goal: hiện đại, bắt mắt, có chiều sâu 3D "vừa phải", không lố.
+   Tất cả hiệu ứng đều tôn trọng prefers-reduced-motion.
+   ===================================================================== */
+
+/* Section heading — thay cho gradient text khổng lồ */
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 15px;
+  margin-top: 6px;
+}
+
+/* Card có chiều sâu + nâng nhẹ khi hover (elevate) */
+.card-elevate {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.35s ease;
+  will-change: transform;
+}
+.card-elevate:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-light);
+}
+
+/* Tilt 3D nhẹ — dùng cho card nổi bật (KPI, CTA). Rất tinh tế: 2-3deg. */
+.tilt-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.4s ease;
+}
+.tilt-3d:hover {
+  transform: perspective(900px) rotateX(2.5deg) rotateY(-2.5deg) translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+.tilt-3d > * { transform: translateZ(0); }
+
+/* Icon "chip" cho KPI — thay cho vòng tròn màu loè loẹt */
+.kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+  background: var(--primary-light);
+  color: var(--primary);
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+}
+.kpi-icon.is-accent { background: var(--accent-bg); color: var(--accent); }
+.kpi-icon.is-success { background: rgba(22,163,74,0.12); color: var(--success); }
+.kpi-icon.is-warning { background: rgba(217,119,6,0.12); color: var(--warning); }
+.card-elevate:hover .kpi-icon,
+.tilt-3d:hover .kpi-icon { transform: scale(1.06); }
+
+/* Viền sáng bên trái khi hover (dùng cho item danh sách) */
+.hover-rail { position: relative; overflow: hidden; }
+.hover-rail::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--gradient-brand);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.3s ease;
+}
+.hover-rail:hover::before { transform: scaleY(1); }
+
+/* Banner/CTA nền brand gradient (blue->cyan) */
+.brand-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+.brand-banner::after {
+  content: '';
+  position: absolute;
+  top: -40%; right: -10%;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18), transparent 70%);
+  pointer-events: none;
+}
+
+/* Sheen: vệt sáng lướt qua khi hover (dùng cho nút/banner nổi bật) */
+.sheen { position: relative; overflow: hidden; }
+.sheen::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 60%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+.sheen:hover::before { left: 140%; }
+
+/* AI accent block */
+.ai-block {
+  background: var(--accent-bg);
+  border: 1px solid rgba(8,145,178,0.20);
+  border-radius: var(--radius);
+}
+
+/* Score pill theo ngưỡng điểm */
+.score-pill {
+  display: inline-flex; align-items: center;
+  padding: 4px 12px; border-radius: var(--radius-full);
+  font-size: 13px; font-weight: 700;
+}
+.score-pill.is-high { background: rgba(22,163,74,0.12); color: var(--success); }
+.score-pill.is-mid  { background: rgba(217,119,6,0.12); color: var(--warning); }
+.score-pill.is-low  { background: rgba(220,38,38,0.12); color: var(--danger); }
+
+/* Entrance animations */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: riseIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.stagger > * { animation: riseIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.stagger > *:nth-child(4) { animation-delay: 0.22s; }
+.stagger > *:nth-child(5) { animation-delay: 0.28s; }
+.stagger > *:nth-child(6) { animation-delay: 0.34s; }
+
+/* Tôn trọng người dùng tắt hiệu ứng chuyển động */
+@media (prefers-reduced-motion: reduce) {
+  .card-elevate, .tilt-3d, .kpi-icon, .hover-rail::before, .sheen::before {
+    transition: none !important;
+  }
+  .tilt-3d:hover { transform: translateY(-2px); }
+  .card-elevate:hover { transform: none; }
+  .animate-rise, .stagger > * { animation: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DARK MODE POLISH — Recruiter & Global Overrides
+   Ensures Tailwind utility-based pages match CSS-variable-based pages
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Override Tailwind bg-white to use CSS variable in dark mode */
+.dark .bg-white { background-color: var(--surface) !important; }
+.dark .bg-slate-50 { background-color: var(--surface-soft) !important; }
+.dark .bg-slate-100 { background-color: var(--surface-soft) !important; }
+
+/* Text color overrides for consistency */
+.dark .text-slate-800,
+.dark .text-slate-900 { color: var(--text-main) !important; }
+.dark .text-slate-700 { color: var(--text-secondary) !important; }
+.dark .text-slate-600,
+.dark .text-slate-500 { color: var(--text-muted) !important; }
+.dark .text-slate-400 { color: var(--text-muted) !important; }
+.dark .text-slate-300 { color: #64748B !important; }
+
+/* Border overrides */
+.dark .border-slate-200,
+.dark .border-slate-300 { border-color: var(--border) !important; }
+
+/* Accent backgrounds in dark — softer, more premium feel */
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.12) !important; }
+.dark .bg-amber-50 { background-color: rgba(217, 119, 6, 0.12) !important; }
+.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.12) !important; }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.12) !important; }
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.12) !important; }
+.dark .bg-cyan-50 { background-color: rgba(6, 182, 212, 0.12) !important; }
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.12) !important; }
+.dark .bg-gray-50 { background-color: var(--surface-soft) !important; }
+
+/* Hover states in dark mode */
+.dark .hover\:bg-slate-100:hover { background-color: var(--surface) !important; }
+.dark .hover\:bg-slate-50:hover { background-color: var(--surface-soft) !important; }
+.dark .hover\:border-slate-200:hover { border-color: var(--border) !important; }
+
+/* Shadow polish for dark mode — deeper, more dramatic */
+.dark .shadow-sm { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4) !important; }
+.dark .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4) !important; }
+
+/* Input & form elements in dark mode */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: var(--surface-soft) !important;
+  border-color: var(--border) !important;
+  color: var(--text-main) !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Table dark mode polish */
+.dark table { border-color: var(--border); }
+.dark th { background-color: var(--surface-soft) !important; color: var(--text-secondary) !important; border-color: var(--border) !important; }
+.dark td { border-color: var(--border) !important; color: var(--text-main) !important; }
+.dark tr:hover td { background-color: rgba(59, 130, 246, 0.04) !important; }
+
+/* Card & panel transitions for smooth dark/light switch */
+.bg-white,
+.bg-slate-50,
+.bg-slate-100 {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Scrollbar in dark mode */
+.dark ::-webkit-scrollbar { width: 6px; height: 6px; }
+.dark ::-webkit-scrollbar-track { background: transparent; }
+.dark ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Modal / dialog dark polish */
+.dark .modal-content,
+.dark [class*="modal"] {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+/* Badge dark mode */
+.dark .badge,
+.dark [class*="badge"] {
+  border-color: var(--border);
+}
+
+/* Dropdown dark mode */
+.dark .dropdown-menu,
+.dark [class*="dropdown"] {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+

@@ -36,13 +36,21 @@ func (s *AILogService) worker() {
 	}
 }
 
-// LogAsync sends the log entry to the background worker. It doesn't block the caller.
+// LogAsync queues an AI usage record. If the buffer is saturated, write it
+// synchronously instead of silently losing billing/audit data.
 func (s *AILogService) LogAsync(logEntry *models.AIRequestLog) {
 	select {
 	case s.logChan <- logEntry:
-		// Successfully queued
 	default:
-		// Queue is full, drop the log to prevent blocking the API
-		log.Printf("[AILogService] WARNING: log queue is full, dropping AI log for template %s", logEntry.TemplateID.String)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.repo.Create(ctx, logEntry); err != nil {
+			log.Printf("[AILogService] failed to save saturated-queue AI log: %v", err)
+		}
 	}
+}
+
+// List returns AI request logs matching the filter (admin debugging / cost audit).
+func (s *AILogService) List(ctx context.Context, f repository.AILogFilter) ([]models.AIRequestLog, error) {
+	return s.repo.List(ctx, f)
 }

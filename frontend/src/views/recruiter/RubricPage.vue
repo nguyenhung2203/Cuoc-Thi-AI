@@ -9,6 +9,7 @@ import Badge from '../../components/common/AppBadge.vue'
 import { Plus, Edit, Trash2, Layers, ChevronDown, ChevronUp, Scale } from 'lucide-vue-next'
 import { rubricService } from '../../services/rubric.service'
 import { authStore } from '../../stores/auth.store'
+import { hasDuplicateNormalized, maxLength, minLength, normalizeText, requiredTrim } from '../../utils/validators.js'
 
 const rubrics = ref([])
 const loading = ref(true)
@@ -16,8 +17,11 @@ const saving = ref(false)
 const toast = ref(null)
 const expandedId = ref(null)
 const showCreateModal = ref(false)
+const showEditModal = ref(false)
 const showDeleteModal = ref(false)
 const deletingId = ref(null)
+const formError = ref('')
+const editingRubricId = ref(null)
 
 const newRubric = ref({
   name: '',
@@ -73,12 +77,37 @@ const removeCriteria = (idx) => {
 
 const totalWeight = () => newRubric.value.criteria.reduce((s, c) => s + Number(c.weight || 0), 0)
 
-const handleCreate = async () => {
-  if (!newRubric.value.name) return
-  if (totalWeight() !== 100) {
-    toast.value = { type: 'error', message: `Tổng trọng số phải là 100%. Hiện tại: ${totalWeight()}%` }
-    return
+const validateRubric = () => {
+  formError.value = ''
+  const name = normalizeText(newRubric.value.name)
+  const criteria = Array.isArray(newRubric.value.criteria) ? newRubric.value.criteria : []
+  let error = requiredTrim(name, 'Vui lòng nhập tên Rubric.')
+    || minLength(name, 2, 'Tên Rubric phải có ít nhất 2 ký tự.')
+    || maxLength(name, 255, 'Tên Rubric không được vượt quá 255 ký tự.')
+  if (!error && criteria.length === 0) error = 'Rubric phải có ít nhất một tiêu chí.'
+  if (!error && hasDuplicateNormalized(criteria.map(item => item.name))) error = 'Tên các tiêu chí không được trùng nhau.'
+  for (const criterion of criteria) {
+    if (error) break
+    criterion.name = normalizeText(criterion.name)
+    criterion.scoring_guide = normalizeText(criterion.scoring_guide)
+    error = requiredTrim(criterion.name, 'Vui lòng nhập tên cho tất cả tiêu chí.')
+      || maxLength(criterion.name, 255, 'Tên tiêu chí không được vượt quá 255 ký tự.')
+      || maxLength(criterion.scoring_guide, 5000, 'Hướng dẫn chấm điểm không được vượt quá 5.000 ký tự.')
+    const weight = Number(criterion.weight)
+    const minScore = Number(criterion.min_score)
+    const maxScore = Number(criterion.max_score)
+    if (!error && (!Number.isFinite(weight) || weight <= 0 || weight > 100)) error = 'Trọng số mỗi tiêu chí phải lớn hơn 0 và không vượt quá 100.'
+    if (!error && (!Number.isFinite(minScore) || !Number.isFinite(maxScore) || minScore >= maxScore)) error = 'Điểm tối thiểu phải nhỏ hơn điểm tối đa.'
   }
+  if (!error && totalWeight() !== 100) error = `Tổng trọng số phải là 100%. Hiện tại: ${totalWeight()}%`
+  formError.value = error
+  if (error) toast.value = { type: 'error', message: error }
+  newRubric.value.name = name
+  return !error
+}
+
+const handleCreate = async () => {
+  if (saving.value || !validateRubric()) return
   saving.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
@@ -95,6 +124,58 @@ const handleCreate = async () => {
     })
     toast.value = { type: 'success', message: 'Đã tạo Rubric thành công!' }
     showCreateModal.value = false
+    newRubric.value = { name: '', description: '', criteria: [{ name: '', weight: 30, min_score: 0, max_score: 5, scoring_guide: '' }] }
+    await loadRubrics()
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lưu thất bại. Backend đang được kết nối.' }
+  } finally {
+    saving.value = false
+  }
+}
+
+const openEditModal = async (rubric) => {
+  try {
+    editingRubricId.value = rubric.id
+    const companyId = authStore.user?.companies?.[0]?.id
+    const fullRubric = await rubricService.getRubric(companyId, rubric.id)
+    newRubric.value = {
+      name: fullRubric.name || rubric.name,
+      description: fullRubric.description || rubric.description,
+      criteria: Array.isArray(fullRubric.rubric_criteria || fullRubric.criteria)
+        ? (fullRubric.rubric_criteria || fullRubric.criteria).map(c => ({
+            name: c.name,
+            weight: Number(c.weight),
+            min_score: Number(c.min_score),
+            max_score: Number(c.max_score),
+            scoring_guide: c.scoring_guide || ''
+          }))
+        : rubric.criteria || [{ name: '', weight: 30, min_score: 0, max_score: 5, scoring_guide: '' }]
+    }
+    showEditModal.value = true
+  } catch (err) {
+    toast.value = { type: 'error', message: 'Lỗi tải chi tiết Rubric: ' + (err.message || 'Không xác định') }
+  }
+}
+
+const handleUpdate = async () => {
+  if (saving.value || !editingRubricId.value || !validateRubric()) return
+  saving.value = true
+  try {
+    const companyId = authStore.user?.companies?.[0]?.id
+    await rubricService.updateRubric(companyId, editingRubricId.value, {
+      name: newRubric.value.name,
+      description: newRubric.value.description,
+      criteria: newRubric.value.criteria.map(c => ({
+        name: c.name,
+        weight: Number(c.weight),
+        min_score: Number(c.min_score),
+        max_score: Number(c.max_score),
+        scoring_guide: c.scoring_guide
+      }))
+    })
+    toast.value = { type: 'success', message: 'Đã cập nhật Rubric thành công!' }
+    showEditModal.value = false
+    editingRubricId.value = null
     newRubric.value = { name: '', description: '', criteria: [{ name: '', weight: 30, min_score: 0, max_score: 5, scoring_guide: '' }] }
     await loadRubrics()
   } catch (err) {
@@ -168,6 +249,9 @@ const confirmDelete = async () => {
             <span :style="`padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: ${rubric.totalWeight === 100 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color: ${rubric.totalWeight === 100 ? 'var(--success)' : 'var(--danger)'}`">
               {{ rubric.totalWeight }}% tổng
             </span>
+            <Button variant="ghost" style="padding: 4px" @click.stop="openEditModal(rubric)">
+              <Edit size="16" color="var(--primary)" />
+            </Button>
             <Button variant="ghost" style="padding: 4px" @click.stop="deletingId = rubric.id; showDeleteModal = true">
               <Trash2 size="16" color="var(--danger)" />
             </Button>
@@ -244,7 +328,55 @@ const confirmDelete = async () => {
       </div>
     </Modal>
 
-    <!-- Delete Modal -->
+    <!-- Edit Modal -->
+    <Modal :isOpen="showEditModal" @close="showEditModal = false" title="Chỉnh sửa Rubric">
+      <div style="max-height: 70vh; overflow-y: auto; padding-right: 4px">
+        <Input label="Tên Rubric" v-model="newRubric.name" placeholder="VD: Frontend Developer Middle" style="margin-bottom: 16px" />
+        <Input label="Mô tả (tùy chọn)" v-model="newRubric.description" placeholder="Mô tả ngắn về bộ tiêu chí này..." style="margin-bottom: 24px" />
+
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px">
+          <p class="text-body" style="font-weight: 700">Danh sách tiêu chí</p>
+          <span :style="`font-size: 12px; font-weight: 700; color: ${totalWeight() === 100 ? 'var(--success)' : 'var(--danger)'}`">
+            Tổng: {{ totalWeight() }}%
+          </span>
+        </div>
+
+        <div v-for="(c, idx) in newRubric.criteria" :key="idx"
+          style="padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; background: var(--surface)">
+          <div style="display: flex; gap: 12px; margin-bottom: 12px">
+            <div style="flex: 1">
+              <label class="input-label">Tên tiêu chí</label>
+              <input class="input-field" v-model="c.name" placeholder="VD: Kiến thức kỹ thuật" style="width: 100%" />
+            </div>
+            <div style="width: 90px">
+              <label class="input-label">Trọng số %</label>
+              <input class="input-field" type="number" v-model.number="c.weight" min="1" max="100" style="width: 100%" />
+            </div>
+            <div style="width: 70px">
+              <label class="input-label">Max điểm</label>
+              <input class="input-field" type="number" v-model.number="c.max_score" min="1" style="width: 100%" />
+            </div>
+            <div style="padding-top: 22px">
+              <Button variant="ghost" style="padding: 6px; color: var(--danger)" @click="removeCriteria(idx)">
+                <Trash2 size="14" />
+              </Button>
+            </div>
+          </div>
+          <div>
+            <label class="input-label">Hướng dẫn chấm điểm</label>
+            <textarea class="input-field" v-model="c.scoring_guide" placeholder="Mô tả cách đánh giá..." rows="2" style="width: 100%; resize: none" />
+          </div>
+        </div>
+
+        <Button variant="secondary" @click="addCriteria" style="width: 100%; margin-bottom: 24px">
+          <Plus size="14" /> Thêm tiêu chí
+        </Button>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 12px">
+        <Button variant="ghost" @click="showEditModal = false">Hủy</Button>
+        <Button :disabled="saving" @click="handleUpdate">{{ saving ? 'Đang lưu...' : 'Cập nhật Rubric' }}</Button>
+      </div>
+    </Modal>
     <Modal :isOpen="showDeleteModal" @close="showDeleteModal = false" title="Xác nhận xóa Rubric">
       <p class="text-body" style="margin-bottom: 24px">Bạn có chắc muốn xóa Rubric này? Hành động này không thể hoàn tác.</p>
       <div style="display: flex; justify-content: flex-end; gap: 12px">

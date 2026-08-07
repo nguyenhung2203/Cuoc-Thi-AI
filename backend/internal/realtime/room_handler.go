@@ -88,25 +88,25 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 
 		missedEvents = room.GetMissedEvents(oldLastSeen, p.ParticipantType)
 		log.Printf("[room] participant=%s reconnected to room=%s (recovered %d missed events)", conn.ID, conn.RoomID, len(missedEvents))
-		
+
 		if r.auditLogger != nil {
 			r.auditLogger.LogEvent("reconnect", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
 		}
 	} else {
 		p = &Participant{
-			ConnectionID:    conn.ID,
-			UserID:          conn.UserID,
-			ParticipantType: events.ParticipantType(conn.Role),
-			DisplayName:     displayName,
-			ConnectionState: events.ConnectionOnline,
-			JoinedAt:        time.Now().UTC(),
-			LastSeenAt:      time.Now().UTC(),
-			Connection:      conn,
+			ConnectionID:     conn.ID,
+			UserID:           conn.UserID,
+			ParticipantType:  events.ParticipantType(conn.Role),
+			DisplayName:      displayName,
+			ConnectionState:  events.ConnectionOnline,
+			JoinedAt:         time.Now().UTC(),
+			LastSeenAt:       time.Now().UTC(),
+			Connection:       conn,
 			MediaRateLimiter: rate.NewLimiter(rate.Every(2*time.Second), 10),
 		}
 		room.AddParticipant(p)
 		log.Printf("[room] participant=%s joined room=%s as %s", conn.ID, conn.RoomID, p.ParticipantType)
-		
+
 		if r.auditLogger != nil {
 			r.auditLogger.LogEvent("room_join", conn.UserID, conn.Role, "interview_room", conn.RoomID, "", conn.IPAddress, map[string]interface{}{"room_id": conn.RoomID, "connection_id": conn.ID})
 		}
@@ -122,6 +122,8 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		RoomStatus:      room.Status,
 		InterviewStatus: string(room.Status),
 		Participants:    room.ParticipantList(),
+		StartedAt:       room.StartedAt,
+		EndedAt:         room.EndedAt,
 	}
 	if isReconnect {
 		ackPayload.MediaStatus = &p.MediaStatus
@@ -134,6 +136,15 @@ func (r *MessageRouter) handleRoomJoin(conn *ClientConnection, env *events.Envel
 		rawAck, _ := ackEnv.ToJSON()
 		if !conn.TrySend(rawAck) {
 			log.Printf("[room] send buffer full/closed for participant=%s ACK", conn.ID)
+		}
+	}
+
+	// Stream historical chat messages to joining client so chat history persists across browser refresh (F5)
+	for _, chatMsg := range r.roomManager.GetChatHistory(room.ID) {
+		if chatEnv, err := events.NewEnvelope(events.EventChatMessage, "", room.ID, room.InterviewID, chatMsg); err == nil {
+			if rawChat, err := chatEnv.ToJSON(); err == nil {
+				conn.TrySend(rawChat)
+			}
 		}
 	}
 

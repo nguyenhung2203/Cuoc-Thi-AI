@@ -2,15 +2,20 @@ package realtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/jmoiron/sqlx"
+
 	"backend/internal/livekit"
 	"backend/internal/realtime/events"
+	"backend/internal/repository"
+	"backend/internal/service"
 )
 
 // Server is the WebSocket realtime gateway.
@@ -22,13 +27,18 @@ type Server struct {
 	httpServer         *http.Server
 	transcriptPipeline *TranscriptPipeline
 	transcriptSaver    *TranscriptBatchSaver
+	interviewRepo      *repository.InterviewRepository
+	livekitCfg         LiveKitConfig
+	aiSettings         service.AIRuntimeConfigProvider
+	aiLogSvc           *service.AILogService
 }
 
 // NewServer creates a Server with all dependencies wired up.
-func NewServer(addr string) *Server {
+// db may be nil in dev/tests; deps carries the real services used in production.
+func NewServer(addr string, db *sqlx.DB, deps RouterDeps, livekitCfg LiveKitConfig, aiSettings ...service.AIRuntimeConfigProvider) *Server {
 	cm := NewConnectionManager()
 	rm := NewRoomManager()
-	router := NewMessageRouter(cm, rm)
+	router := NewMessageRouter(cm, rm, db, deps)
 
 	tp := NewTranscriptPipeline(rm, 1000)
 	router.SetTranscriptPipeline(tp)
@@ -40,6 +50,9 @@ func NewServer(addr string) *Server {
 		router:             router,
 		transcriptPipeline: tp,
 		transcriptSaver:    router.GetTranscriptSaver(),
+		interviewRepo:      deps.InterviewRepo,
+		aiLogSvc:           deps.AILogSvc,
+		livekitCfg:         livekitCfg,
 		httpServer: &http.Server{
 			Addr:         addr,
 			Handler:      mux,
@@ -49,8 +62,22 @@ func NewServer(addr string) *Server {
 		},
 	}
 
+	if len(aiSettings) > 0 {
+		s.aiSettings = aiSettings[0]
+	}
+
+	// Liveness endpoint used by container orchestration.
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
+	})
+
 	// WebSocket upgrade endpoint
 	mux.HandleFunc("/ws/interview-room", s.handleUpgrade)
+
+	// WebSocket voice mock-interview proxy (browser <-> Gemini Live)
+	mux.HandleFunc("/ws/mock-live", s.handleMockLive)
 
 	// REST endpoint for chat history
 	mux.HandleFunc("/api/v1/rooms/", s.handleGetChatHistory)
@@ -101,7 +128,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return s.Shutdown()
 	}
 }
-
 
 // Shutdown gracefully drains all connections and stops the HTTP server.
 func (s *Server) Shutdown() error {
@@ -333,6 +359,17 @@ func (s *Server) handleGetChatHistory(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// writeJSONError writes a standard {success:false,error,message} JSON error response.
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"error":   code,
+		"message": message,
+	})
+}
+
 // handleGetRecruiterRoomToken handles generating a LiveKit token for the recruiter.
 func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -389,21 +426,20 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// For recruiters, let's use a deterministic room ID based on interviewID.
-	// In mock environment, roomID is "room-" + interviewID.
+	// 3. Verify the interview belongs to this company and resolve its real room_id.
+	// Falls back to the legacy "room-"+interviewID scheme when no DB is wired (dev)
+	// or the interview has no room row yet, so dev flows keep working.
 	roomID := "room-" + interviewID
-
-	// Log simulated DB SELECT query for verification
-	log.Printf("[db] SELECT * FROM interviews WHERE id = '%s' AND company_id = '%s'", interviewID, companyID)
-
-	// 3. Generate LiveKit token
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
+	if s.interviewRepo != nil {
+		interview, lookupErr := s.interviewRepo.GetByIDAndCompany(r.Context(), interviewID, companyID)
+		if lookupErr != nil {
+			log.Printf("[api] recruiter room lookup failed interview=%s company=%s: %v", interviewID, companyID, lookupErr)
+			writeJSONError(w, http.StatusNotFound, "INTERVIEW_NOT_FOUND", "Không tìm thấy buổi phỏng vấn")
+			return
+		}
+		if interview.RoomID.Valid && interview.RoomID.String != "" {
+			roomID = interview.RoomID.String
+		}
 	}
 
 	displayName := claims.DisplayName
@@ -412,8 +448,8 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		s.livekitCfg.APIKey,
+		s.livekitCfg.APISecret,
 		roomID,
 		claims.UserID,
 		displayName,
@@ -422,21 +458,11 @@ func (s *Server) handleGetRecruiterRoomToken(w http.ResponseWriter, r *http.Requ
 	)
 	if err != nil {
 		log.Printf("[api] token generation failed: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERNAL_ERROR",
-			"message": "Failed to generate token",
-		})
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate token")
 		return
 	}
 
-	livekitURL := os.Getenv("LIVEKIT_URL")
-	if livekitURL == "" {
-		livekitURL = "wss://livekit.example.com"
-	}
-
+	livekitURL := s.livekitCfg.URL
 	expiresAt := time.Now().Add(4 * time.Hour).UTC().Format(time.RFC3339)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -486,77 +512,57 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Simulate looking up token in DB
-	log.Printf("[db] SELECT * FROM interviews WHERE invite_token_hash = SHA256('%s')", inviteToken)
+	// 2. Resolve the invite token against Postgres. The stored value is a
+	// SHA-256 hash of the raw token; a 64-char token is already a hash.
+	var hash string
+	if len(inviteToken) == 64 {
+		hash = inviteToken
+	} else {
+		sum := sha256.Sum256([]byte(inviteToken))
+		hash = hex.EncodeToString(sum[:])
+	}
 
-	// 2. Mock checking
-	if inviteToken == "invalid-token" || inviteToken == "notfound-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INVITE_NOT_FOUND",
-			"message": "Token không tồn tại",
-		})
+	if s.interviewRepo == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Dịch vụ phỏng vấn chưa kết nối cơ sở dữ liệu")
 		return
 	}
 
-	if inviteToken == "expired-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INVITE_EXPIRED",
-			"message": "Token hết hạn",
-		})
+	info, lookupErr := s.interviewRepo.GetCandidateJoinInfoByInviteTokenHash(r.Context(), hash)
+	if lookupErr != nil || info == nil {
+		log.Printf("[api] candidate invite lookup failed: %v", lookupErr)
+		writeJSONError(w, http.StatusNotFound, "INVITE_NOT_FOUND", "Token không tồn tại hoặc đã hết hạn")
+		return
+	}
+	if info.InviteExpiresAt.Before(time.Now()) {
+		writeJSONError(w, http.StatusForbidden, "INVITE_EXPIRED", "Token hết hạn")
 		return
 	}
 
-	if inviteToken == "cancelled-token" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERVIEW_CANCELLED",
-			"message": "Buổi phỏng vấn đã hủy",
-		})
-		return
+	interviewID := info.InterviewID
+	roomID := info.RoomID
+	if roomID == "" {
+		roomID = "room-" + interviewID
 	}
+	candidateName := info.CandidateName
 
-	// Default case - valid token
-	interviewID := "interview-123"
-	roomID := "room-" + interviewID
-	candidateName := "Trần Văn B"
-	jobTitle := "Frontend Developer"
-
-	// 3. Generate candidate LiveKit room token
-	livekitSecret := os.Getenv("LIVEKIT_API_SECRET")
-	if livekitSecret == "" {
-		livekitSecret = "devsecret"
-	}
-	livekitKey := os.Getenv("LIVEKIT_API_KEY")
-	if livekitKey == "" {
-		livekitKey = "devkey"
+	// 3. Identity: prefer the linked user id, else a candidate-scoped id.
+	identity := "candidate-" + info.CandidateID
+	if info.UserID != nil && *info.UserID != "" {
+		identity = *info.UserID
 	}
 
 	tokenString, err := livekit.GenerateToken(
-		livekitKey,
-		livekitSecret,
+		s.livekitCfg.APIKey,
+		s.livekitCfg.APISecret,
 		roomID,
-		"candidate-123", // candidate user ID
+		identity,
 		candidateName,
 		"candidate",
 		interviewID,
 	)
 	if err != nil {
 		log.Printf("[api] candidate token generation failed: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   "INTERNAL_ERROR",
-			"message": "Failed to generate candidate token",
-		})
+		writeJSONError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to generate candidate token")
 		return
 	}
 
@@ -570,8 +576,8 @@ func (s *Server) handleCandidateJoinByInviteToken(w http.ResponseWriter, r *http
 			"interview_id":                 interviewID,
 			"room_id":                      roomID,
 			"candidate_name":               candidateName,
-			"job_title":                    jobTitle,
-			"scheduled_at":                 now.Format(time.RFC3339),
+			"job_title":                    info.JobTitle,
+			"scheduled_at":                 info.ScheduledAt.Format(time.RFC3339),
 			"requires_consent_ai":          true,
 			"requires_consent_recording":   false,
 			"room_access_token":            tokenString,

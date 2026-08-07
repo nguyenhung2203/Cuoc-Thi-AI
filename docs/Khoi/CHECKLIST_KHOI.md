@@ -206,7 +206,7 @@
 - [x] `GET /companies/:company_id/interviews?status=&date=&page=&page_size=`
 - [x] `POST /companies/:company_id/interviews` — body `{ job_id, candidate_id, recruiter_id, template_id?, rubric_id?, scheduled_at, duration_minutes, mode, send_invite }`; tạo luôn record `interview_rooms` và sinh `invite_token`/`invite_url`
 - [x] `GET /companies/:company_id/interviews/:interview_id` — chi tiết kèm `room`, `rubric`, `job`, `candidate`, `recruiter`
-- [x] `PUT /companies/:company_id/interviews/:interview_id` — reschedule (chỉ khi `status=scheduled`)
+- [x] `PUT /companies/:company_id/interviews/:interview_id` — reschedule (chỉ khi `status=scheduled`); validate state, notify candidate, audit `interview:reschedule`
 - [x] `POST /companies/:company_id/interviews/:interview_id/cancel`
 - [x] Validate trùng lịch recruiter/candidate (cảnh báo, không cứng)
 - [x] Lưu `consent_recording`, `consent_ai`
@@ -290,7 +290,7 @@
 - [x] Log mỗi AI call: `template_id`, `template_version`, input/output, latency, status, error, tokens, cost
 - [x] Truy vấn được theo `interview_id` / `job_id` / `candidate_id`
 - [x] Không log PII thừa (mask password, token nếu có)
-- [x] API admin xem log: `GET /admin/ai-logs?interview_id=...`
+- [x] API admin xem log: `GET /admin/ai-logs?interview_id=&job_id=&candidate_id=&page=&page_size=` (admin-only, filter + pagination)
 - [x] **DoD:** Có log đủ để debug AI và audit cost
 
 ---
@@ -403,7 +403,7 @@
 > Dùng bảng `notifications`. `report_status` nằm ở `interviews` (pending/generating/ready/failed).
 
 - [x] Field `report_status` trong `interviews` — `pending` / `generating` / `ready` / `failed`
-- [ ] Retry tự động khi failed (max N lần, exponential backoff) — **chưa làm, manual retry qua endpoint**
+- [x] Retry tự động khi failed (max N lần, exponential backoff) — **CÓ khi bật Redis:** `asynq.MaxRetry(3)` + exponential backoff trong `queue/dispatcher.go`, worker phân biệt lỗi retryable/non-retryable (`SkipRetry`). Không có Redis → report chạy inline, không auto-retry (dùng manual retry endpoint bên dưới)
 - [x] `POST /companies/:company_id/interviews/:interview_id/report/retry` — retry thủ công (sync, có feedback)
 - [x] `PUT /companies/:company_id/interviews/:interview_id/report/decision` — recruiter cập nhật `recruiter_decision`, `recruiter_comment`
 - [x] Insert notification cho recruiter khi report `ready` hoặc `failed` (type: report_ready/report_failed)

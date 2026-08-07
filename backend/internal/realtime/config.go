@@ -1,6 +1,40 @@
 package realtime
 
-import "time"
+import (
+	"os"
+	"strings"
+	"time"
+
+	"backend/internal/livekit"
+)
+
+// LiveKitConfig aliases the shared LiveKit config so existing gateway code
+// (cmd/realtime, server.go) keeps compiling unchanged.
+type LiveKitConfig = livekit.Config
+
+// LoadLiveKitConfig delegates to the shared livekit.Load — one source of
+// truth for credentials and the production fail-fast guard.
+func LoadLiveKitConfig() (LiveKitConfig, error) {
+	return livekit.Load()
+}
+
+// allowDevBroadcast is the pure decision for dev-only chat mirroring across
+// rooms: it requires an explicit opt-in flag AND a non-production APP_ENV.
+// Production always returns false regardless of the flag.
+func allowDevBroadcast(appEnv, flagValue string) bool {
+	env := strings.ToLower(strings.TrimSpace(appEnv))
+	if env == "production" || env == "prod" {
+		return false
+	}
+	return strings.ToLower(strings.TrimSpace(flagValue)) == "true"
+}
+
+// devBroadcastAllRooms reads APP_ENV + REALTIME_DEV_BROADCAST_ALL from the
+// environment. Default OFF — chat never leaves its own room unless a dev
+// explicitly opts in. Reads env on every call so t.Setenv works in tests.
+func devBroadcastAllRooms() bool {
+	return allowDevBroadcast(os.Getenv("APP_ENV"), os.Getenv("REALTIME_DEV_BROADCAST_ALL"))
+}
 
 const (
 	// writeWait is the maximum time allowed to write a message to a client.
@@ -17,7 +51,6 @@ const (
 
 	// sendBufferSize is the channel buffer per connection.
 	sendBufferSize = 256
-
 )
 
 var (

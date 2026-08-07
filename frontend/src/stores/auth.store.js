@@ -33,7 +33,15 @@ export const authStore = reactive({
         }
         
         this.user = userData;
-        localStorage.setItem('user_role', userData.role);
+        if (userData?.role) {
+          localStorage.setItem('user_role', userData.role);
+        }
+        if (userData?.email) {
+          localStorage.setItem('user_email', userData.email);
+        }
+        if (userData?.id) {
+          localStorage.setItem('user_id', userData.id);
+        }
       } catch (err) {
         console.error('Failed to init auth store:', err);
         // api.service.js đã tự động đá về /login nếu 401
@@ -54,9 +62,7 @@ export const authStore = reactive({
       
       // Lưu token
       localStorage.setItem('access_token', data.access_token);
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token);
-      }
+      // Refresh token được trình duyệt giữ trong HttpOnly cookie.
       
       this.user = data.user;
       
@@ -92,11 +98,11 @@ export const authStore = reactive({
   /**
    * Đăng ký
    */
-  async register(email, password, full_name, role) {
+  async register(email, password, full_name, role, otp) {
     this.isLoading = true;
     this.error = null;
     try {
-      const data = await authService.register({ email, password, full_name, role });
+      const data = await authService.register({ email, password, full_name, role, otp });
       return data;
     } catch (err) {
       this.error = err.message || 'Đăng ký thất bại';
@@ -117,11 +123,60 @@ export const authStore = reactive({
     } finally {
       // Dù API thành công hay lỗi, vẫn xóa ở client
       localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user_role');
       this.user = null;
       this.isAuthenticated = false;
       window.location.href = '/login';
     }
-  }
+  },
+
+  /**
+   * Đăng nhập thật bằng Google OAuth.
+   * Yêu cầu id_token thật do Google Identity Services cấp — backend sẽ verify token
+   * với Google và lấy email/tên từ token đã xác thực (không tin payload từ client).
+   * @param {string} idToken - JWT credential từ Google Identity Services
+   * @param {string} role - 'candidate' | 'recruiter'
+   */
+  async loginWithGoogle(idToken, role = 'candidate') {
+    this.isLoading = true;
+    this.error = null;
+    try {
+      if (!idToken) {
+        throw new Error('Thiếu Google credential. Vui lòng thử đăng nhập lại.');
+      }
+
+      // Gọi xuống API thực tế trên Go Backend (/api/v1/auth/google-login)
+      const data = await authService.googleLogin({
+        id_token: idToken,
+        role: role
+      });
+
+      localStorage.setItem('access_token', data.access_token);
+      // Refresh token được trình duyệt giữ trong HttpOnly cookie.
+
+      this.user = data.user;
+      this.isAuthenticated = true;
+
+      let fullUserData = await authService.getMe();
+      if (fullUserData.role === 'recruiter' && (!fullUserData.companies || fullUserData.companies.length === 0)) {
+        const { apiService } = await import('../services/api.service');
+        await apiService.post('/companies', {
+          name: `Doanh nghiệp AI (${fullUserData.full_name})`,
+          website: '',
+          industry: 'Technology & AI',
+          size: '50-200'
+        });
+        fullUserData = await authService.getMe();
+      }
+
+      this.user = fullUserData;
+      localStorage.setItem('user_role', fullUserData.role);
+      return fullUserData;
+    } catch (err) {
+      this.error = err.message || 'Lỗi xác thực Google OAuth';
+      throw err;
+    } finally {
+      this.isLoading = false;
+    }
+  },
 });

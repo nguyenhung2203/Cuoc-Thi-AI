@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,52 +13,107 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/ledongthuc/pdf"
-	"google.golang.org/api/option"
-
-	"database/sql"
+	"google.golang.org/genai"
 
 	"backend/internal/models"
 	"backend/internal/repository"
 )
 
 type AIService struct {
-	fileRepo      *repository.FileRepository
-	candidateRepo *repository.CandidateRepository
-	geminiKeys    []string
+	fileRepo       *repository.FileRepository
+	candidateRepo  *repository.CandidateRepository
+	configProvider AIRuntimeConfigProvider
+	uploadDir      string
+	logSvc         *AILogService
 }
 
 func NewAIService(
 	fileRepo *repository.FileRepository,
 	candidateRepo *repository.CandidateRepository,
-	geminiKey string,
+	configProvider AIRuntimeConfigProvider,
+	uploadDir string,
 ) *AIService {
 	rand.Seed(time.Now().UnixNano())
-	
-	// Read GEMINI_API_KEYS from env if present, else fallback to geminiKey
-	keysStr := os.Getenv("GEMINI_API_KEYS")
-	if keysStr == "" {
-		keysStr = geminiKey
+	if uploadDir == "" {
+		uploadDir = "uploads"
 	}
-	
-	var keys []string
-	for _, k := range strings.Split(keysStr, ",") {
-		k = strings.TrimSpace(k)
-		if k != "" {
-			keys = append(keys, k)
+	return &AIService{
+		fileRepo: fileRepo, candidateRepo: candidateRepo,
+		configProvider: configProvider, uploadDir: uploadDir,
+	}
+}
+
+// SetLogService wires the AI log service so CV parse tokens are recorded.
+func (s *AIService) SetLogService(logSvc *AILogService) {
+	s.logSvc = logSvc
+}
+
+// generateGeminiJSON sends a prompt to Gemini (new google.golang.org/genai SDK)
+// requesting a JSON response, rotating through the configured API keys with
+// retry on failure. Returns the cleaned JSON text, tokens_in, tokens_out.
+func (s *AIService) generateGeminiJSON(ctx context.Context, prompt string) (text string, tokensIn, tokensOut int32, err error) {
+	if s.configProvider == nil {
+		return "", 0, 0, fmt.Errorf("AI runtime configuration is not available")
+	}
+	cfg, err := s.configProvider.GetRuntimeConfig(ctx)
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("load AI runtime configuration: %w", err)
+	}
+	if len(cfg.APIKeys) == 0 {
+		return "", 0, 0, fmt.Errorf("GEMINI_API_KEY is not configured")
+	}
+	model := firstNonEmpty(cfg.TextModel, DefaultTextModel)
+
+	var lastErr error
+	startIndex := rand.Intn(len(cfg.APIKeys))
+	for i := 0; i < len(cfg.APIKeys); i++ {
+		idx := (startIndex + i) % len(cfg.APIKeys)
+		key := cfg.APIKeys[idx]
+
+		client, cerr := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  key,
+			Backend: genai.BackendGeminiAPI,
+		})
+		if cerr != nil {
+			lastErr = fmt.Errorf("failed to create gemini client: %w", cerr)
+			continue
 		}
-	}
-	
-	if len(keys) == 0 {
-		keys = []string{""} // Fallback to empty string if missing
+
+		resp, gerr := client.Models.GenerateContent(ctx, model,
+			genai.Text(prompt),
+			&genai.GenerateContentConfig{ResponseMIMEType: "application/json"},
+		)
+		if gerr != nil {
+			lastErr = fmt.Errorf("gemini generation failed: %w", gerr)
+			log.Printf("[WARN] AI Key %d failed, retrying with next key... error: %v", idx, gerr)
+			continue
+		}
+
+		rawText := resp.Text()
+		if rawText == "" {
+			lastErr = fmt.Errorf("empty response from gemini")
+			continue
+		}
+
+		// Extract token counts from usage metadata
+		var tIn, tOut int32
+		if resp.UsageMetadata != nil {
+			tIn = resp.UsageMetadata.PromptTokenCount
+			tOut = resp.UsageMetadata.CandidatesTokenCount
+		}
+
+		clean := strings.TrimPrefix(rawText, "```json\n")
+		clean = strings.TrimPrefix(clean, "```json")
+		clean = strings.TrimSuffix(clean, "\n```")
+		clean = strings.TrimSuffix(clean, "```")
+		return strings.TrimSpace(clean), tIn, tOut, nil
 	}
 
-	return &AIService{
-		fileRepo:      fileRepo,
-		candidateRepo: candidateRepo,
-		geminiKeys:    keys,
+	if lastErr == nil {
+		lastErr = fmt.Errorf("all api keys failed")
 	}
+	return "", 0, 0, lastErr
 }
 
 // ExtractTextFromPDF reads a local PDF file and extracts its text.
@@ -66,7 +122,7 @@ func ExtractTextFromPDF(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Trim any leading whitespace or newlines which can break PDF parsers
 	data = bytes.TrimLeft(data, " \t\r\n")
 
@@ -91,7 +147,55 @@ type AIExtractionResult struct {
 	Education  string   `json:"education"`
 }
 
+// ExtractAndParseCV reads a CV PDF from disk (by storage key), asks the LLM to
+// extract structured info, and returns the raw JSON plus a short summary.
+// Reusable by both the recruiter candidate flow and the candidate portal.
+func (s *AIService) ExtractAndParseCV(ctx context.Context, storageKey string) (string, string, error) {
+	start := time.Now()
+	filePath := filepath.Join(s.uploadDir, storageKey)
+	text, err := ExtractTextFromPDF(filePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read PDF: %w", err)
+	}
+
+	prompt := fmt.Sprintf(`Analyze the following resume text and extract the key information into a JSON format with exactly three fields:
+1. "skills": A list of strings representing the technical and soft skills.
+2. "experience": A short summary string of their work experience (e.g., "3 years Backend Developer").
+3. "education": A short summary string of their education (e.g., "BS Computer Science").
+
+Resume Text:
+%s`, text)
+
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Log token usage to ai_request_logs (best-effort, non-blocking)
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: "", Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_extract", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_extract"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true},
+			TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true}, TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true},
+			Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
+		})
+	}
+
+	var parsed AIExtractionResult
+	if err := json.Unmarshal([]byte(cleanJSON), &parsed); err != nil {
+		return "", "", fmt.Errorf("invalid json from gemini: %w", err)
+	}
+
+	summary := fmt.Sprintf("Candidate has skills in %s. Experience: %s. Education: %s.",
+		strings.Join(parsed.Skills, ", "), parsed.Experience, parsed.Education)
+	return cleanJSON, summary, nil
+}
+
 func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) error {
+	start := time.Now()
 	candidate, err := s.candidateRepo.GetByID(ctx, companyID, candidateID)
 	if err != nil || candidate == nil {
 		return fmt.Errorf("candidate not found")
@@ -107,16 +211,13 @@ func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) 
 	}
 
 	// 1. Read PDF text
-	filePath := filepath.Join(".", "uploads", fileRecord.StorageKey)
+	filePath := filepath.Join(s.uploadDir, fileRecord.StorageKey)
 	text, err := ExtractTextFromPDF(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to read PDF: %w", err)
 	}
 
 	// 2. Setup Gemini
-	if len(s.geminiKeys) == 0 || s.geminiKeys[0] == "" {
-		return fmt.Errorf("GEMINI_API_KEY is not configured")
-	}
 	prompt := fmt.Sprintf(`Analyze the following resume text and extract the key information into a JSON format with exactly three fields:
 1. "skills": A list of strings representing the technical and soft skills.
 2. "experience": A short summary string of their work experience (e.g., "3 years Backend Developer").
@@ -125,54 +226,20 @@ func (s *AIService) ParseCV(ctx context.Context, companyID, candidateID string) 
 Resume Text:
 %s`, text)
 
-	var resp *genai.GenerateContentResponse
-	var lastErr error
-	
-	// Start at a random index
-	startIndex := rand.Intn(len(s.geminiKeys))
-	
-	for i := 0; i < len(s.geminiKeys); i++ {
-		idx := (startIndex + i) % len(s.geminiKeys)
-		key := s.geminiKeys[idx]
-		
-		client, err := genai.NewClient(ctx, option.WithAPIKey(key))
-		if err != nil {
-			lastErr = fmt.Errorf("failed to create gemini client: %w", err)
-			continue
-		}
-		
-		model := client.GenerativeModel("gemini-2.5-flash")
-		model.ResponseMIMEType = "application/json"
-		
-		resp, err = model.GenerateContent(ctx, genai.Text(prompt))
-		client.Close()
-		
-		if err == nil {
-			lastErr = nil
-			break // Success!
-		}
-		
-		lastErr = fmt.Errorf("gemini generation failed: %w", err)
-		log.Printf("[WARN] AI Key %d failed, retrying with next key... error: %v", idx, err)
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
+	if err != nil {
+		return err
 	}
-
-	if lastErr != nil || resp == nil {
-		return fmt.Errorf("all api keys failed. last error: %v", lastErr)
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: companyID, CandidateID: sql.NullString{String: candidateID, Valid: true}, Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_parse", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_parse"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true}, TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true},
+			TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true}, Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
+		})
 	}
-
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return fmt.Errorf("empty response from gemini")
-	}
-
-	part := resp.Candidates[0].Content.Parts[0]
-	jsonText, ok := part.(genai.Text)
-	if !ok {
-		return fmt.Errorf("unexpected response type from gemini")
-	}
-
-	// Remove markdown code blocks if any
-	cleanJSON := strings.TrimPrefix(string(jsonText), "```json\n")
-	cleanJSON = strings.TrimSuffix(cleanJSON, "\n```")
 
 	// Validate JSON
 	var parsed AIExtractionResult
@@ -181,7 +248,7 @@ Resume Text:
 	}
 
 	// AI Summary (Short descriptive text)
-	summary := fmt.Sprintf("Candidate has skills in %s. Experience: %s. Education: %s.", 
+	summary := fmt.Sprintf("Candidate has skills in %s. Experience: %s. Education: %s.",
 		strings.Join(parsed.Skills, ", "), parsed.Experience, parsed.Education)
 
 	// 3. Save back to candidate
@@ -198,194 +265,75 @@ Resume Text:
 	return nil
 }
 
-type AIReportResult struct {
-	Summary            string   `json:"summary"`
-	FinalScore         float64  `json:"final_score"`
-	Recommendation     string   `json:"recommendation"` // hire, consider, reject
-	Strengths          []string `json:"strengths"`
-	Weaknesses         []string `json:"weaknesses"`
-	Risks              []string `json:"risks"`
-	EvidenceJSON       any      `json:"evidence_json"`
-	AIReasoningSummary string   `json:"ai_reasoning_summary"`
+// CVReviewResult is structured feedback for improving a candidate's CV.
+type CVReviewResult struct {
+	Summary         string   `json:"summary"`
+	Issues          []string `json:"issues"`
+	Suggestions     []string `json:"suggestions"`
+	MissingSections []string `json:"missing_sections"`
+	Strengths       []string `json:"strengths"`
 }
 
-func (s *AIService) GenerateInterviewReport(ctx context.Context, interviewID string, transcripts []models.InterviewTranscript) (*models.InterviewReport, error) {
-	if len(s.geminiKeys) == 0 || s.geminiKeys[0] == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY is not configured")
+// ReviewCV reads a CV PDF and returns concrete improvement suggestions (not interview scoring).
+func (s *AIService) ReviewCV(ctx context.Context, storageKey string) (*CVReviewResult, error) {
+	start := time.Now()
+	filePath := filepath.Join(s.uploadDir, storageKey)
+	text, err := ExtractTextFromPDF(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDF: %w", err)
+	}
+	if len(strings.TrimSpace(text)) < 40 {
+		return nil, fmt.Errorf("CV text too short to review")
+	}
+	// Cap prompt size for safety.
+	if len(text) > 12000 {
+		text = text[:12000]
 	}
 
-	// 1. Compile the transcripts into a single text block
-	var sb strings.Builder
-	for _, t := range transcripts {
-		speaker := t.SpeakerRole
-		if speaker == "" {
-			speaker = "Unknown"
-		}
-		sb.WriteString(fmt.Sprintf("[%s]: %s\n", speaker, t.Content))
-	}
-	transcriptText := sb.String()
+	prompt := fmt.Sprintf(`You are a career coach helping a job seeker improve their CV/resume.
+Review the resume text below and return ONLY valid JSON with these fields:
+- "summary": short overall assessment in Vietnamese (2-3 sentences)
+- "issues": array of concrete problems found (Vietnamese strings)
+- "suggestions": array of specific actionable fixes (Vietnamese strings)
+- "missing_sections": array of important sections that are missing or weak (Vietnamese strings)
+- "strengths": array of strong points already present (Vietnamese strings)
 
-	// 2. Setup prompt
-	prompt := fmt.Sprintf(`You are an expert technical interviewer and recruiter.
-Analyze the following interview transcript and generate a comprehensive evaluation report.
-Provide the result as a JSON object with EXACTLY the following fields:
-1. "summary": A brief 2-3 sentence overview of the interview performance.
-2. "final_score": A number out of 10 representing overall performance.
-3. "recommendation": One of exactly ["hire", "consider", "reject"].
-4. "strengths": Array of strings detailing the candidate's strong points.
-5. "weaknesses": Array of strings detailing the candidate's weak points.
-6. "risks": Array of strings detailing potential red flags.
-7. "evidence_json": An array of objects, each containing {"type":"...", "badge":"...", "time":"...", "text":"..."} extracting key quotes. Set time to "00:00" if unknown.
-8. "ai_reasoning_summary": A detailed paragraph explaining why this score and recommendation were given.
+Do NOT score an interview. Focus only on CV quality, clarity, evidence, and structure.
 
-Interview Transcript:
-%s`, transcriptText)
+Resume Text:
+%s`, text)
 
-	var resp *genai.GenerateContentResponse
-	var lastErr error
-
-	startIndex := rand.Intn(len(s.geminiKeys))
-	for i := 0; i < len(s.geminiKeys); i++ {
-		idx := (startIndex + i) % len(s.geminiKeys)
-		key := s.geminiKeys[idx]
-
-		client, err := genai.NewClient(ctx, option.WithAPIKey(key))
-		if err != nil {
-			lastErr = fmt.Errorf("failed to create gemini client: %w", err)
-			continue
-		}
-
-		model := client.GenerativeModel("gemini-2.5-flash")
-		model.ResponseMIMEType = "application/json"
-
-		resp, err = model.GenerateContent(ctx, genai.Text(prompt))
-		client.Close()
-
-		if err == nil {
-			lastErr = nil
-			break
-		}
-		lastErr = fmt.Errorf("gemini generation failed: %w", err)
-		log.Printf("[WARN] AI Key %d failed, retrying... error: %v", idx, err)
-	}
-
-	if lastErr != nil || resp == nil {
-		return nil, fmt.Errorf("all api keys failed. last error: %v", lastErr)
-	}
-
-	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("empty response from gemini")
-	}
-
-	part := resp.Candidates[0].Content.Parts[0]
-	jsonText, ok := part.(genai.Text)
-	if !ok {
-		return nil, fmt.Errorf("unexpected response type from gemini")
-	}
-
-	cleanJSON := strings.TrimPrefix(string(jsonText), "```json\n")
-	cleanJSON = strings.TrimSuffix(cleanJSON, "\n```")
-
-	var parsed AIReportResult
-	if err := json.Unmarshal([]byte(cleanJSON), &parsed); err != nil {
-		return nil, fmt.Errorf("invalid json from gemini: %w", err)
-	}
-
-	// 3. Map to InterviewReport model
-	strengthsJSON, _ := json.Marshal(parsed.Strengths)
-	weaknessesJSON, _ := json.Marshal(parsed.Weaknesses)
-	risksJSON, _ := json.Marshal(parsed.Risks)
-	evidenceJSON, _ := json.Marshal(parsed.EvidenceJSON)
-
-	report := &models.InterviewReport{
-		InterviewID:    interviewID,
-		Summary:        parsed.Summary,
-		FinalScore:     sql.NullFloat64{Float64: parsed.FinalScore, Valid: true},
-		Recommendation: parsed.Recommendation,
-		Strengths:      models.JSONB(strengthsJSON),
-		Weaknesses:     models.JSONB(weaknessesJSON),
-		Risks:          models.JSONB(risksJSON),
-		EvidenceJSON:   models.JSONB(evidenceJSON),
-		AIReasoningSummary: sql.NullString{String: parsed.AIReasoningSummary, Valid: true},
-		ReportJSON:     models.JSONB(cleanJSON),
-		GeneratedBy:    "Gemini 2.5 Flash",
-	}
-
-	return report, nil
-}
-
-type AIMockResult struct {
-	QuestionType string `json:"question_type"` // technical, soft, scenario
-	AIResponse   string `json:"ai_response"`   // The next question or feedback
-	Score        int    `json:"score"`         // Score of the candidate's answer (0-10)
-}
-
-func (s *AIService) GenerateMockResponse(ctx context.Context, role, level, candidateAnswer string, history []models.MockInterviewMessage) (*AIMockResult, error) {
-	if len(s.geminiKeys) == 0 || s.geminiKeys[0] == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY is not configured")
-	}
-
-	var sb strings.Builder
-	for _, m := range history {
-		sb.WriteString(fmt.Sprintf("[%s]: %s\n", m.SenderType, m.Content))
-	}
-	historyText := sb.String()
-
-	prompt := fmt.Sprintf(`You are an expert technical interviewer conducting a mock interview for the role of %s (%s).
-Here is the chat history:
-%s
-
-The candidate just replied: "%s"
-
-Evaluate their answer (if they answered a previous question), score it from 0-10, and generate your next response. If it's the beginning of the interview, welcome them and ask the first question.
-Keep your response concise, conversational, and professional.
-Respond STRICTLY in JSON format:
-{
-  "question_type": "technical" | "soft" | "scenario",
-  "ai_response": "...",
-  "score": 8
-}
-`, role, level, historyText, candidateAnswer)
-
-	var resp *genai.GenerateContentResponse
-	var lastErr error
-
-	startIndex := rand.Intn(len(s.geminiKeys))
-	for i := 0; i < len(s.geminiKeys); i++ {
-		key := s.geminiKeys[(startIndex+i)%len(s.geminiKeys)]
-		client, err := genai.NewClient(ctx, option.WithAPIKey(key))
-		if err != nil {
-			continue
-		}
-		model := client.GenerativeModel("gemini-2.5-flash")
-		model.ResponseMIMEType = "application/json"
-		resp, err = model.GenerateContent(ctx, genai.Text(prompt))
-		client.Close()
-		if err == nil {
-			lastErr = nil
-			break
-		}
-		lastErr = err
-	}
-
-	if lastErr != nil || resp == nil {
-		return nil, lastErr
-	}
-
-	part := resp.Candidates[0].Content.Parts[0]
-	jsonText, ok := part.(genai.Text)
-	if !ok {
-		return nil, fmt.Errorf("unexpected response type")
-	}
-
-	cleanJSON := strings.TrimPrefix(string(jsonText), "```json\n")
-	cleanJSON = strings.TrimSuffix(cleanJSON, "\n```")
-
-	var parsed AIMockResult
-	if err := json.Unmarshal([]byte(cleanJSON), &parsed); err != nil {
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
+	if err != nil {
 		return nil, err
 	}
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: "", Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_review", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_review"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true},
+			TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true}, TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true},
+			Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
+		})
+	}
 
-	return &parsed, nil
+	var result CVReviewResult
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		return nil, fmt.Errorf("invalid json from gemini: %w", err)
+	}
+	if result.Issues == nil {
+		result.Issues = []string{}
+	}
+	if result.Suggestions == nil {
+		result.Suggestions = []string{}
+	}
+	if result.MissingSections == nil {
+		result.MissingSections = []string{}
+	}
+	if result.Strengths == nil {
+		result.Strengths = []string{}
+	}
+	return &result, nil
 }
-

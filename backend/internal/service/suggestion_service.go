@@ -17,11 +17,11 @@ import (
 
 // SuggestionService handles AI follow-up suggestion generation.
 type SuggestionService struct {
-	orchestrator   *AIOrchestratorService
+	orchestrator    *AIOrchestratorService
 	suggestAnalyzer *ai.SuggestFollowUpAnalyzer
-	transcriptRepo *repository.TranscriptRepository
-	interviewRepo  *repository.InterviewRepository
-	jobRepo        *repository.JobRepository
+	transcriptRepo  *repository.TranscriptRepository
+	interviewRepo   *repository.InterviewRepository
+	jobRepo         *repository.JobRepository
 }
 
 func NewSuggestionService(
@@ -69,13 +69,13 @@ func (s *SuggestionService) SuggestFollowUp(
 	var windowItems []response.TranscriptItem
 	for _, t := range transcripts {
 		content := t.Content
-		if t.EditedContent.Valid && t.EditedContent.String != "" {
-			content = t.EditedContent.String
+		if t.EditedContent != nil && *t.EditedContent != "" {
+			content = *t.EditedContent
 		}
-		transcriptLines = append(transcriptLines, fmt.Sprintf("%s: %s", t.SpeakerRole, content))
+		transcriptLines = append(transcriptLines, fmt.Sprintf("%s: %s", t.SpeakerType, content))
 		windowItems = append(windowItems, response.TranscriptItem{
 			ID:      t.ID,
-			Speaker: t.SpeakerRole,
+			Speaker: t.SpeakerType,
 			Content: content,
 			IsFinal: t.IsFinal,
 		})
@@ -93,7 +93,26 @@ func (s *SuggestionService) SuggestFollowUp(
 		}
 	}
 
-	// 4. Call AI orchestrator
+	// Prefer the structured contract; it returns the same validated question shape
+	// used by recruiter and mock-interview flows.
+	level := "unknown"
+	if interview.JobID.Valid {
+		if job, err := s.jobRepo.GetByID(ctx, companyID, interview.JobID.String); err == nil && job != nil {
+			level = job.Level.String
+		}
+	}
+	structured, structuredErr := s.orchestrator.GenerateFollowUp(ctx, companyID, ai.StructuredQuestionRequest{
+		JobTitle: jobContext, JobDescription: jobContext, Level: level, Mode: "real", Language: "vi",
+		QuestionCount: 1, PreviousQuestions: nil, RecentAnswer: transcriptWindow,
+	})
+	if structuredErr == nil && structured != nil && len(structured.Questions) > 0 {
+		result := structured.Questions[0]
+		now := time.Now()
+		expiresAt := now.Add(5 * time.Minute)
+		return &response.SuggestFollowUpResponse{SuggestedQuestion: result.QuestionText, TargetSkill: strings.Join(result.SkillTags, ", "), Confidence: structured.Confidence, CreatedAt: now, ExpiresAt: &expiresAt, TranscriptWindow: windowItems}, nil
+	}
+
+	// Compatibility fallback for existing recruiter prompts while deployments roll out the AI endpoint.
 	result, err := s.suggestAnalyzer.SuggestFollowUp(ctx, transcriptWindow, jobContext, focus, companyID)
 	if err != nil {
 		return nil, fmt.Errorf("AI suggestion failed: %w", err)
