@@ -40,7 +40,9 @@ const fetchJobs = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     if (!companyId) {
-      throw new Error('Không tìm thấy company ID')
+      jobs.value = []
+      loading.value = false
+      return
     }
     
     const params = {}

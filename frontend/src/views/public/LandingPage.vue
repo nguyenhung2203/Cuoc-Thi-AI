@@ -4,6 +4,7 @@ import { Sparkles, BrainCircuit, Video, FileText, BarChart3, CheckCircle2, Arrow
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { langStore } from '../../stores/lang.store'
 import { authStore } from '../../stores/auth.store'
+import { publicService } from '../../services/public.service'
 
 const router = useRouter()
 const handleGetStarted = () => {
@@ -15,6 +16,35 @@ const handleGetStarted = () => {
 }
 
 const isCandidate = computed(() => authStore.isAuthenticated && authStore.user?.role === 'candidate')
+
+const publicJobs = ref([])
+const jobsLoading = ref(true)
+const jobsError = ref(false)
+const unwrap = (value) => {
+  if (!value) return ''
+  if (typeof value === 'object' && 'String' in value) return value.Valid ? value.String : ''
+  return value
+}
+const loadPublicJobs = async () => {
+  try {
+    const response = await publicService.getAllJobs({ page: 1, page_size: 6 })
+    const rows = Array.isArray(response) ? response : (response?.data || [])
+    publicJobs.value = rows.map(job => ({
+      ...job,
+      company_name: unwrap(job.company_name),
+      location: unwrap(job.location),
+      employment_type: unwrap(job.employment_type),
+      department: unwrap(job.department),
+      level: unwrap(job.level)
+    }))
+  } catch (error) {
+    console.error('Không thể tải vị trí tuyển dụng công khai:', error)
+    jobsError.value = true
+  } finally {
+    jobsLoading.value = false
+  }
+}
+const viewPublicJob = (job) => router.push(`/careers/${job.company_id}/jobs/${job.id}`)
 
 const currentImageIndex = ref(0)
 const images = ['/images/hero_office.png', '/images/hero_network.png', '/images/hero_dashboard.png']
@@ -50,6 +80,7 @@ const faqs = [
 ]
 
 onMounted(() => {
+  loadPublicJobs()
   reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   // Stagger children reveal via CSS custom prop index (đặt trước khi observe)
@@ -232,6 +263,38 @@ onUnmounted(() => { if (carouselInterval) clearInterval(carouselInterval) })
     </section>
 
     <!-- 3b. SHOWCASE (ảnh sản phẩm thật) -->
+    <section class="jobs-section animate-on-scroll fade-in-up">
+      <div class="section-inner">
+        <div class="section-header">
+          <h2 class="section-title">Vị trí tuyển dụng <span class="gradient-text">mới nhất</span></h2>
+          <p class="section-subtitle">Khám phá cơ hội phù hợp và ứng tuyển trực tuyến ngay hôm nay.</p>
+        </div>
+        <div v-if="jobsLoading" class="jobs-state">Đang tải các vị trí tuyển dụng...</div>
+        <div v-else-if="jobsError" class="jobs-state jobs-error">Không thể tải danh sách việc làm. Vui lòng thử lại sau.</div>
+        <div v-else-if="publicJobs.length === 0" class="jobs-state">Hiện chưa có vị trí đang tuyển dụng.</div>
+        <div v-else class="jobs-grid">
+          <article v-for="job in publicJobs" :key="job.id" class="public-job-card">
+            <div class="job-card-heading">
+              <div>
+                <h3>{{ job.title || 'Vị trí tuyển dụng' }}</h3>
+                <p>{{ job.company_name || 'Doanh nghiệp tuyển dụng' }}</p>
+              </div>
+              <span v-if="job.department || job.level" class="job-tag">{{ job.department || job.level }}</span>
+            </div>
+            <div class="job-meta">
+              <span v-if="job.location">{{ job.location }}</span>
+              <span v-if="job.employment_type">{{ job.employment_type }}</span>
+              <span v-if="job.level">{{ job.level }}</span>
+            </div>
+            <p class="job-description">{{ job.description || 'Xem chi tiết yêu cầu và quyền lợi của vị trí này.' }}</p>
+            <button class="job-link" @click="viewPublicJob(job)">Xem chi tiết <ArrowRight :size="16" /></button>
+          </article>
+        </div>
+        <div class="jobs-cta"><button class="btn-primary-glow" @click="router.push('/job-board')">Xem tất cả vị trí <ArrowRight :size="17" /></button></div>
+      </div>
+    </section>
+
+    <!-- 3b. SHOWCASE (ảnh sản phẩm thật) -->
     <section class="showcase-section animate-on-scroll fade-in-up">
       <div class="section-inner showcase-grid">
         <div class="showcase-copy">
@@ -408,7 +471,24 @@ section { padding: 80px 20px; width: 100%; }
 
 .gradient-text { background: var(--gradient-brand); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
-/* ===== 1. HERO ===== */
+/* ===== PUBLIC JOBS ===== */
+.jobs-section { background: var(--surface-soft); }
+.jobs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.public-job-card { display: flex; flex-direction: column; gap: 16px; min-height: 250px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: 0 8px 24px -18px rgba(15,23,42,.35); }
+.job-card-heading { display: flex; justify-content: space-between; gap: 12px; }
+.job-card-heading h3 { margin: 0 0 6px; color: var(--text-main); font-size: 1.05rem; font-weight: 750; }
+.job-card-heading p, .job-description { color: var(--text-secondary); font-size: .88rem; line-height: 1.5; margin: 0; }
+.job-tag { flex-shrink: 0; align-self: flex-start; padding: 5px 9px; border-radius: var(--radius-full); background: var(--primary-light); color: var(--primary); font-size: .72rem; font-weight: 700; }
+.job-meta { display: flex; flex-wrap: wrap; gap: 8px; color: var(--text-secondary); font-size: .78rem; }
+.job-meta span { padding: 4px 8px; background: var(--surface-soft); border-radius: 6px; }
+.job-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.job-link { display: inline-flex; align-items: center; gap: 7px; width: fit-content; margin-top: auto; padding: 0; border: 0; background: transparent; color: var(--primary); font-size: .88rem; font-weight: 700; cursor: pointer; }
+.jobs-state { padding: 40px 20px; text-align: center; color: var(--text-secondary); background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius-lg); }
+.jobs-error { color: var(--danger); }
+.jobs-cta { display: flex; justify-content: center; margin-top: 28px; }
+.jobs-cta button { display: inline-flex; align-items: center; gap: 8px; }
+
+
 .hero-section { position: relative; overflow: hidden; margin-top: -64px; padding: 150px 20px 90px; min-height: 92vh; display: flex; align-items: center; }
 .hero-bg-carousel { position: absolute; inset: 0; z-index: 0; }
 .hero-bg-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 2s ease-in-out, transform 9s ease-out; transform: scale(1); }
@@ -595,6 +675,7 @@ section { padding: 80px 20px; width: 100%; }
   .step-card { flex-direction: row; text-align: left; align-items: flex-start; gap: 18px; }
   .step-icon { margin-bottom: 0; }
   .audience-grid { grid-template-columns: 1fr; }
+  .jobs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 768px) {
   .hero-section { padding: 120px 20px 70px; min-height: auto; }
@@ -604,6 +685,7 @@ section { padding: 80px 20px; width: 100%; }
   .tilt-scene { width: 300px; height: 320px; transform: none !important; }
   .audience-card { padding: 32px; }
   .section-title { font-size: 1.9rem; }
+  .jobs-grid { grid-template-columns: 1fr; }
 }
 
 /* Reduce motion */

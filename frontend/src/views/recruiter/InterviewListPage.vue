@@ -14,6 +14,7 @@ import { candidateService } from '../../services/candidate.service'
 import { authStore } from '../../stores/auth.store'
 import { normalizeText, minLength, maxLength, requiredTrim, isValidId, isValidDate, isUrl } from '../../utils/validators.js'
 
+const router = useRouter()
 const interviews = ref([])
 const loading = ref(true)
 const copied = ref(false)
@@ -36,7 +37,11 @@ const confirmEnterRoom = () => {
 onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) throw new Error('Không tìm thấy company ID')
+    if (!companyId) {
+      interviews.value = []
+      loading.value = false
+      return
+    }
     
     const [response, jobs, candidates] = await Promise.all([
       interviewService.getInterviews(companyId),

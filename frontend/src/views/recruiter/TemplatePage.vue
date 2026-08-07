@@ -76,7 +76,9 @@ const fetchTemplates = async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     if (!companyId) {
-      throw new Error('Không tìm thấy company ID')
+      templates.value = []
+      loading.value = false
+      return
     }
     const response = await templateService.getTemplates(companyId)
     templates.value = (Array.isArray(response) ? response : []).map(mapTemplate)
