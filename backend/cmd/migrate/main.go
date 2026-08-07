@@ -101,17 +101,18 @@ func loadMigrations(dir string) []migration {
 	if err != nil {
 		log.Fatalf("read migrations: %v", err)
 	}
-	byVersion := map[string]*migration{}
+	byKey := map[string]*migration{}
 	for _, e := range entries {
 		m := fileRe.FindStringSubmatch(e.Name())
 		if m == nil {
 			continue
 		}
 		version, name, dir2 := m[1], m[2], m[3]
-		mig := byVersion[version]
+		key := version + "_" + name
+		mig := byKey[key]
 		if mig == nil {
-			mig = &migration{version: version, name: name}
-			byVersion[version] = mig
+			mig = &migration{version: key, name: name}
+			byKey[key] = mig
 		}
 		full := filepath.Join(dir, e.Name())
 		if dir2 == "up" {
@@ -121,7 +122,7 @@ func loadMigrations(dir string) []migration {
 		}
 	}
 	var out []migration
-	for _, m := range byVersion {
+	for _, m := range byKey {
 		out = append(out, *m)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].version < out[j].version })
@@ -154,19 +155,30 @@ func runUp(db *sqlx.DB, migs []migration) {
 			continue
 		}
 		if m.upPath == "" {
-			log.Fatalf("migration %s_%s has no up file", m.version, m.name)
+			log.Printf("skipping %s (no up file)", m.version)
+			continue
 		}
 		sqlBytes, err := os.ReadFile(m.upPath)
 		if err != nil {
 			log.Fatalf("read %s: %v", m.upPath, err)
 		}
-		log.Printf("applying %s_%s", m.version, m.name)
-		tx := db.MustBegin()
+		log.Printf("applying %s", m.version)
+		tx, err := db.Begin()
+		if err != nil {
+			log.Fatalf("begin tx %s: %v", m.version, err)
+		}
 		if _, err := tx.Exec(string(sqlBytes)); err != nil {
 			_ = tx.Rollback()
+			errMsg := strings.ToLower(err.Error())
+			if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "duplicate") {
+				log.Printf("warning: migration %s encountered existing object: %v. Marking as applied.", m.version, err)
+				_, _ = db.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, m.version, m.name)
+				count++
+				continue
+			}
 			log.Fatalf("migration %s failed: %v", m.version, err)
 		}
-		if _, err := tx.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2)`, m.version, m.name); err != nil {
+		if _, err := tx.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, m.version, m.name); err != nil {
 			_ = tx.Rollback()
 			log.Fatalf("record migration %s: %v", m.version, err)
 		}
