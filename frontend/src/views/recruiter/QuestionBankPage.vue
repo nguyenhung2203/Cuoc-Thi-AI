@@ -85,7 +85,7 @@ onMounted(async () => {
   await loadQuestions()
   if (!companyId) return
   try {
-    const data = await jobService.getJobs(companyId, { status: 'active', page_size: 100 })
+    const data = await jobService.getJobs(companyId, { status: 'open', page_size: 100 })
     jobs.value = Array.isArray(data) ? data : (data?.items || data?.data || [])
     selectedJobId.value = jobs.value[0]?.id || ''
   } catch (error) {
