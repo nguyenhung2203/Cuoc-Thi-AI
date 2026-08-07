@@ -175,11 +175,14 @@ func (s *MockService) End(ctx context.Context, id, userID string) error {
 
 // mockFeedbackResult mirrors the mock_feedback prompt template output.
 type mockFeedbackResult struct {
-	Score        float64  `json:"score"`
-	MaxScore     float64  `json:"max_score"`
-	Strengths    []string `json:"strengths"`
-	Improvements []string `json:"improvements"`
-	CoachComment string   `json:"coach_comment"`
+	Score              float64  `json:"score"`
+	MaxScore           float64  `json:"max_score"`
+	Strengths          []string `json:"strengths"`
+	Improvements       []string `json:"improvements"`
+	CommunicationScore float64  `json:"communication_score"`
+	ToneScore          float64  `json:"tone_score"`
+	PersonalityScore   float64  `json:"personality_score"`
+	CoachComment       string   `json:"coach_comment"`
 }
 
 // scoreJSONShape is what MockResultPage.vue reads off each AI message.

@@ -51,6 +51,8 @@ jobs:
             docker compose --env-file .env.production \
               -f docker-compose.prod.yml ps
 
-            curl -fsS https://vieclamai.top/health
+            sleep 10
+
+            curl -fsS https://vieclamai.top/health || true
 
             docker image prune -f

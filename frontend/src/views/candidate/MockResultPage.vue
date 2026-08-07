@@ -62,12 +62,23 @@ onMounted(async () => {
        finalScore = formattedQuestions.reduce((sum, q) => sum + q.score, 0) / formattedQuestions.length
     }
 
+    let feedbackSummary = data.feedback_json || ''
+    if (typeof feedbackSummary === 'string') {
+      try { feedbackSummary = JSON.parse(feedbackSummary) } catch (_) { /* legacy plain text */ }
+    }
+    const allFeedback = formattedQuestions.reduce((acc, q) => ({
+      strengths: [...acc.strengths, ...q.goodPoints],
+      improvements: [...acc.improvements, ...q.improvePoints],
+    }), { strengths: [], improvements: [] })
+
     sessionData.value = {
       role: data.target_role || 'Phỏng vấn thử',
       level: data.target_level || '',
       date: data.created_at ? new Date(data.created_at).toLocaleDateString('vi-VN') : '',
       overallScore: finalScore != null ? Number(finalScore).toFixed(1) : null,
-      summaryFeedback: data.feedback_json || '',
+      summaryFeedback: typeof feedbackSummary === 'string' ? feedbackSummary : '',
+      strengths: [...new Set(allFeedback.strengths)],
+      improvements: [...new Set(allFeedback.improvements)],
       questions: formattedQuestions
     }
   } catch (err) {
@@ -124,6 +135,16 @@ onMounted(async () => {
           <div class="score-note">
             <h3 class="score-note-title"><Sparkles :size="18" /> Nhận xét chung</h3>
             <p class="score-note-text">{{ sessionData.summaryFeedback || 'Chưa có nhận xét tổng hợp cho bài luyện tập này.' }}</p>
+          </div>
+          <div v-if="sessionData.strengths?.length || sessionData.improvements?.length" class="mt-5 space-y-4 text-left">
+            <div v-if="sessionData.strengths?.length">
+              <h3 class="font-bold text-emerald-600">Điểm mạnh</h3>
+              <ul class="mt-2 list-disc pl-5 text-sm text-[var(--text-secondary)]"><li v-for="(item, i) in sessionData.strengths" :key="'s' + i">{{ item }}</li></ul>
+            </div>
+            <div v-if="sessionData.improvements?.length">
+              <h3 class="font-bold text-amber-600">Gợi ý cải thiện</h3>
+              <ul class="mt-2 list-disc pl-5 text-sm text-[var(--text-secondary)]"><li v-for="(item, i) in sessionData.improvements" :key="'i' + i">{{ item }}</li></ul>
+            </div>
           </div>
         </Card>
       </div>
