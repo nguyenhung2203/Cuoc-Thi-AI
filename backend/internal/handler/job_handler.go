@@ -219,8 +219,13 @@ func (h *JobHandler) GenerateQuestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkgresponse.JSON(w, http.StatusOK, map[string]interface{}{
-		"questions": questions,
-		"count":     len(questions),
+		"status":          "complete",
+		"questions":       questions,
+		"count":           len(questions),
+		"requested_count": req.Count,
+		"actual_count":    len(questions),
+		"mode":            req.Mode,
+		"level":           req.Level,
 	}, nil, requestID)
 }
 
