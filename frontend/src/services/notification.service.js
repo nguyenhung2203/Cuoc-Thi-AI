@@ -45,5 +45,13 @@ export const auditService = {
   getAuditLogs: (companyId, params = {}) => {
     const query = new URLSearchParams(params).toString();
     return apiService.get(`/companies/${companyId}/audit-logs${query ? `?${query}` : ''}`);
+  },
+
+  /**
+   * Lấy danh sách audit log của toàn hệ thống (Admin)
+   */
+  getSystemAuditLogs: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiService.get(`/admin/audit-logs${query ? `?${query}` : ''}`);
   }
 };

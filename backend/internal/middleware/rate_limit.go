@@ -20,7 +20,7 @@ func getVisitor(ip string) *rate.Limiter {
 	defer mu.Unlock()
 	limiter, exists := visitors[ip]
 	if !exists {
-		limiter = rate.NewLimiter(rate.Every(time.Minute), 10)
+		limiter = rate.NewLimiter(rate.Every(time.Minute), 100)
 		visitors[ip] = limiter
 	}
 	return limiter

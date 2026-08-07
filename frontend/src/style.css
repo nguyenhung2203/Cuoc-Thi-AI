@@ -249,3 +249,7 @@ code {
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
 }
 
+button {
+  border-radius: 10px !important;
+}
+

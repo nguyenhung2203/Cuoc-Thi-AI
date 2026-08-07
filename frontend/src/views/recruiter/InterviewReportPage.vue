@@ -28,11 +28,12 @@ onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     const interviewId = route.params.id
-    const reportData = await reportService.getReport(companyId, interviewId)
+    const resData = await reportService.getReport(companyId, interviewId)
+    const reportData = resData.report || resData // Handle both cases just in case
     report.value = reportData
     // Map backend JSON to frontend structure
     if (reportData && reportData.report_json) {
-      const parsed = JSON.parse(reportData.report_json)
+      const parsed = typeof reportData.report_json === 'string' ? JSON.parse(reportData.report_json) : reportData.report_json
       report.value.overall_score = parsed.final_score || reportData.final_score
       report.value.ai_recommendation = parsed.recommendation
       report.value.core_feedback = parsed.summary

@@ -1,6 +1,14 @@
 import { apiService } from './api.service';
 
 export const candidatePortalService = {
+  checkApplied: (jobId) => {
+    return apiService.get(`/portal/jobs/${jobId}/check-applied`);
+  },
+
+  getApplications: () => {
+    return apiService.get('/portal/applications');
+  },
+
   getDashboardStats: () => {
     return apiService.get('/portal/dashboard');
   },
