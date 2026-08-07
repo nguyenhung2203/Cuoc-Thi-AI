@@ -87,7 +87,6 @@ func (s *CandidatePortalService) GetDashboardStats(ctx context.Context, userID s
 		return nil, errors.NewInternal("failed to get avg score")
 	}
 
-	// Simple completeness logic
 	user, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return nil, errors.NewInternal("failed to get user")
@@ -96,7 +95,9 @@ func (s *CandidatePortalService) GetDashboardStats(ctx context.Context, userID s
 	if user.AvatarURL.Valid && user.AvatarURL.String != "" {
 		completeness += 25
 	}
-	// Note: Proper CV check would require checking candidate rows or user's central CV
+	if fileID, _, _, cvErr := s.repo.GetUserLatestCV(ctx, userID); cvErr == nil && fileID != "" {
+		completeness += 25
+	}
 
 	return &response.CandidatePortalDashboardStats{
 		UpcomingInterviews:  upcomingCount,
@@ -153,6 +154,9 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 		CVUrl:     cvUrl,
 		CVName:    cvName,
 	}
+	if status, err := s.repo.GetUserCVParseStatus(ctx, userID); err == nil {
+		profile.CVParseStatus = status
+	}
 
 	// Attach AI-parsed CV data if available.
 	if parsedJSON, err := s.repo.GetParsedCV(ctx, userID); err == nil && parsedJSON != "" {
@@ -161,46 +165,166 @@ func (s *CandidatePortalService) GetProfile(ctx context.Context, userID string) 
 			profile.ParsedData = parsed
 		}
 	}
+	if score, err := s.repo.GetLatestInterviewScore(ctx, userID); err == nil {
+		profile.InterviewScore = score
+	}
 
 	return profile, nil
 }
 
-// UploadCV updates the central CV and requires a successful AI parse.
+// UploadCV saves the CV file metadata even if AI parse fails (best-effort analysis).
 func (s *CandidatePortalService) UploadCV(ctx context.Context, userID, originalName, cvFileID, storageKey string) (*response.CandidatePortalCVUpload, error) {
-	if s.aiSvc == nil || storageKey == "" {
-		return nil, errors.NewInternal("CV analysis unavailable")
+	if storageKey == "" {
+		return nil, errors.NewInternal("CV storage unavailable")
 	}
 	if err := s.repo.UpdateUserCV(ctx, userID, cvFileID, originalName); err != nil {
 		return nil, err
 	}
-	if err := s.repo.UpdateCVAIStatus(ctx, userID, "processing", nil); err != nil {
-		return nil, errors.NewInternal("mark CV parsing as processing failed")
+
+	result := &response.CandidatePortalCVUpload{
+		Message:     "CV uploaded",
+		FileName:    originalName,
+		CVFileID:    cvFileID,
+		ParseStatus: "pending",
 	}
+
+	if s.aiSvc == nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", fmt.Errorf("AI service unavailable"))
+		result.ParseStatus = "failed"
+		result.Message = "CV uploaded; analysis unavailable"
+		return result, nil
+	}
+
+	if err := s.repo.UpdateCVAIStatus(ctx, userID, "processing", nil); err != nil {
+		result.ParseStatus = "failed"
+		result.Message = "CV uploaded; could not start analysis"
+		return result, nil
+	}
+
 	parsedJSON, summary, err := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
 	if err != nil {
 		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
-		return nil, errors.NewInternal("CV analysis failed")
+		result.ParseStatus = "failed"
+		result.Message = "CV uploaded; analysis failed"
+		return result, nil
 	}
 	var parsed interface{}
 	if err := json.Unmarshal([]byte(parsedJSON), &parsed); err != nil {
 		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
-		return nil, errors.NewInternal("CV analysis returned invalid data")
+		result.ParseStatus = "failed"
+		result.Message = "CV uploaded; analysis returned invalid data"
+		return result, nil
 	}
 	saved, err := s.repo.SaveParsedCV(ctx, userID, cvFileID, parsedJSON, summary)
 	if err != nil {
 		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
-		return nil, errors.NewInternal("save parsed CV failed")
+		result.ParseStatus = "failed"
+		result.Message = "CV uploaded; failed to save analysis"
+		return result, nil
 	}
-	if !saved {
-		return nil, errors.NewConflict("CV was replaced by a newer upload")
+	// saved=false can mean no candidate rows yet (first portal upload) or a race with a newer file.
+	// Still return parsed data so the UI can show analysis immediately.
+	if saved {
+		if s.matchCache != nil {
+			s.matchCache.InvalidateUser(ctx, userID)
+		}
+		if s.matchEnqueuer != nil {
+			_ = s.matchEnqueuer(userID)
+		}
 	}
-	if s.matchCache != nil {
-		s.matchCache.InvalidateUser(ctx, userID)
+	result.ParseStatus = "ready"
+	result.ParsedData = parsed
+	result.Message = "CV uploaded and analyzed"
+	return result, nil
+}
+
+// ReparseCV re-runs AI parse on the user's latest owned CV and persists the
+// result on the file row (and candidate rows when present).
+func (s *CandidatePortalService) ReparseCV(ctx context.Context, userID string) (*response.CandidatePortalCVUpload, error) {
+	fileID, fileName, storageKey, err := s.repo.GetUserLatestCV(ctx, userID)
+	if err != nil {
+		return nil, errors.NewInternal("failed to load CV")
 	}
-	if s.matchEnqueuer != nil {
-		_ = s.matchEnqueuer(userID)
+	if fileID == "" || storageKey == "" {
+		return nil, errors.NewBadRequest("no CV uploaded")
 	}
-	return &response.CandidatePortalCVUpload{Message: "CV uploaded", FileName: originalName, CVFileID: cvFileID, ParsedData: parsed}, nil
+
+	result := &response.CandidatePortalCVUpload{
+		Message:     "CV re-analyzed",
+		FileName:    fileName,
+		CVFileID:    fileID,
+		ParseStatus: "pending",
+	}
+	if s.aiSvc == nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", fmt.Errorf("AI service unavailable"))
+		result.ParseStatus = "failed"
+		result.Message = "Analysis unavailable"
+		return result, nil
+	}
+	if err := s.repo.UpdateCVAIStatus(ctx, userID, "processing", nil); err != nil {
+		result.ParseStatus = "failed"
+		result.Message = "Could not start analysis: " + err.Error()
+		return result, nil
+	}
+
+	parsedJSON, summary, err := s.aiSvc.ExtractAndParseCV(ctx, storageKey)
+	if err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		result.ParseStatus = "failed"
+		result.Message = "Analysis failed"
+		return result, nil
+	}
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(parsedJSON), &parsed); err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		result.ParseStatus = "failed"
+		result.Message = "Analysis returned invalid data"
+		return result, nil
+	}
+	saved, err := s.repo.SaveParsedCV(ctx, userID, fileID, parsedJSON, summary)
+	if err != nil {
+		_ = s.repo.UpdateCVAIStatus(ctx, userID, "failed", err)
+		result.ParseStatus = "failed"
+		result.Message = "Failed to save analysis"
+		return result, nil
+	}
+	if saved {
+		if s.matchCache != nil {
+			s.matchCache.InvalidateUser(ctx, userID)
+		}
+		if s.matchEnqueuer != nil {
+			_ = s.matchEnqueuer(userID)
+		}
+	}
+	result.ParseStatus = "ready"
+	result.ParsedData = parsed
+	result.Message = "CV analyzed"
+	return result, nil
+}
+
+// DeleteCV permanently removes a candidate-owned CV and purges remaining portal
+// CV uploads so an older file cannot reappear after reload.
+func (s *CandidatePortalService) DeleteCV(ctx context.Context, userID, fileID string) error {
+	if userID == "" || fileID == "" {
+		return errors.NewBadRequest("invalid CV id")
+	}
+	if s.fileSvc == nil {
+		return errors.NewInternal("CV storage unavailable")
+	}
+	owned, err := s.fileSvc.GetOwnedCV(ctx, userID, fileID)
+	if err != nil {
+		return err
+	}
+	if owned == nil {
+		return errors.NewNotFound("CV not found")
+	}
+	if err := s.repo.ClearAllUserCVs(ctx, userID); err != nil {
+		return errors.NewInternal("failed to detach CV from profile")
+	}
+	if err := s.fileSvc.PurgeOwnedCVFiles(ctx, userID); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID, cvFileID, cvOriginalName string) error {
@@ -223,6 +347,9 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 	candidateID := uuid.NewString()
 	err = s.repo.ApplyForJob(ctx, candidateID, job.CompanyID, user.ID, user.FullName, user.Email, "", cvFileID, cvOriginalName, job.ID)
 	if err != nil {
+		if err == repository.DuplicateApplication {
+			return errors.NewConflict("you have already applied to this job")
+		}
 		return errors.NewInternal("failed to apply for job")
 	}
 
@@ -279,7 +406,19 @@ func (s *CandidatePortalService) ApplyForJob(ctx context.Context, userID, jobID,
 }
 
 func (s *CandidatePortalService) GetApplications(ctx context.Context, userID string) ([]response.CandidatePortalApplication, error) {
-	return s.repo.GetApplicationsByUserID(ctx, userID)
+	apps, err := s.repo.GetApplicationsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range apps {
+		if apps[i].CVStorageKey != "" && s.fileSvc != nil {
+			url, _ := s.fileSvc.SignedURL(apps[i].CVStorageKey)
+			if url != "" {
+				apps[i].CVUrl = url
+			}
+		}
+	}
+	return apps, nil
 }
 
 func (s *CandidatePortalService) CancelApplication(ctx context.Context, userID string, applicationID string) error {
@@ -359,6 +498,31 @@ func (s *CandidatePortalService) computeMatch(ctx context.Context, userID string
 	return fit, []byte(cleanJSON), nil
 }
 
+// ReviewCV runs AI CV improvement feedback for the candidate portal (not interview scoring).
+func (s *CandidatePortalService) ReviewCV(ctx context.Context, userID string) (*response.CandidatePortalCVReview, error) {
+	if s.aiSvc == nil {
+		return nil, errors.NewInternal("AI service unavailable")
+	}
+	fileID, _, storageKey, err := s.repo.GetUserLatestCV(ctx, userID)
+	if err != nil {
+		return nil, errors.NewInternal("failed to load CV")
+	}
+	if fileID == "" || storageKey == "" {
+		return nil, errors.NewBadRequest("please upload a CV before requesting a review")
+	}
+	result, err := s.aiSvc.ReviewCV(ctx, storageKey)
+	if err != nil {
+		return nil, errors.NewInternal("CV review failed")
+	}
+	return &response.CandidatePortalCVReview{
+		Summary:         result.Summary,
+		Issues:          result.Issues,
+		Suggestions:     result.Suggestions,
+		MissingSections: result.MissingSections,
+		Strengths:       result.Strengths,
+	}, nil
+}
+
 // GetJobMatch computes an on-demand CV↔job match for the Apply page preview.
 // Returns ErrNoCV when the user has not uploaded/parsed a CV.
 func (s *CandidatePortalService) GetJobMatch(ctx context.Context, userID, jobID string) (*MatchResult, error) {
@@ -418,3 +582,4 @@ func (s *CandidatePortalService) RecomputeUserMatches(ctx context.Context, userI
 	}
 	return nil
 }
+

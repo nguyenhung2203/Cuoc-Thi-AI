@@ -90,4 +90,8 @@ type ReportGenerationResult struct {
 	Risks              []string `json:"risks"`
 	EvidenceJSON       any      `json:"evidence_json"` // Can be a map mapping criterion to evidence
 	AIReasoningSummary string   `json:"ai_reasoning_summary"`
+	ImprovementAdvice  []string `json:"improvement_advice,omitempty"`
+	CommunicationScore float64  `json:"communication_score,omitempty"`
+	ToneScore          float64  `json:"tone_score,omitempty"`
+	PersonalityScore   float64  `json:"personality_score,omitempty"`
 }

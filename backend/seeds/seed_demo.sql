@@ -30,11 +30,14 @@ ON CONFLICT (id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- 2) COMPANY + members
 -- ---------------------------------------------------------------------------
-INSERT INTO companies (id, name, slug, website, industry, size, created_by, settings) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'TechViet Solutions', 'demo-techviet', 'https://techviet.example.vn',
+INSERT INTO companies (id, name, slug, logo_url, website, industry, size, created_by, settings) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'TechViet Solutions', 'demo-techviet',
+   '/company-logos/techviet.svg', 'https://techviet.example.vn',
    'Công nghệ thông tin', '50-200', 'bbbbbbbb-0000-0000-0000-000000000002',
    '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi"}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  logo_url = COALESCE(EXCLUDED.logo_url, companies.logo_url),
+  updated_at = NOW();
 
 INSERT INTO company_members (id, company_id, user_id, role, status, joined_at) VALUES
   ('a1a1a1a1-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner',  'active', NOW()),

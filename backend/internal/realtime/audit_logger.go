@@ -44,20 +44,26 @@ func (l *AuditLogger) LogEvent(action, actorID, actorRole, resourceType, resourc
 		Action:       action,
 		ResourceType: resourceType,
 	}
+	nullStr := func(s string) sql.NullString {
+		if s == "" {
+			return sql.NullString{}
+		}
+		return sql.NullString{String: s, Valid: true}
+	}
 	if actorID != "" {
-		al.ActorUserID = sql.NullString{String: actorID, Valid: true}
+		al.ActorUserID = nullStr(actorID)
 	}
 	if actorRole != "" {
-		al.ActorRole = sql.NullString{String: actorRole, Valid: true}
+		al.ActorRole = nullStr(actorRole)
 	}
 	if resourceID != "" {
-		al.ResourceID = sql.NullString{String: resourceID, Valid: true}
+		al.ResourceID = nullStr(resourceID)
 	}
 	if companyID != "" {
-		al.CompanyID = sql.NullString{String: companyID, Valid: true}
+		al.CompanyID = nullStr(companyID)
 	}
 	if ip != "" {
-		al.IPAddress = sql.NullString{String: ip, Valid: true}
+		al.IPAddress = nullStr(ip)
 	}
 
 	select {

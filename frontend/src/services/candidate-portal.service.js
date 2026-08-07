@@ -1,6 +1,15 @@
 import { apiService } from './api.service';
+import { loadSavedJobs } from '../utils/savedJobs';
 
 export const candidatePortalService = {
+  checkApplied: (jobId) => {
+    return apiService.get(`/portal/jobs/${jobId}/check-applied`);
+  },
+
+  getApplications: () => {
+    return apiService.get('/portal/applications');
+  },
+
   getDashboardStats: () => {
     return apiService.get('/portal/dashboard');
   },
@@ -28,6 +37,22 @@ export const candidatePortalService = {
     return apiService.post('/portal/cv', formData);
   },
 
+  deleteCv: (fileId) => {
+    return apiService.delete(`/portal/cv/${fileId}`);
+  },
+
+  /** Re-run AI CV parse and persist on the file (for portal CVs without applications). */
+  reparseCv: () => {
+    return apiService.post('/portal/cv/reparse', {});
+  },
+
+  /**
+   * AI góp ý sửa lỗi / cải thiện CV (không phải chấm phỏng vấn).
+   * @returns {Promise<{ summary, issues, suggestions, missing_sections, strengths }>}
+   */
+  reviewCv: () => {
+    return apiService.post('/portal/cv/review', {});
+  },
   getApplications: () => {
     return apiService.get('/portal/applications');
   },
@@ -47,7 +72,6 @@ export const candidatePortalService = {
   },
 
   getSavedJobs: async () => {
-    const saved = localStorage.getItem('candidate_saved_jobs');
-    return saved ? JSON.parse(saved) : [];
+    return loadSavedJobs();
   }
 };

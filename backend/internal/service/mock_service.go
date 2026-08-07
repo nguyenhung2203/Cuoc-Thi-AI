@@ -175,18 +175,24 @@ func (s *MockService) End(ctx context.Context, id, userID string) error {
 
 // mockFeedbackResult mirrors the mock_feedback prompt template output.
 type mockFeedbackResult struct {
-	Score        float64  `json:"score"`
-	MaxScore     float64  `json:"max_score"`
-	Strengths    []string `json:"strengths"`
-	Improvements []string `json:"improvements"`
-	CoachComment string   `json:"coach_comment"`
+	Score              float64  `json:"score"`
+	MaxScore           float64  `json:"max_score"`
+	Strengths          []string `json:"strengths"`
+	Improvements       []string `json:"improvements"`
+	CommunicationScore float64  `json:"communication_score"`
+	ToneScore          float64  `json:"tone_score"`
+	PersonalityScore   float64  `json:"personality_score"`
+	CoachComment       string   `json:"coach_comment"`
 }
 
 // scoreJSONShape is what MockResultPage.vue reads off each AI message.
 type scoreJSONShape struct {
-	Score         float64  `json:"score"`
-	GoodPoints    []string `json:"good_points"`
-	ImprovePoints []string `json:"improve_points"`
+	Score              float64  `json:"score"`
+	GoodPoints         []string `json:"good_points"`
+	ImprovePoints      []string `json:"improve_points"`
+	CommunicationScore float64  `json:"communication_score"`
+	ToneScore          float64  `json:"tone_score"`
+	PersonalityScore   float64  `json:"personality_score"`
 }
 
 // scoreSession scores each (AI question -> candidate answer) pair, writes a
@@ -218,7 +224,7 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 			continue
 		}
 
-		fb, ferr := s.scoreAnswer(ctx, question, msg.Content, m.TargetRole)
+		fb, ferr := s.scoreAnswer(ctx, question, msg.Content, m.TargetRole, m.TargetLevel.String)
 		if ferr != nil {
 			logger.Error("mock: failed to score answer", "id", m.ID, "error", ferr)
 			continue
@@ -238,9 +244,12 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 		}
 
 		sj := scoreJSONShape{
-			Score:         norm,
-			GoodPoints:    fb.Strengths,
-			ImprovePoints: fb.Improvements,
+			Score:              norm,
+			GoodPoints:         fb.Strengths,
+			ImprovePoints:      fb.Improvements,
+			CommunicationScore: fb.CommunicationScore,
+			ToneScore:          fb.ToneScore,
+			PersonalityScore:   fb.PersonalityScore,
 		}
 		sjBytes, merr := json.Marshal(sj)
 		if merr != nil {
@@ -290,11 +299,12 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 }
 
 // scoreAnswer scores a single Q&A pair via the mock_feedback prompt template.
-func (s *MockService) scoreAnswer(ctx context.Context, question, answer, targetRole string) (*mockFeedbackResult, error) {
+func (s *MockService) scoreAnswer(ctx context.Context, question, answer, targetRole, targetLevel string) (*mockFeedbackResult, error) {
 	variables := map[string]string{
-		"question":    question,
-		"answer":      answer,
-		"target_role": targetRole,
+		"question":     question,
+		"answer":       answer,
+		"target_role":  targetRole,
+		"target_level": targetLevel,
 	}
 	data, err := s.orchestrator.CallAI(ctx, "mock_feedback", "", variables)
 	if err != nil {

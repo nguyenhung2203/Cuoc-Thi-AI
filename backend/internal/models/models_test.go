@@ -138,12 +138,12 @@ func TestAuditLog_NullHandling(t *testing.T) {
 		ActorUserID: sql.NullString{},
 		CompanyID:    sql.NullString{},
 	}
-	// Null strings should have Valid=false by default
-	if log.ActorUserID.Valid {
-		t.Fatal("ActorUserID should be invalid by default")
+	// String pointers should be nil by default
+	if log.ActorUserID != nil {
+		t.Fatal("ActorUserID should be nil by default")
 	}
-	if log.CompanyID.Valid {
-		t.Fatal("CompanyID should be invalid by default")
+	if log.CompanyID != nil {
+		t.Fatal("CompanyID should be nil by default")
 	}
 }
 

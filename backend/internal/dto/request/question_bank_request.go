@@ -17,7 +17,7 @@ type UpdateQuestionBankRequest struct {
 	ExpectedSignals *[]string `json:"expected_signals"`
 }
 
-type GenerateQuestionsRequest struct {
+type GenerateQuestionBankRequest struct {
 	QuestionTypes []string `json:"question_types"`
 	Level         string   `json:"level"`
 	Mode          string   `json:"mode"`

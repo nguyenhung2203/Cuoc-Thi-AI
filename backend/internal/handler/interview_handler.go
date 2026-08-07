@@ -171,7 +171,7 @@ func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 		requestID = ""
 	}
 
-	room, err := h.svc.JoinByToken(r.Context(), inviteToken)
+	info, err := h.svc.JoinByToken(r.Context(), inviteToken)
 	if err != nil {
 		if appErr, ok := apierrors.IsAppError(err); ok {
 			response.Error(w, appErr, requestID.(string))
@@ -181,7 +181,7 @@ func (h *InterviewHandler) JoinByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, room, nil, requestID.(string))
+	response.JSON(w, http.StatusOK, info, nil, requestID.(string))
 }
 
 func (h *InterviewHandler) CreateInterview(w http.ResponseWriter, r *http.Request) {

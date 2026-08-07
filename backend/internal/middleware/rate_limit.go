@@ -29,6 +29,7 @@ func getVisitor(ip string, requestsPerMinute, burst int) *rate.Limiter {
 	key := fmt.Sprintf("%s:%d:%d", ip, requestsPerMinute, burst)
 	limiter, exists := visitors[key]
 	if !exists {
+
 		limiter = rate.NewLimiter(rate.Every(time.Minute/time.Duration(requestsPerMinute)), burst)
 		visitors[key] = limiter
 	}

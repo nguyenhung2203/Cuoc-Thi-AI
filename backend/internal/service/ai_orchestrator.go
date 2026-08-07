@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -77,7 +80,7 @@ func NewAIOrchestratorService(promptSvc *PromptService, logSvc *AILogService, ai
 		promptSvc: promptSvc,
 		logSvc:    logSvc,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 120 * time.Second,
 		},
 		breaker:      gobreaker.NewCircuitBreaker[[]byte](cbSettings),
 		aiServiceURL: aiServiceURL,
@@ -113,7 +116,34 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 	var responseBody []byte
 
 	operation := func() ([]byte, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiServiceURL+"/api/v1/generate", bytes.NewReader(payloadBytes))
+		apiKey := os.Getenv("GEMINI_API_KEY")
+		if apiKey == "" {
+			return nil, fmt.Errorf("GEMINI_API_KEY is not set")
+		}
+
+		model := strings.TrimSpace(tmpl.Model)
+		if model == "" || strings.Contains(model, "1.5") || !strings.HasPrefix(model, "gemini") {
+			model = "gemini-2.5-flash"
+		}
+
+		url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
+		
+		reqBody := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{
+					"parts": []map[string]interface{}{
+						{"text": renderedPrompt},
+					},
+				},
+			},
+			"generationConfig": map[string]interface{}{
+				"temperature": 0.7,
+				"maxOutputTokens": 8192,
+			},
+		}
+		reqBytes, _ := json.Marshal(reqBody)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBytes))
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +157,7 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 
 		if resp.StatusCode >= 500 {
 			// Server error, should trigger retry
-			return nil, fmt.Errorf("AI service returned 5xx status: %d", resp.StatusCode)
+			return nil, fmt.Errorf("Gemini API returned 5xx status: %d", resp.StatusCode)
 		}
 
 		body, err := io.ReadAll(resp.Body)
@@ -136,17 +166,47 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			// e.g. 400 Bad Request, usually don't retry, but for simplicity returning error
-			return nil, backoff.Permanent(fmt.Errorf("AI service returned %d: %s", resp.StatusCode, string(body)))
+			return nil, backoff.Permanent(fmt.Errorf("Gemini API returned %d: %s", resp.StatusCode, string(body)))
 		}
 
-		return body, nil
+		// Parse Gemini response
+		var geminiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+		if err := json.Unmarshal(body, &geminiResp); err != nil {
+			return nil, err
+		}
+		
+		if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+			return nil, fmt.Errorf("empty response from Gemini")
+		}
+		
+		text := geminiResp.Candidates[0].Content.Parts[0].Text
+		cleanText := utils.CleanJSON(text)
+		
+		// Ensure cleanText is a valid JSON object or wrap it
+		if !json.Valid([]byte(cleanText)) {
+			cleanText = `{"raw_text": ` + fmt.Sprintf("%q", cleanText) + `}`
+		}
+
+		// Construct StandardAIResponse JSON bytes
+		stdResp := StandardAIResponse{
+			Data: json.RawMessage(cleanText),
+			Confidence: 0.9,
+		}
+		return json.Marshal(stdResp)
 	}
 
 	// Exponential backoff configuration
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = 1 * time.Second
-	bo.MaxElapsedTime = 15 * time.Second // Stop trying after 15s
+	bo.MaxElapsedTime = 120 * time.Second // Stop trying after 120s
 
 	// Wrap operation in Circuit Breaker
 	cbOperation := func() ([]byte, error) {
@@ -300,26 +360,56 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 }
 
 type AIScoreData struct {
-	Score     float64 `json:"score"`
-	AIComment string  `json:"ai_comment"`
+	Score             float64  `json:"score"`
+	AIComment         string   `json:"ai_comment"`
+	Communication     float64  `json:"communication"`
+	Tone              float64  `json:"tone"`
+	Personality       float64  `json:"personality"`
+	Strengths         []string `json:"strengths"`
+	Weaknesses        []string `json:"weaknesses"`
+	ImprovementAdvice []string `json:"improvement_advice"`
 }
 
 type ScoreResult struct {
-	Score      float64
-	Evidence   string
-	AIComment  string
-	Confidence float64
+	Score             float64
+	Evidence          string
+	AIComment         string
+	Confidence        float64
+	Communication     float64
+	Tone              float64
+	Personality       float64
+	Strengths         []string
+	Weaknesses        []string
+	ImprovementAdvice []string
 }
 
-// ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
+func NormalizeCandidateLevel(level string) string {
+	level = strings.ToLower(strings.TrimSpace(level))
+	switch level {
+	case "intern", "fresher", "entry", "entry-level":
+		return "fresher"
+	case "junior", "jr":
+		return "junior"
+	case "mid", "middle", "mid-level", "medior":
+		return "mid"
+	default:
+		return "junior"
+	}
+}
+
 func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide string) (*ScoreResult, error) {
+	return s.ScoreAnswerForLevel(ctx, companyID, transcriptText, criterionName, criterionDesc, minScore, maxScore, scoringGuide, "junior")
+}
+
+func (s *AIOrchestratorService) ScoreAnswerForLevel(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide, candidateLevel string) (*ScoreResult, error) {
 	variables := map[string]string{
-		"transcript":     transcriptText,
-		"criterion_name": criterionName,
-		"criterion_desc": criterionDesc,
-		"min_score":      fmt.Sprintf("%d", minScore),
-		"max_score":      fmt.Sprintf("%d", maxScore),
-		"scoring_guide":  scoringGuide,
+		"transcript":      transcriptText,
+		"criterion_name":  criterionName,
+		"criterion_desc":  criterionDesc,
+		"min_score":       fmt.Sprintf("%d", minScore),
+		"max_score":       fmt.Sprintf("%d", maxScore),
+		"candidate_level": NormalizeCandidateLevel(candidateLevel),
+		"scoring_guide":   scoringGuide,
 	}
 
 	fullResp, err := s.CallAIWithFullResponse(ctx, "score_answer", companyID, variables)
@@ -334,10 +424,16 @@ func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID strin
 	}
 
 	return &ScoreResult{
-		Score:      scoreData.Score,
-		AIComment:  scoreData.AIComment,
-		Evidence:   fullResp.Evidence,
-		Confidence: fullResp.Confidence,
+		Score:             scoreData.Score,
+		AIComment:         scoreData.AIComment,
+		Evidence:          fullResp.Evidence,
+		Confidence:        fullResp.Confidence,
+		Communication:     scoreData.Communication,
+		Tone:              scoreData.Tone,
+		Personality:       scoreData.Personality,
+		Strengths:         scoreData.Strengths,
+		Weaknesses:        scoreData.Weaknesses,
+		ImprovementAdvice: scoreData.ImprovementAdvice,
 	}, nil
 }
 

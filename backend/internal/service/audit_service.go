@@ -39,23 +39,29 @@ func (s *AuditService) LogAction(ctx context.Context, in AuditLogInput) error {
 		Action:       in.Action,
 		ResourceType: in.ResourceType,
 	}
+	nullStr := func(s string) sql.NullString {
+		if s == "" {
+			return sql.NullString{}
+		}
+		return sql.NullString{String: s, Valid: true}
+	}
 	if in.CompanyID != "" {
-		al.CompanyID = sql.NullString{String: in.CompanyID, Valid: true}
+		al.CompanyID = nullStr(in.CompanyID)
 	}
 	if in.ActorUserID != "" {
-		al.ActorUserID = sql.NullString{String: in.ActorUserID, Valid: true}
+		al.ActorUserID = nullStr(in.ActorUserID)
 	}
 	if in.ActorRole != "" {
-		al.ActorRole = sql.NullString{String: in.ActorRole, Valid: true}
+		al.ActorRole = nullStr(in.ActorRole)
 	}
 	if in.ResourceID != "" {
-		al.ResourceID = sql.NullString{String: in.ResourceID, Valid: true}
+		al.ResourceID = nullStr(in.ResourceID)
 	}
 	if in.IPAddress != "" {
-		al.IPAddress = sql.NullString{String: in.IPAddress, Valid: true}
+		al.IPAddress = nullStr(in.IPAddress)
 	}
 	if in.UserAgent != "" {
-		al.UserAgent = sql.NullString{String: in.UserAgent, Valid: true}
+		al.UserAgent = nullStr(in.UserAgent)
 	}
 	if in.BeforeData != nil {
 		b, _ := json.Marshal(in.BeforeData)

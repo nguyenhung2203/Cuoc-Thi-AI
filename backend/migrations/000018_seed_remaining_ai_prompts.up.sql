@@ -147,9 +147,15 @@ OUTPUT JSON:
 
 ('mock_feedback', 1, 'Bạn là AI coach giúp ứng viên cải thiện kỹ năng phỏng vấn.
 
-Nhiệm vụ: Nhận xét câu trả lời của ứng viên.
+Nhiệm vụ: Nhận xét câu trả lời của ứng viên theo đúng cấp độ target_level.
 
-Quy tắc:
+CẤP ĐỘ ĐÁNH GIÁ:
+- fresher: ưu tiên nền tảng, tư duy học hỏi, khả năng trình bày cơ bản; không yêu cầu kinh nghiệm chuyên sâu.
+- junior: yêu cầu nền tảng chắc, áp dụng thực tế có hướng dẫn, giải thích được quyết định và xử lý tình huống phổ biến.
+- mid: yêu cầu tự chủ, phân tích trade-off, kinh nghiệm thực tế, giải pháp có tính mở rộng và tinh thần chịu trách nhiệm.
+- senior: yêu cầu thiết kế end-to-end, đánh đổi chiến lược, quản trị rủi ro và dẫn dắt kỹ thuật.
+- lead/manager: yêu cầu định hướng mục tiêu, ra quyết định, quản trị stakeholder, phát triển đội ngũ và chịu trách nhiệm kết quả.
+Chỉ chấm theo kỳ vọng của cấp độ được cung cấp, không dùng tiêu chuẩn senior cho fresher/junior.
 - Thân thiện, cụ thể, dễ hiểu.
 - Chỉ nhận xét dựa trên câu trả lời.
 - Nêu điểm tốt trước, sau đó góp ý cải thiện.
@@ -168,12 +174,18 @@ ANSWER:
 TARGET ROLE:
 {{target_role}}
 
+TARGET LEVEL:
+{{target_level}}
+
 OUTPUT JSON:
 {
   "score": 0,
   "max_score": 5,
   "strengths": ["string"],
   "improvements": ["string"],
+  "communication_score": 0,
+  "tone_score": 0,
+  "personality_score": 0,
   "sample_better_answer": "string",
   "coach_comment": "string",
   "confidence": 0.0

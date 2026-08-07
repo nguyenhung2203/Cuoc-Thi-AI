@@ -10,6 +10,7 @@ import { apiService } from '../../services/api.service'
 import { authStore } from '../../stores/auth.store'
 import { langStore } from '../../stores/lang.store'
 import { Calendar, CalendarPlus, Bot, Star, UserCheck, ArrowRight, Building2, Play, ShieldCheck, FileText, Award, Sparkles, CheckCircle2, AlertCircle, Briefcase, MapPin, Banknote, Clock } from 'lucide-vue-next'
+import { formatSalaryTrieu } from '../../utils/formatters'
 
 const router = useRouter()
 const entryToast = ref(history.state?.message ? { type: 'success', message: history.state.message } : null)
@@ -34,20 +35,13 @@ const unwrap = (val) => {
   return val
 }
 
-const getSalaryDisplay = (job) => {
-  const min = unwrap(job.salary_min)
-  const max = unwrap(job.salary_max)
-  const curr = unwrap(job.currency) || 'VND'
-  if (!min && !max) return 'Thỏa thuận'
-  if (min && !max) return `Từ ${min} ${curr}`
-  if (!min && max) return `Đến ${max} ${curr}`
-  return `${min} - ${max} ${curr}`
-}
+const getSalaryDisplay = (job) => formatSalaryTrieu(unwrap(job.salary_min), unwrap(job.salary_max))
 
-onMounted(async () => {
-  if (history.state?.message) {
-    window.history.replaceState({}, document.title)
-  }
+const loadError = ref('')
+
+const loadDashboard = async () => {
+  loading.value = true
+  loadError.value = ''
 
   if (!authStore.isAuthenticated && !localStorage.getItem('access_token')) {
     stats.value = {
@@ -57,6 +51,7 @@ onMounted(async () => {
       profile_completeness: 0
     }
     upcomingInterviews.value = []
+    recommendedJobs.value = []
     loading.value = false
     return
   }
@@ -84,9 +79,17 @@ onMounted(async () => {
     }))
   } catch (err) {
     console.error('Lỗi tải dữ liệu dashboard:', err)
+    loadError.value = err?.message || 'Không tải được trang chủ ứng viên. Vui lòng thử lại.'
   } finally {
     loading.value = false
   }
+}
+
+onMounted(async () => {
+  if (history.state?.message) {
+    window.history.replaceState({}, document.title)
+  }
+  await loadDashboard()
 })
 
 const formatDate = (dateString) => {
@@ -128,6 +131,13 @@ const formatDate = (dateString) => {
     <div v-if="loading" class="flex flex-col items-center justify-center py-20">
       <div class="dash-spinner mb-4"></div>
       <p class="text-helper">Đang tải dữ liệu dashboard...</p>
+    </div>
+
+    <div v-else-if="loadError" class="empty-state bg-[var(--surface)] p-10 rounded-2xl border border-dashed border-[var(--border)] text-center">
+      <AlertCircle :size="36" class="mx-auto mb-3 text-[var(--danger)]" />
+      <h3 class="text-base font-bold text-[var(--text-main)] mb-1">Không tải được dữ liệu</h3>
+      <p class="text-sm text-[var(--text-secondary)] mb-4">{{ loadError }}</p>
+      <Button variant="primary" @click="loadDashboard">Thử lại</Button>
     </div>
 
     <template v-else>

@@ -1,6 +1,10 @@
 import { apiService } from './api.service'
 
 export const publicService = {
+  getAllJobs: async (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return await apiService.get(`/public/all-jobs${query ? `?${query}` : ''}`)
+  },
   getCompanyJobs: async (companyId, params = {}) => {
     const query = new URLSearchParams(params).toString()
     return await apiService.get(`/public/companies/${companyId}/jobs${query ? `?${query}` : ''}`)

@@ -1,0 +1,447 @@
+-- ============================================================================
+-- seed_daklak_jobs_batch2.sql — +40 tin Đắk Lắk / Buôn Ma Thuột
+-- ----------------------------------------------------------------------------
+-- Bổ sung sau seed_daklak_jobs.sql (đã có 10 công ty + 10 tin).
+-- Nguồn tham khảo phong cách: TopCV/CareerViet Đắk Lắk (viết lại ngắn gọn).
+-- An toàn chạy lại: ON CONFLICT DO NOTHING.
+-- Logo: SVG demo trong frontend/public/company-logos/*.svg
+-- ============================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- Companies batch 2 — aaaaaaaa-…021 → 034
+-- ---------------------------------------------------------------------------
+INSERT INTO companies (id, name, slug, logo_url, website, industry, size, created_by, settings) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000021', 'FPT Shop - Chi nhánh Buôn Ma Thuột', 'demo-fpt-shop-bmt',
+   '/company-logos/fpt-shop.png', 'https://fptshop.com.vn', 'Bán lẻ / Điện máy', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000022', 'Thế Giới Di Động - Khu vực Đắk Lắk', 'demo-tgdd-daklak',
+   '/company-logos/the-gioi-di-dong.png', 'https://www.thegioididong.com', 'Bán lẻ / Điện thoại', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000023', 'Highlands Coffee - Buôn Ma Thuột', 'demo-highlands-bmt',
+   '/company-logos/highland.png', 'https://www.highlandscoffee.com.vn', 'F&B / Cà phê', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000024', 'Công ty Cà phê Trung Nguyên - VP Đắk Lắk', 'demo-trung-nguyen-daklak',
+   '/company-logos/coffee-dak.png', 'https://trungnguyenlegend.com', 'Nông sản / Cà phê', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000025', 'Trung tâm Anh ngữ Nova Edu Buôn Ma Thuột', 'demo-nova-edu-bmt',
+   '/company-logos/nova-edu.png', NULL, 'Giáo dục / Đào tạo', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000026', 'Phòng khám Đa khoa Ban Mê', 'demo-pkdk-banme',
+   '/company-logos/daklak-hospital.png', NULL, 'Y tế / Sức khỏe', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000027', 'Công ty XD Tây Nguyên Phát', 'demo-xd-taynguyen',
+   '/company-logos/construction-tay.png', NULL, 'Xây dựng', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000028', 'Công ty BĐS Ban Mê Land', 'demo-bds-banme',
+   '/company-logos/realestate-bmt.png', NULL, 'Bất động sản', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000029', 'Nhà thuốc Pharmacity - Đại lý Đắk Lắk', 'demo-pharma-daklak',
+   '/company-logos/pharma-bmt.png', 'https://www.pharmacity.vn', 'Dược / Y tế', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002a', 'Co.opmart Buôn Ma Thuột', 'demo-coopmart-bmt',
+   '/company-logos/coopmart.png', 'https://www.co-opmart.com.vn', 'Bán lẻ / Siêu thị', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002b', 'Viettel Đắk Lắk', 'demo-viettel-daklak',
+   '/company-logos/viettel.svg', 'https://vietteltelecom.vn', 'Viễn thông', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002c', 'PC Đắk Lắk - EVN CPC', 'demo-evn-daklak',
+   '/company-logos/evn-cpc.png', 'https://cpc.vn', 'Điện lực / Năng lượng', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002d', 'Agribank Chi nhánh Đắk Lắk', 'demo-agribank-daklak',
+   '/company-logos/agribank.png', 'https://www.agribank.com.vn', 'Ngân hàng / Tài chính', '1000+',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002e', 'Khách sạn Ban Mê Riverside', 'demo-hotel-banme',
+   '/company-logos/hotel-ban-me.png', NULL, 'Khách sạn / Du lịch', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-00000000002f', 'Mai Linh Taxi Buôn Ma Thuột', 'demo-mailinh-bmt',
+   '/company-logos/taxi-mai-linh.png', 'https://www.mailinh.vn', 'Vận tải / Taxi', '200-500',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000030', 'Công ty XK Cà phê Đắk Lắk Export', 'demo-cafe-export-dlk',
+   '/company-logos/cafe-export.png', NULL, 'Xuất khẩu / Nông sản', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000031', 'Digital Agency BMT Media', 'demo-digital-bmt',
+   '/company-logos/digital-bmt.png', NULL, 'Marketing / Truyền thông', '10-50',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000032', 'Công ty DV Nhân sự Tây Nguyên', 'demo-hr-taynguyen',
+   '/company-logos/hr-services.png', NULL, 'Nhân sự / Dịch vụ', '10-50',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000033', 'Văn phòng dịch vụ kế toán An Tâm BMT', 'demo-ketoan-antam',
+   '/company-logos/accounting-firm.png', NULL, 'Kế toán / Thuế', '10-50',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb),
+
+  ('aaaaaaaa-0000-0000-0000-000000000034', 'Nhà hàng Lạc Cảnh - Buôn Ma Thuột', 'demo-nhahang-laccanh',
+   '/company-logos/restaurant-lac.png', NULL, 'Nhà hàng / F&B', '50-200',
+   'bbbbbbbb-0000-0000-0000-000000000002', '{"timezone":"Asia/Ho_Chi_Minh","locale":"vi","region":"DakLak"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO company_members (id, company_id, user_id, role, status, joined_at) VALUES
+  ('a1a1a1a1-0000-0000-0000-000000000021', 'aaaaaaaa-0000-0000-0000-000000000021', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000022', 'aaaaaaaa-0000-0000-0000-000000000022', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000023', 'aaaaaaaa-0000-0000-0000-000000000023', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000024', 'aaaaaaaa-0000-0000-0000-000000000024', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000025', 'aaaaaaaa-0000-0000-0000-000000000025', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000026', 'aaaaaaaa-0000-0000-0000-000000000026', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000027', 'aaaaaaaa-0000-0000-0000-000000000027', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000028', 'aaaaaaaa-0000-0000-0000-000000000028', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000029', 'aaaaaaaa-0000-0000-0000-000000000029', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002a', 'aaaaaaaa-0000-0000-0000-00000000002a', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002b', 'aaaaaaaa-0000-0000-0000-00000000002b', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002c', 'aaaaaaaa-0000-0000-0000-00000000002c', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002d', 'aaaaaaaa-0000-0000-0000-00000000002d', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002e', 'aaaaaaaa-0000-0000-0000-00000000002e', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-00000000002f', 'aaaaaaaa-0000-0000-0000-00000000002f', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000030', 'aaaaaaaa-0000-0000-0000-000000000030', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000031', 'aaaaaaaa-0000-0000-0000-000000000031', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000032', 'aaaaaaaa-0000-0000-0000-000000000032', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000033', 'aaaaaaaa-0000-0000-0000-000000000033', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW()),
+  ('a1a1a1a1-0000-0000-0000-000000000034', 'aaaaaaaa-0000-0000-0000-000000000034', 'bbbbbbbb-0000-0000-0000-000000000002', 'owner', 'active', NOW())
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Jobs batch 2 — dddddddd-…0201 → 0228 (40 tin)
+-- ---------------------------------------------------------------------------
+INSERT INTO jobs (id, company_id, title, department, level, location, employment_type,
+                  salary_min, salary_max, currency, description, requirements, benefits, status,
+                  ai_summary, created_by) VALUES
+  ('dddddddd-0000-4000-8000-000000000201', 'aaaaaaaa-0000-0000-0000-000000000021',
+   'Nhân viên Tư vấn bán hàng - FPT Shop BMT', 'Retail', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   8000000, 15000000, 'VND',
+   'Tư vấn laptop, điện thoại, phụ kiện tại cửa hàng FPT Shop Buôn Ma Thuột. Chăm sóc khách, đạt KPI doanh số.',
+   'THPT trở lên. Giao tiếp tốt. Ưu tiên có kinh nghiệm bán hàng điện máy. Có xe máy.',
+   'Lương cứng + hoa hồng, BHXH, đồng phục.', 'open',
+   'Tư vấn bán hàng điện máy tại FPT Shop BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000202', 'aaaaaaaa-0000-0000-0000-000000000021',
+   'Thu ngân cửa hàng - Buôn Ma Thuột', 'Retail', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7000000, 10000000, 'VND',
+   'Thu ngân, đối soát cuối ca, hỗ trợ khách thanh toán tại cửa hàng Đắk Lắk.',
+   'Cẩn thận, thành thạo máy tính cơ bản. Ưu tiên nữ. Không yêu cầu kinh nghiệm.',
+   'Ca linh hoạt, BHXH.', 'open',
+   'Thu ngân bán lẻ tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000203', 'aaaaaaaa-0000-0000-0000-000000000022',
+   'Tư vấn viên Điện thoại - Thế Giới Di Động Đắk Lắk', 'Retail', 'junior', 'Đắk Lắk', 'full_time',
+   8000000, 16000000, 'VND',
+   'Tư vấn sản phẩm điện thoại, máy tính bảng; upsell bảo hành và phụ kiện.',
+   'Ham học sản phẩm công nghệ. Giao tiếp tự tin. Có thể làm ca tối/cuối tuần.',
+   'Lương + KPI, đào tạo sản phẩm.', 'open',
+   'TVV điện thoại tại TGDD khu vực Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000204', 'aaaaaaaa-0000-0000-0000-000000000022',
+   'Kỹ thuật viên sửa chữa điện thoại', 'Technical', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   10000000, 18000000, 'VND',
+   'Tiếp nhận và sửa chữa điện thoại, kiểm tra linh kiện, ghi nhật ký kỹ thuật.',
+   '1+ năm sửa chữa di động. Cẩn thận, chịu được áp lực. Có chứng chỉ kỹ thuật là lợi thế.',
+   'Phụ cấp chuyên môn, BHXH.', 'open',
+   'Kỹ thuật viên sửa chữa tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000205', 'aaaaaaaa-0000-0000-0000-000000000023',
+   'Barista / Nhân viên pha chế - Highlands BMT', 'F&B', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6000000, 9000000, 'VND',
+   'Pha chế đồ uống, phục vụ khách, giữ vệ sinh quầy theo chuẩn Highlands.',
+   'Yêu thích cà phê. Có thể làm ca xoay. Ưu tiên đã qua đào tạo barista.',
+   'Tip, suất ăn ca, đào tạo pha chế.', 'open',
+   'Barista Highlands tại Buôn Ma Thuột.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000206', 'aaaaaaaa-0000-0000-0000-000000000023',
+   'Quản lý ca cửa hàng cà phê', 'F&B', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   10000000, 14000000, 'VND',
+   'Điều phối ca làm, kiểm soát chất lượng dịch vụ, báo cáo doanh thu ca.',
+   '1-2 năm F&B. Kỹ năng lãnh đạo nhóm nhỏ. Chịu áp lực cao điểm.',
+   'Lương quản lý ca + thưởng doanh số.', 'open',
+   'Shift leader F&B tại Highlands BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000207', 'aaaaaaaa-0000-0000-0000-000000000024',
+   'Nhân viên QC cà phê nhân', 'Quality', 'junior', 'Đắk Lắk', 'full_time',
+   8000000, 12000000, 'VND',
+   'Kiểm tra chất lượng cà phê nhân: độ ẩm, tỷ lệ lẫn tạp, ghi nhận lô hàng.',
+   'Tốt nghiệp nông nghiệp/thủy sản hoặc có kinh nghiệm QC nông sản. Trung thực, tỉ mỉ.',
+   'BHXH, phụ cấp độc hại nhẹ.', 'open',
+   'QC cà phê tại Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000208', 'aaaaaaaa-0000-0000-0000-000000000024',
+   'Chuyên viên Thu mua nông sản', 'Procurement', 'middle', 'Đắk Lắk', 'full_time',
+   12000000, 20000000, 'VND',
+   'Thu mua cà phê/nông sản từ nông hộ và đại lý; đàm phán giá, kiểm tra chất lượng đầu vào.',
+   'Hiểu thị trường cà phê Tây Nguyên. Có xe máy, sẵn sàng đi huyện. 1-3 năm kinh nghiệm.',
+   'Phụ cấp xăng xe, thưởng theo sản lượng.', 'open',
+   'Thu mua cà phê khu vực Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000209', 'aaaaaaaa-0000-0000-0000-000000000025',
+   'Giáo viên Tiếng Anh thiếu nhi', 'Education', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'part_time',
+   8000000, 15000000, 'VND',
+   'Giảng dạy tiếng Anh cho học sinh tiểu học/THCS theo giáo trình trung tâm.',
+   'IELTS 6.0+ hoặc tương đương. Yêu thích trẻ em. Có thể dạy tối/cuối tuần.',
+   'Lương theo giờ, hỗ trợ giáo án.', 'open',
+   'GV tiếng Anh part-time tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020a', 'aaaaaaaa-0000-0000-0000-000000000025',
+   'Tư vấn tuyển sinh khóa học', 'Education', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7000000, 14000000, 'VND',
+   'Tư vấn phụ huynh, chăm sóc lead, theo dõi học viên đăng ký khóa học.',
+   'Giao tiếp tốt, giọng nói dễ nghe. Ưu tiên có kinh nghiệm telesales/giáo dục.',
+   'Lương cứng + hoa hồng tuyển sinh.', 'open',
+   'Tư vấn tuyển sinh trung tâm Anh ngữ BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020b', 'aaaaaaaa-0000-0000-0000-000000000026',
+   'Điều dưỡng viên', 'Healthcare', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   9000000, 13000000, 'VND',
+   'Hỗ trợ bác sĩ khám bệnh, chăm sóc người bệnh, thực hiện y lệnh điều dưỡng.',
+   'Có bằng Trung cấp Điều dưỡng trở lên. Chứng chỉ hành nghề. Ca trực theo lịch.',
+   'BHXH, phụ cấp trực đêm.', 'open',
+   'Điều dưỡng tại phòng khám Ban Mê.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020c', 'aaaaaaaa-0000-0000-0000-000000000026',
+   'Lễ tân phòng khám', 'Admin', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6500000, 9000000, 'VND',
+   'Đón tiếp bệnh nhân, xếp lịch khám, thu viện phí, cập nhật hồ sơ.',
+   'Ngoại hình ưa nhìn, giao tiếp lịch sự. Biết dùng máy tính văn phòng.',
+   'Đồng phục, BHXH.', 'open',
+   'Lễ tân y tế tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020d', 'aaaaaaaa-0000-0000-0000-000000000027',
+   'Kỹ sư hiện trường xây dựng', 'Construction', 'middle', 'Đắk Lắk', 'full_time',
+   12000000, 20000000, 'VND',
+   'Giám sát thi công công trình dân dụng/nhà xưởng tại Đắk Lắk; lập nhật ký thi công.',
+   'Tốt nghiệp XD/Cầu đường. 1-3 năm hiện trường. Có thể đi công trình huyện.',
+   'Phụ cấp công trình, BHXH.', 'open',
+   'Kỹ sư hiện trường XD Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020e', 'aaaaaaaa-0000-0000-0000-000000000027',
+   'Nhân viên dự toán công trình', 'Construction', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   9000000, 14000000, 'VND',
+   'Lập dự toán, bóc khối lượng, hỗ trợ đấu thầu các gói thầu địa phương.',
+   'Biết AutoCAD/Excel. Ưu tiên tốt nghiệp ngành XD. Fresher được đào tạo.',
+   'Môi trường văn phòng + đi hiện trường định kỳ.', 'open',
+   'Dự toán xây dựng tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000020f', 'aaaaaaaa-0000-0000-0000-000000000028',
+   'Nhân viên Kinh doanh Bất động sản', 'Sales', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   8000000, 30000000, 'VND',
+   'Tư vấn nhà đất, dự án tại BMT và vùng phụ cận; dẫn khách xem nhà, chốt giao dịch.',
+   'Năng động, chịu khó đi thực địa. Không bắt buộc kinh nghiệm (đào tạo pháp lý cơ bản).',
+   'Hoa hồng cao theo deal, hỗ trợ marketing tin đăng.', 'open',
+   'Sales BĐS tại Buôn Ma Thuột.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000210', 'aaaaaaaa-0000-0000-0000-000000000028',
+   'Chuyên viên Pháp lý BĐS', 'Legal', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   12000000, 18000000, 'VND',
+   'Rà soát sổ đỏ, hợp đồng mua bán, hỗ trợ công chứng/sang tên.',
+   'Tốt nghiệp Luật. Ưu tiên 1+ năm pháp lý BĐS. Am hiểu thủ tục địa phương.',
+   'BHXH, thưởng theo hồ sơ hoàn tất.', 'open',
+   'Legal BĐS tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000211', 'aaaaaaaa-0000-0000-0000-000000000029',
+   'Dược sĩ nhà thuốc', 'Pharmacy', 'junior', 'Đắk Lắk', 'full_time',
+   9000000, 14000000, 'VND',
+   'Tư vấn thuốc OTC, bán hàng, quản lý tồn kho theo đơn vị nhà thuốc.',
+   'Có bằng Dược (TC trở lên). Chứng chỉ hành nghề nếu yêu cầu vị trí. Ca xoay.',
+   'Phụ cấp chuyên môn, BHXH.', 'open',
+   'Dược sĩ bán lẻ khu vực Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000212', 'aaaaaaaa-0000-0000-0000-000000000029',
+   'Nhân viên bán hàng siêu thị thuốc', 'Retail', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6500000, 9000000, 'VND',
+   'Sắp xếp quầy, hỗ trợ khách tìm sản phẩm chăm sóc sức khỏe, thu ngân hỗ trợ.',
+   'THPT. Không bắt buộc bằng dược. Nhanh nhẹn, thân thiện.',
+   'Đào tạo sản phẩm, đồng phục.', 'open',
+   'Bán hàng OTC/care tại nhà thuốc BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000213', 'aaaaaaaa-0000-0000-0000-00000000002a',
+   'Nhân viên sắp xếp hàng hóa siêu thị', 'Retail', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6000000, 8500000, 'VND',
+   'Nhận hàng, trưng bày, kiểm tra hạn sử dụng, hỗ trợ khách tại siêu thị.',
+   'Sức khỏe tốt, chịu đứng lâu. Có thể làm ca đêm theo lịch.',
+   'Suất ăn ca, phụ cấp ca đêm.', 'open',
+   'Nhân viên siêu thị Co.opmart BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000214', 'aaaaaaaa-0000-0000-0000-00000000002a',
+   'Trưởng ngành hàng Thực phẩm tươi sống', 'Retail', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   12000000, 18000000, 'VND',
+   'Quản lý tồn kho, chất lượng thịt/cá/rau; điều phối nhân viên ngành hàng.',
+   '2+ năm bán lẻ siêu thị. Kỹ năng quản lý nhóm. Ưu tiên có kinh nghiệm ngành tươi sống.',
+   'Lương quản lý + thưởng KPI.', 'open',
+   'Trưởng ngành hàng fresh tại siêu thị BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000215', 'aaaaaaaa-0000-0000-0000-00000000002b',
+   'Nhân viên Kinh doanh dịch vụ di động', 'Sales', 'junior', 'Đắk Lắk', 'full_time',
+   8000000, 18000000, 'VND',
+   'Tư vấn gói cước, bán máy, phát triển điểm bán Viettel tại địa bàn Đắk Lắk.',
+   'Giao tiếp tốt. Có xe máy. Ưu tiên kinh nghiệm bán hàng viễn thông/FMCG.',
+   'Lương + hoa hồng, hỗ trợ sim/tool bán hàng.', 'open',
+   'Sales viễn thông Viettel Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000216', 'aaaaaaaa-0000-0000-0000-00000000002b',
+   'Kỹ thuật viên lắp đặt mạng / WiFi', 'Technical', 'junior', 'Đắk Lắk', 'full_time',
+   8000000, 12000000, 'VND',
+   'Lắp đặt đường truyền, xử lý sự cố tại nhà khách hàng trên địa bàn tỉnh.',
+   'Biết mạng cơ bản. Chịu khó leo cột/đi huyện. Có bằng trung cấp kỹ thuật là lợi thế.',
+   'Phụ cấp xăng xe, công cụ đầy đủ.', 'open',
+   'Kỹ thuật viên mạng tại Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000217', 'aaaaaaaa-0000-0000-0000-00000000002c',
+   'Kỹ sư điện / vận hành lưới', 'Engineering', 'middle', 'Đắk Lắk', 'full_time',
+   14000000, 22000000, 'VND',
+   'Tham gia vận hành, bảo dưỡng lưới phân phối; hỗ trợ xử lý sự cố điện lực tỉnh.',
+   'Tốt nghiệp Điện/Điện tử. Có chứng chỉ an toàn điện. Sẵn sàng trực sự cố.',
+   'Phụ cấp độc hại, BHXH ngành điện.', 'open',
+   'Kỹ sư điện PC Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000218', 'aaaaaaaa-0000-0000-0000-00000000002c',
+   'Nhân viên hành chính - văn phòng điện lực', 'Admin', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7500000, 11000000, 'VND',
+   'Soạn thảo văn bản, quản lý hồ sơ, hỗ trợ tiếp nhận phản ánh khách hàng.',
+   'Tin học văn phòng. Cẩn thận với số liệu. Tốt nghiệp CĐ trở lên.',
+   'Phúc lợi ngành điện.', 'open',
+   'Hành chính văn phòng điện lực BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000219', 'aaaaaaaa-0000-0000-0000-00000000002d',
+   'Giao dịch viên ngân hàng', 'Banking', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   9000000, 14000000, 'VND',
+   'Thực hiện giao dịch tiền mặt, mở tài khoản, hỗ trợ khách hàng tại quầy.',
+   'Tốt nghiệp Tài chính/Ngân hàng/Kế toán. Ngoại hình và giao tiếp tốt. Ưu tiên fresher xuất sắc.',
+   'Phúc lợi ngân hàng, đào tạo nghiệp vụ.', 'open',
+   'GDV Agribank chi nhánh Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021a', 'aaaaaaaa-0000-0000-0000-00000000002d',
+   'Chuyên viên Tín dụng nông nghiệp', 'Banking', 'middle', 'Đắk Lắk', 'full_time',
+   12000000, 22000000, 'VND',
+   'Thẩm định hồ sơ vay nông hộ/HTX, giám sát sử dụng vốn, thu hồi nợ.',
+   '1-3 năm tín dụng. Hiểu đặc thù nông nghiệp Tây Nguyên. Có xe máy, đi địa bàn.',
+   'Phụ cấp địa bàn, thưởng theo chất lượng nợ.', 'open',
+   'Tín dụng nông nghiệp tại Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021b', 'aaaaaaaa-0000-0000-0000-00000000002e',
+   'Lễ tân / Front Office khách sạn', 'Hospitality', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7000000, 10000000, 'VND',
+   'Check-in/out, trả lời điện thoại đặt phòng, hỗ trợ khách quốc nội.',
+   'Giao tiếp tiếng Anh cơ bản. Ngoại hình chỉn chu. Có thể làm ca.',
+   'Suất ăn, phòng nghỉ ca đêm (nếu áp dụng).', 'open',
+   'Front office khách sạn BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021c', 'aaaaaaaa-0000-0000-0000-00000000002e',
+   'Nhân viên buồng phòng', 'Hospitality', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6000000, 8500000, 'VND',
+   'Dọn phòng, bổ sung đồ dùng, báo cáo tình trạng phòng.',
+   'Chăm chỉ, trung thực. Không yêu cầu kinh nghiệm.',
+   'Suất ăn ca, phụ cấp.', 'open',
+   'Housekeeping khách sạn Ban Mê.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021d', 'aaaaaaaa-0000-0000-0000-00000000002f',
+   'Tài xế Taxi / Xe công nghệ', 'Transport', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   10000000, 18000000, 'VND',
+   'Chở khách theo điều phối; giữ xe sạch sẽ, thái độ lịch sự.',
+   'Bằng B2. Lý lịch rõ ràng. Am hiểu đường phố BMT là lợi thế.',
+   'Thu nhập theo cuốc xe, hỗ trợ nhiên liệu theo chính sách.', 'open',
+   'Tài xế taxi tại Buôn Ma Thuột.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021e', 'aaaaaaaa-0000-0000-0000-00000000002f',
+   'Điều phối viên tổng đài', 'Operations', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7000000, 10000000, 'VND',
+   'Nhận cuộc gọi đặt xe, điều phối tài xế, xử lý phản ánh khách.',
+   'Nói chuyện rõ ràng, sử dụng máy tính thành thạo. Có thể trực ca.',
+   'Phụ cấp ca đêm.', 'open',
+   'Điều phối tổng đài taxi BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-00000000021f', 'aaaaaaaa-0000-0000-0000-000000000030',
+   'Nhân viên Xuất nhập khẩu nông sản', 'Logistics', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   11000000, 17000000, 'VND',
+   'Chuẩn bị hồ sơ xuất khẩu cà phê, làm việc với forwarder và hải quan.',
+   'Biết tiếng Anh đọc viết hồ sơ. Có kinh nghiệm XNK nông sản là lợi thế.',
+   'Thưởng theo lô hàng hoàn tất.', 'open',
+   'XNK cà phê tại Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000220', 'aaaaaaaa-0000-0000-0000-000000000030',
+   'Nhân viên Kho thành phẩm', 'Warehouse', 'junior', 'Đắk Lắk', 'full_time',
+   7500000, 11000000, 'VND',
+   'Nhập xuất kho bao/xưởng; kiểm đếm, cập nhật tồn trên phần mềm.',
+   'Khỏe mạnh, cẩn thận số liệu. Biết Excel cơ bản.',
+   'Phụ cấp độc hại nhẹ, BHXH.', 'open',
+   'Thủ kho nông sản Đắk Lắk.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000221', 'aaaaaaaa-0000-0000-0000-000000000031',
+   'Nhân viên Digital Marketing', 'Marketing', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   8000000, 14000000, 'VND',
+   'Chạy ads Facebook/TikTok cho SME địa phương; theo dõi KPI lead/doanh số.',
+   'Biết cơ bản Meta Ads. Có portfolio chiến dịch nhỏ là lợi thế. Fresher ham học được đào tạo.',
+   'Được thực hành ngân sách thật, thưởng theo KPI.', 'open',
+   'Digital marketing agency tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000222', 'aaaaaaaa-0000-0000-0000-000000000031',
+   'Content Creator / Biên tập nội dung', 'Marketing', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   7000000, 12000000, 'VND',
+   'Viết caption, kịch bản Reels; dựng video ngắn giới thiệu địa phương/doanh nghiệp.',
+   'Biết CapCut/Canva. Viết tiếng Việt tốt. Có tư duy hình ảnh.',
+   'Làm việc hybrid linh hoạt.', 'open',
+   'Content creator tại BMT Media.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000223', 'aaaaaaaa-0000-0000-0000-000000000032',
+   'Chuyên viên Tuyển dụng', 'HR', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   8000000, 13000000, 'VND',
+   'Đăng tin, sourcing ứng viên Đắk Lắk, sàng CV, sắp xếp phỏng vấn cho khách hàng doanh nghiệp.',
+   'Giao tiếp tốt. Ưu tiên đã dùng TopCV/Facebook Groups tuyển dụng. Fresher được đào tạo.',
+   'Thưởng theo vị trí chốt.', 'open',
+   'Recruiter dịch vụ tại Tây Nguyên.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000224', 'aaaaaaaa-0000-0000-0000-000000000032',
+   'Nhân sự tổng hợp', 'HR', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   10000000, 15000000, 'VND',
+   'Phụ trách C&B cơ bản, hợp đồng lao động, chấm công cho các DN thuê ngoài dịch vụ.',
+   '1+ năm HR. Biết BHXH, hợp đồng LĐ. Thành thạo Excel.',
+   'BHXH, môi trường văn phòng.', 'open',
+   'HR generalist dịch vụ tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000225', 'aaaaaaaa-0000-0000-0000-000000000033',
+   'Kế toán thuế dịch vụ', 'Accounting', 'middle', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   10000000, 16000000, 'VND',
+   'Kê khai thuế GTGT/TNCN/TNDN cho hộ kinh doanh và SME; tư vấn tối ưu chi phí hợp pháp.',
+   'Thành thạo MISA/Fast. 1-3 năm kế toán thuế. Có chứng chỉ kế toán viên là lợi thế.',
+   'Thưởng theo số khách phụ trách.', 'open',
+   'Kế toán thuế dịch vụ tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000226', 'aaaaaaaa-0000-0000-0000-000000000033',
+   'Thực tập sinh Kế toán', 'Accounting', 'intern', 'Buôn Ma Thuột, Đắk Lắk', 'intern',
+   2500000, 4500000, 'VND',
+   'Hỗ trợ nhập chứng từ, scan hồ sơ, học quy trình kê khai dưới sự hướng dẫn.',
+   'Sinh viên năm 3-4 ngành Kế toán. Biết Excel. Chăm chỉ, đúng giờ.',
+   'Trợ cấp + cơ hội full-time.', 'open',
+   'Intern kế toán văn phòng dịch vụ BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000227', 'aaaaaaaa-0000-0000-0000-000000000034',
+   'Nhân viên phục vụ nhà hàng', 'F&B', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   5500000, 8000000, 'VND',
+   'Phục vụ bàn, nhận order, hỗ trợ thu ngân vào giờ cao điểm.',
+   'Nhanh nhẹn, vui vẻ. Có thể làm ca tối. Không yêu cầu kinh nghiệm.',
+   'Tip, suất ăn ca.', 'open',
+   'Phục vụ nhà hàng tại BMT.', 'bbbbbbbb-0000-0000-0000-000000000002'),
+
+  ('dddddddd-0000-4000-8000-000000000228', 'aaaaaaaa-0000-0000-0000-000000000034',
+   'Bếp phụ / Phụ bếp', 'F&B', 'junior', 'Buôn Ma Thuột, Đắk Lắk', 'full_time',
+   6000000, 9000000, 'VND',
+   'Sơ chế nguyên liệu, hỗ trợ đầu bếp, vệ sinh khu vực bếp.',
+   'Sức khỏe tốt, chịu được môi trường nóng. Trung thực.',
+   'Suất ăn, phụ cấp tăng ca.', 'open',
+   'Phụ bếp nhà hàng Lạc Cảnh BMT.', 'bbbbbbbb-0000-0000-0000-000000000002')
+ON CONFLICT (id) DO NOTHING;
+
+COMMIT;

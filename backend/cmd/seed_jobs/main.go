@@ -29,7 +29,7 @@ type JobSeed struct {
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgresql://postgres.ouqlvqitktzqggwbmfki:khoihunglai@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres"
+		log.Fatal("DATABASE_URL not set")
 	}
 
 	db, err := sql.Open("postgres", dbURL)

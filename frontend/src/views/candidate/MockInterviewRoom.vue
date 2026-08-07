@@ -49,15 +49,19 @@ watch(transcript, async () => {
   if (transcriptBox.value) transcriptBox.value.scrollTop = transcriptBox.value.scrollHeight
 }, { deep: true })
 
+const connectFailed = ref(false)
+
 onMounted(async () => {
   if (!mockId) {
     toast.value = { type: 'error', message: 'Thiếu mã phiên luyện tập.' }
+    connectFailed.value = true
     return
   }
   try {
     await start({ role, level })
-  } catch {
-    // error surfaced via `error` ref
+  } catch (e) {
+    connectFailed.value = true
+    toast.value = { type: 'error', message: e?.message || 'Không kết nối được AI. Bạn có thể thoát và thử lại.' }
   }
 })
 
@@ -105,30 +109,41 @@ const handleEnd = async () => {
       text: turn.text.trim().slice(0, 5000),
     }))
     await mockService.saveLiveTranscript(mockId, turns).catch(() => {})
-    await mockService.endMockInterview(mockId)
+    await mockService.endMockInterview(mockId).catch(() => {})
   } catch (e) {
     console.error('Lỗi kết thúc phiên', e)
+    toast.value = { type: 'warning', message: 'Phiên đã dừng; một phần dữ liệu có thể chưa được lưu.' }
   } finally {
     stop()
+    ending.value = false
     router.push({ path: '/mock-results', query: { mock_id: mockId } })
   }
+}
+
+const leaveWithoutEnd = () => {
+  stop()
+  router.push('/mock-results')
 }
 </script>
 <template>
   <div class="h-screen flex flex-col bg-white font-sans overflow-hidden text-slate-900">
+    <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
     <!-- Header -->
     <div class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
       <div>
         <h1 class="text-lg font-bold">Luyện tập AI · {{ role }}</h1>
         <p class="text-xs text-slate-500 capitalize">Trình độ: {{ level }}</p>
       </div>
-      <button @click="showEndModal = true"
+      <button @click="(connectFailed || error) ? leaveWithoutEnd() : (showEndModal = true)"
         class="text-rose-500 hover:text-white hover:bg-rose-500 font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-        <PhoneOff class="w-4 h-4" /> Kết thúc
+        <PhoneOff class="w-4 h-4" /> {{ (connectFailed || error) ? 'Thoát' : 'Kết thúc' }}
       </button>
     </div>
 
-    <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
+    <div v-if="connectFailed || error" class="mx-6 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 flex items-center justify-between gap-3">
+      <span>{{ error || 'Không kết nối được AI luyện tập. Bạn có thể thoát và thử lại sau.' }}</span>
+      <button class="font-semibold underline shrink-0" @click="leaveWithoutEnd">Về lịch sử</button>
+    </div>
 
     <!-- Main -->
     <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] gap-4 bg-slate-50 p-4 lg:p-6 overflow-hidden">

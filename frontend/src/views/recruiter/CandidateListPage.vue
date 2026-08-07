@@ -25,6 +25,11 @@ const localToast = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalPages = ref(1)
+const filters = ref({
+  keyword: '',
+  job_id: '',
+  status: ''
+})
 
 const jobs = ref([])
 const isValidId = (value) => typeof value === 'string' || typeof value === 'number'
@@ -48,7 +53,12 @@ const fetchCandidates = async () => {
   loading.value = true
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) return
+    if (!companyId) {
+      candidates.value = []
+      totalPages.value = 1
+      localToast.value = { type: 'error', message: 'Không tìm thấy company ID. Vui lòng đăng nhập đúng tài khoản recruiter/admin có công ty.' }
+      return
+    }
 
     // Clean up empty filters
     const params = {
@@ -95,8 +105,19 @@ const fetchCandidates = async () => {
 onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) throw new Error('Không tìm thấy company ID')
-    
+    if (!companyId) {
+
+      loading.value = false
+      candidates.value = []
+      totalPages.value = 1
+      localToast.value = {
+        type: 'error',
+        message: 'Không tìm thấy company ID. Vui lòng đăng nhập đúng tài khoản recruiter có công ty.'
+      }
+      return
+    }
+
+
     // Fetch both jobs for dropdown and initial candidates
     const [jobsRes] = await Promise.all([
       jobService.getJobs(companyId),
@@ -105,6 +126,11 @@ onMounted(async () => {
     jobs.value = jobsRes
   } catch (error) {
     console.error(error)
+    loading.value = false
+    localToast.value = {
+      type: 'error',
+      message: 'Không thể tải danh sách ứng viên.'
+    }
   }
 })
 
@@ -117,6 +143,7 @@ const applyFilter = () => {
 const clearFilter = () => {
   filters.value.job_id = ''
   filters.value.status = ''
+  filters.value.keyword = ''
   showFilterModal.value = false
   fetchCandidates()
 }
@@ -158,7 +185,7 @@ const columns = [
   <div class="animate-fade-in space-y-6">
     <Toast v-if="routeMessage" type="success" :message="routeMessage" @close="routeMessage = ''" />
     <Toast v-if="localToast" :type="localToast.type" :message="localToast.message" @close="localToast = null" />
-    
+
     <!-- Page Header -->
     <Card class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl shadow-sm">
       <div>
@@ -176,9 +203,9 @@ const columns = [
       <div class="p-6 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4 bg-slate-50/50 dark:bg-slate-800/50">
         <div class="relative flex-1 max-w-md group">
           <Search size="18" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Tìm tên, email..." 
+          <input
+            type="text"
+            placeholder="Tìm tên, email..."
             class="w-full pl-10 pr-4 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]"
             v-model="filters.keyword"
             @keyup.enter="fetchCandidates"
@@ -199,7 +226,7 @@ const columns = [
         <div class="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
         <span class="text-sm font-medium">Đang tải dữ liệu...</span>
       </div>
-      
+
       <div v-else class="w-full overflow-x-auto">
         <Table :columns="columns" :data="candidates" class="w-full text-left text-sm text-slate-600 dark:text-slate-400">
           <template #candidate="{ row }">
@@ -210,26 +237,26 @@ const columns = [
               <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ row.email }}</div>
             </div>
           </template>
-          
+
           <template #appliedJob="{ row }">
             <span class="text-slate-600 dark:text-slate-300 font-medium">{{ row.appliedJob }}</span>
           </template>
-          
+
           <template #status="{ row }">
-            <span 
+            <span
               class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider rounded-full border"
               :class="[
-                row.status === 'New' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' : 
-                row.status === 'Interviewing' ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 
-                row.status === 'Offered' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
-                row.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' : 
+                row.status === 'New' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
+                row.status === 'Interviewing' ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' :
+                row.status === 'Offered' ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
+                row.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20' :
                 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
               ]"
             >
               {{ row.status }}
             </span>
           </template>
-          
+
           <template #action="{ row }">
             <div class="flex items-center gap-1">
               <button @click="router.push(`/candidates/${row.id}`)" class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors" title="Xem chi tiết">
@@ -287,7 +314,7 @@ const columns = [
       <div class="flex flex-col gap-5 mb-6 p-1">
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vị trí ứng tuyển (Job)</label>
-          <select 
+          <select
             class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.job_id"
           >
@@ -297,7 +324,7 @@ const columns = [
         </div>
         <div class="space-y-2">
           <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Trạng thái hồ sơ</label>
-          <select 
+          <select
             class="w-full px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-[var(--text-primary)]"
             v-model="filters.status"
           >
