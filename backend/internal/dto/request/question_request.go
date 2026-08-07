@@ -25,5 +25,7 @@ type GenerateQuestionsRequest struct {
 	RubricID      string   `json:"rubric_id,omitempty"`
 	Count         int      `json:"count" validate:"required,min=1,max=20"`
 	Difficulty    string   `json:"difficulty"`
+	Level         string   `json:"level"`
+	Mode          string   `json:"mode"`
 	QuestionTypes []string `json:"question_types"`
 }

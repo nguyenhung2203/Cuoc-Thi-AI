@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 
 	"backend/internal/models"
@@ -38,24 +39,29 @@ func (s *AuditService) LogAction(ctx context.Context, in AuditLogInput) error {
 		Action:       in.Action,
 		ResourceType: in.ResourceType,
 	}
-	strPtr := func(s string) *string { return &s }
+	nullStr := func(s string) sql.NullString {
+		if s == "" {
+			return sql.NullString{}
+		}
+		return sql.NullString{String: s, Valid: true}
+	}
 	if in.CompanyID != "" {
-		al.CompanyID = strPtr(in.CompanyID)
+		al.CompanyID = nullStr(in.CompanyID)
 	}
 	if in.ActorUserID != "" {
-		al.ActorUserID = strPtr(in.ActorUserID)
+		al.ActorUserID = nullStr(in.ActorUserID)
 	}
 	if in.ActorRole != "" {
-		al.ActorRole = strPtr(in.ActorRole)
+		al.ActorRole = nullStr(in.ActorRole)
 	}
 	if in.ResourceID != "" {
-		al.ResourceID = strPtr(in.ResourceID)
+		al.ResourceID = nullStr(in.ResourceID)
 	}
 	if in.IPAddress != "" {
-		al.IPAddress = strPtr(in.IPAddress)
+		al.IPAddress = nullStr(in.IPAddress)
 	}
 	if in.UserAgent != "" {
-		al.UserAgent = strPtr(in.UserAgent)
+		al.UserAgent = nullStr(in.UserAgent)
 	}
 	if in.BeforeData != nil {
 		b, _ := json.Marshal(in.BeforeData)

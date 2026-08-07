@@ -137,6 +137,15 @@ func (r *UserRepository) UpdateStatus(ctx context.Context, id, status string) er
 	return err
 }
 
+// UpdateRole updates the role of a user.
+func (r *UserRepository) UpdateRole(ctx context.Context, id, role string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users SET role = $1, updated_at = NOW()
+		 WHERE id = $2 AND deleted_at IS NULL`,
+		role, id)
+	return err
+}
+
 // SoftDelete marks a user account as deleted (data retained, login disabled).
 func (r *UserRepository) SoftDelete(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx,

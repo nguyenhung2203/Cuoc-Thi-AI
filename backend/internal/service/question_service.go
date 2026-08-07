@@ -30,7 +30,7 @@ func (s *QuestionService) List(ctx context.Context, companyID, jobID, qType, lev
 	if err != nil {
 		return nil, 0, errors.NewInternal("failed to list questions")
 	}
-	return items, total, nil
+	return items, int64(total), nil
 }
 
 func (s *QuestionService) Create(ctx context.Context, companyID, userID string, req *request.CreateQuestionRequest) (*models.QuestionBank, error) {

@@ -8,6 +8,7 @@ import (
 
 	"backend/internal/middleware"
 	apierrors "backend/internal/pkg/errors"
+	"backend/internal/pkg/pagination"
 	pkgresponse "backend/internal/pkg/response"
 	"backend/internal/repository"
 	"backend/internal/service"
@@ -30,7 +31,7 @@ func NewAdminHandler(adminSvc *service.AdminService, userRepo *repository.UserRe
 }
 
 func (h *AdminHandler) Routes(r chi.Router) {
-	r.Use(middleware.RequireAdmin)
+	r.Use(middleware.RequireRole("admin"))
 
 	r.Get("/stats", h.GetStats)
 
@@ -59,7 +60,7 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	requestID := r.Context().Value(middleware.CtxRequestID).(string)
-	users, _, err := h.userRepo.List(r.Context(), 1000, 0)
+	users, _, err := h.userRepo.ListAllUsersPage(r.Context(), pagination.Params{Page: 1, PageSize: 1000}, repository.UserListFilter{})
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -103,7 +104,11 @@ func (h *AdminHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err := h.userRepo.UpdateStatus(r.Context(), userID, req.IsActive)
+	statusStr := "active"
+	if !req.IsActive {
+		statusStr = "inactive"
+	}
+	err := h.userRepo.UpdateStatus(r.Context(), userID, statusStr)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
@@ -145,7 +150,7 @@ func (h *AdminHandler) UpdateCompanyStatus(w http.ResponseWriter, r *http.Reques
 func (h *AdminHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	requestID := r.Context().Value(middleware.CtxRequestID).(string)
 	
-	logs, _, err := h.auditRepo.ListSystem(r.Context(), 1000, 0)
+	logs, err := h.auditRepo.ListAll(r.Context(), 1000, 0)
 	if err != nil {
 		writeServiceError(w, err, requestID)
 		return
