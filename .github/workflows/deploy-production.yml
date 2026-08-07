@@ -59,8 +59,19 @@ jobs:
             docker compose --env-file .env.production \
               -f docker-compose.prod.yml ps
 
-            sleep 10
+            health_ok=false
+            for attempt in 1 2 3; do
+              if curl -fsS https://vieclamai.top/health; then
+                health_ok=true
+                break
+              fi
+              echo "Health check attempt $attempt/3 failed; retrying in 10 seconds..."
+              sleep 10
+            done
 
-            curl -fsS https://vieclamai.top/health
+            if [ "$health_ok" != true ]; then
+              echo "Health check failed after 3 attempts"
+              exit 1
+            fi
 
             docker image prune -f
