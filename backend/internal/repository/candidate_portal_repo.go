@@ -20,12 +20,12 @@ func NewCandidatePortalRepository(db *sqlx.DB) *CandidatePortalRepository {
 }
 
 func (r *CandidatePortalRepository) GetLatestInterviewScore(ctx context.Context, userID string) (*response.CandidateInterviewScore, error) {
-	q := `SELECT COALESCE(ir.final_score, 0), COALESCE(ir.summary, ''), COALESCE(ir.strengths, '[]'::jsonb), COALESCE(ir.weaknesses, '[]'::jsonb), COALESCE(ir.report_json->'suggested_next_steps', '[]'::jsonb)
+	q := `SELECT COALESCE(ir.final_score, 0), COALESCE(ir.summary, ''), COALESCE(ir.strengths, '[]'::jsonb), COALESCE(ir.weaknesses, '[]'::jsonb), COALESCE(ir.report_json->'improvement_advice', ir.report_json->'suggested_next_steps', '[]'::jsonb), COALESCE(ir.report_json->>'communication_score', '0'), COALESCE(ir.report_json->>'tone_score', '0'), COALESCE(ir.report_json->>'personality_score', '0')
 		FROM interview_reports ir JOIN interviews i ON i.id = ir.interview_id JOIN candidates c ON c.id = i.candidate_id
 		WHERE c.user_id = $1 AND i.status = 'completed' ORDER BY ir.updated_at DESC LIMIT 1`
 	var score response.CandidateInterviewScore
 	var strengths, weaknesses, advice []byte
-	if err := r.db.QueryRowxContext(ctx, q, userID).Scan(&score.FinalScore, &score.Summary, &strengths, &weaknesses, &advice); err != nil {
+	if err := r.db.QueryRowxContext(ctx, q, userID).Scan(&score.FinalScore, &score.Summary, &strengths, &weaknesses, &advice, &score.CommunicationScore, &score.ToneScore, &score.PersonalityScore); err != nil {
 		return nil, err
 	}
 	_ = json.Unmarshal(strengths, &score.Strengths)

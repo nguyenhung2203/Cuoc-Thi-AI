@@ -38,11 +38,14 @@ type CandidatePortalProfile struct {
 }
 
 type CandidateInterviewScore struct {
-	FinalScore float64  `json:"final_score"`
-	Summary    string   `json:"summary"`
-	Strengths  []string `json:"strengths,omitempty"`
-	Weaknesses []string `json:"weaknesses,omitempty"`
-	Advice     []string `json:"advice,omitempty"`
+	FinalScore         float64  `json:"final_score"`
+	Summary            string   `json:"summary"`
+	Strengths          []string `json:"strengths,omitempty"`
+	Weaknesses         []string `json:"weaknesses,omitempty"`
+	Advice             []string `json:"advice,omitempty"`
+	CommunicationScore float64  `json:"communication_score,omitempty"`
+	ToneScore          float64  `json:"tone_score,omitempty"`
+	PersonalityScore   float64  `json:"personality_score,omitempty"`
 }
 
 type CandidatePortalCVUpload struct {

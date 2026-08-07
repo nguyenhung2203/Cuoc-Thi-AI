@@ -270,20 +270,29 @@ const closeCvModal = () => {
 
 const pdfBlobUrl = ref('')
 const pdfLoading = ref(false)
+const pdfError = ref('')
 const cvPages = ref([])
 
 const loadPdfAsImages = async (url) => {
   cvPages.value = []
   pdfBlobUrl.value = ''
+  pdfError.value = ''
   pdfLoading.value = true
   try {
     const resp = await fetch(url)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    if (!resp.ok) {
+      throw new Error(`Tài liệu không tìm thấy hoặc đã bị xóa (HTTP ${resp.status})`)
+    }
+    const contentType = resp.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const json = await resp.json()
+      throw new Error(json.error?.message || 'Không tìm thấy file CV')
+    }
     const blob = await resp.blob()
     pdfBlobUrl.value = URL.createObjectURL(blob)
   } catch (err) {
     console.error('Failed to load PDF:', err)
-    pdfBlobUrl.value = url
+    pdfError.value = err.message || 'Không thể tải file xem trước'
   } finally {
     pdfLoading.value = false
   }
@@ -292,6 +301,7 @@ const loadPdfAsImages = async (url) => {
 watch(selectedCv, async (newCv) => {
   cvPages.value = []
   pdfBlobUrl.value = ''
+  pdfError.value = ''
   if (!newCv) return
 
   let url = ''
@@ -703,19 +713,27 @@ const confirmDeleteAccount = async () => {
         <div v-if="activeTab === 'profile'" class="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <!-- Left Sub-column: Personal Info Form -->
           <div class="xl:col-span-7 space-y-6">
-            <Card v-if="profile.interviewScore" class="pf-card border-[var(--accent)]/30">
+            <Card class="pf-card border-[var(--accent)]/30">
               <div class="p-6 space-y-4">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h3 class="pf-sub-title mb-1">Kết quả phỏng vấn AI</h3>
-                    <p class="text-xs text-[var(--text-secondary)]">Điểm tổng hợp từ buổi phỏng vấn gần nhất</p>
+                <template v-if="profile.interviewScore">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="pf-sub-title mb-1">Kết quả phỏng vấn AI</h3>
+                      <p class="text-xs text-[var(--text-secondary)]">Điểm tổng hợp từ buổi phỏng vấn gần nhất</p>
+                    </div>
+                    <strong class="text-3xl text-[var(--accent)]">{{ Number(profile.interviewScore.final_score || 0).toFixed(1) }}/10</strong>
                   </div>
-                  <strong class="text-3xl text-[var(--accent)]">{{ Number(profile.interviewScore.final_score || 0).toFixed(1) }}/10</strong>
-                </div>
-                <p v-if="profile.interviewScore.summary" class="text-sm text-[var(--text-secondary)]">{{ profile.interviewScore.summary }}</p>
-                <div v-if="profile.interviewScore.strengths?.length" class="text-sm"><b>Điểm mạnh:</b> {{ profile.interviewScore.strengths.join(' • ') }}</div>
-                <div v-if="profile.interviewScore.weaknesses?.length" class="text-sm"><b>Cần cải thiện:</b> {{ profile.interviewScore.weaknesses.join(' • ') }}</div>
-                <div v-if="profile.interviewScore.advice?.length" class="text-sm"><b>Gợi ý:</b> {{ profile.interviewScore.advice.join(' • ') }}</div>
+                  <p v-if="profile.interviewScore.summary" class="text-sm text-[var(--text-secondary)]">{{ profile.interviewScore.summary }}</p>
+                  <div v-if="profile.interviewScore.communication_score || profile.interviewScore.tone_score || profile.interviewScore.personality_score" class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div class="rounded-lg bg-[var(--surface-soft)] p-2">Giao tiếp<br><b>{{ Number(profile.interviewScore.communication_score || 0).toFixed(1) }}</b></div>
+                    <div class="rounded-lg bg-[var(--surface-soft)] p-2">Tone<br><b>{{ Number(profile.interviewScore.tone_score || 0).toFixed(1) }}</b></div>
+                    <div class="rounded-lg bg-[var(--surface-soft)] p-2">Chuyên nghiệp<br><b>{{ Number(profile.interviewScore.personality_score || 0).toFixed(1) }}</b></div>
+                  </div>
+                  <div v-if="profile.interviewScore.strengths?.length" class="text-sm"><b>Điểm mạnh:</b> {{ profile.interviewScore.strengths.join(' • ') }}</div>
+                  <div v-if="profile.interviewScore.weaknesses?.length" class="text-sm"><b>Cần cải thiện:</b> {{ profile.interviewScore.weaknesses.join(' • ') }}</div>
+                  <div v-if="profile.interviewScore.advice?.length" class="text-sm"><b>Gợi ý:</b> {{ profile.interviewScore.advice.join(' • ') }}</div>
+                </template>
+                <p v-else class="text-sm text-[var(--text-secondary)]">Bạn chưa có kết quả phỏng vấn AI hoàn tất. Hãy hoàn thành một buổi luyện tập để xem điểm mạnh, điểm cần cải thiện và gợi ý cá nhân hóa.</p>
               </div>
             </Card>
             <Card class="pf-card">
@@ -827,46 +845,54 @@ const confirmDeleteAccount = async () => {
                     <!-- <span class="text-xs text-[var(--text-muted)]">Bấm ⭐ để chọn CV mặc định</span> -->
                   </div>
 
-                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] gap-3 cursor-pointer" @click="viewCv(cv)">
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
-                      <div class="pf-cv-icon shrink-0 w-11 h-11 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden">
+                  <div v-for="cv in uploadedCvs" :key="cv.id" class="pf-cv-item group p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] hover:border-[var(--primary)] transition-all cursor-pointer space-y-2.5" @click="viewCv(cv)">
+                    <!-- Top row: File Icon + Info -->
+                    <div class="flex items-center gap-3 min-w-0">
+                      <div class="pf-cv-icon shrink-0 w-10 h-10 rounded-xl bg-[var(--primary-light)]/50 border border-[var(--primary-light)] flex items-center justify-center overflow-hidden">
                         <img v-if="cv.url && (cv.url.toLowerCase().includes('.png') || cv.url.toLowerCase().includes('.jpg') || cv.url.toLowerCase().includes('.jpeg'))" :src="cv.url" class="w-full h-full object-cover" />
                         <div v-else class="flex flex-col items-center justify-center text-[var(--primary)] font-extrabold text-[10px] leading-tight">
                           <FileText :size="18" />
-                          <span style="font-size: 9px; margin-top: -2px">PDF</span>
+                          <span style="font-size: 8px; margin-top: -2px">PDF</span>
                         </div>
                       </div>
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
-                          <div class="pf-cv-name truncate font-semibold text-sm text-[var(--text-main)]">{{ cv.name }}</div>
+                          <div class="pf-cv-name truncate font-semibold text-sm text-[var(--text-main)]" :title="cv.name">{{ cv.name }}</div>
                           <!-- Default Badge -->
-                          <span v-if="String(cv.id) === String(defaultCvId)" class="px-2.5 py-0.5 rounded-full bg-[var(--primary-light)] text-[var(--primary)] font-bold text-[11px] flex items-center gap-1 shrink-0 border border-[var(--primary)]/20">
-                            <Star :size="12" fill="currentColor" /> Mặc định
+                          <span v-if="String(cv.id) === String(defaultCvId)" class="px-2 py-0.5 rounded-full bg-[var(--primary-light)] text-[var(--primary)] font-bold text-[10px] flex items-center gap-1 shrink-0 border border-[var(--primary)]/20">
+                            <Star :size="10" fill="currentColor" /> Mặc định
                           </span>
                         </div>
                         <div class="pf-cv-meta flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
-                          <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)]" />
-                          <AlertCircle v-else-if="cv.status === 'uploaded' || cv.status === 'failed'" :size="12" class="text-[var(--warning)]" />
-                          <Loader2 v-else class="pf-spin text-[var(--primary)]" :size="12" />
-                          {{ cvStatusLabel(cv) }}
+                          <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)] shrink-0" />
+                          <AlertCircle v-else-if="cv.status === 'uploaded' || cv.status === 'failed'" :size="12" class="text-[var(--warning)] shrink-0" />
+                          <Loader2 v-else class="pf-spin text-[var(--primary)] shrink-0" :size="12" />
+                          <span class="truncate">{{ cvStatusLabel(cv) }}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div class="flex items-center gap-2 shrink-0">
+                    <!-- Bottom row: Actions Toolbar -->
+                    <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/60 text-xs">
                       <button 
                         v-if="String(cv.id) !== String(defaultCvId)" 
                         type="button" 
                         @click.stop="setDefaultCv(cv)" 
-                        class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                        class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)] hover:border-[var(--primary)] transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                         title="Đặt làm CV mặc định">
-                        <Star :size="13" /> Chọn mặc định
+                        <Star :size="12" /> Chọn mặc định
                       </button>
-                      <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="16"/></button>
-                      <button type="button" @click.stop="askDeleteCv(cv)" class="pf-icon-btn is-danger" title="Xóa" :disabled="deletingCvId === String(cv.id)">
-                        <Loader2 v-if="deletingCvId === String(cv.id)" class="pf-spin" :size="16"/>
-                        <Trash2 v-else :size="16"/>
-                      </button>
+                      <span v-else class="text-[11px] font-medium text-[var(--text-muted)] italic flex items-center gap-1">
+                        <Star :size="11" fill="currentColor" class="text-[var(--primary)]" /> Đang dùng làm mặc định
+                      </span>
+
+                      <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="15"/></button>
+                        <button type="button" @click.stop="askDeleteCv(cv)" class="pf-icon-btn is-danger" title="Xóa" :disabled="deletingCvId === String(cv.id)">
+                          <Loader2 v-if="deletingCvId === String(cv.id)" class="pf-spin" :size="15"/>
+                          <Trash2 v-else :size="15"/>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1249,6 +1275,14 @@ const confirmDeleteAccount = async () => {
               </div>
             </div>
 
+            <div v-else-if="pdfError" class="flex flex-col items-center justify-center p-8 my-auto text-center">
+              <div class="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500 mb-3 shadow-sm">
+                <AlertCircle class="w-7 h-7" />
+              </div>
+              <p class="text-sm font-bold text-[var(--text-main)] mb-1">Không thể tải bản xem trước CV</p>
+              <p class="text-xs text-[var(--text-secondary)] max-w-xs leading-relaxed">{{ pdfError }}</p>
+            </div>
+
             <div v-else-if="pdfBlobUrl" class="w-full h-[580px] my-auto">
               <iframe :src="pdfBlobUrl + '#toolbar=0&navpanes=0&view=FitH'" class="w-full h-full rounded-xl border-0 bg-white shadow-sm"></iframe>
             </div>
@@ -1412,7 +1446,7 @@ const confirmDeleteAccount = async () => {
 .pf-dz-title { font-weight: 700; font-size: 14px; color: var(--text-main); margin-bottom: 4px; }
 .pf-list-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
 
-.pf-cv-item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); transition: all 0.2s ease; }
+.pf-cv-item { display: block; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); transition: all 0.2s ease; }
 .pf-cv-item.is-done { cursor: pointer; }
 .pf-cv-item.is-done:hover { box-shadow: var(--shadow-sm); border-color: var(--primary); }
 .pf-cv-item.is-loading { opacity: 0.8; cursor: wait; }
