@@ -394,6 +394,8 @@ func toJobCandidateItem(jc models.JobCandidate) response.JobCandidateItem {
 	item := response.JobCandidateItem{
 		ID:             jc.ID,
 		CandidateID:    jc.CandidateID,
+		FullName:       jc.CandidateName.String,
+		Email:          jc.CandidateEmail.String,
 		PipelineStatus: jc.PipelineStatus,
 		FitScore:       jc.FitScore.Float64,
 	}

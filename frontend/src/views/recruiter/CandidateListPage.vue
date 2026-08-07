@@ -22,6 +22,7 @@ const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
 const deletingId = ref(null)
 const localToast = ref(null)
+const filters = ref({ keyword: '', job_id: '', status: '' })
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalPages = ref(1)
@@ -106,6 +107,7 @@ onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
     if (!companyId) {
+
       loading.value = false
       candidates.value = []
       totalPages.value = 1
@@ -115,6 +117,7 @@ onMounted(async () => {
       }
       return
     }
+
 
     // Fetch both jobs for dropdown and initial candidates
     const [jobsRes] = await Promise.all([

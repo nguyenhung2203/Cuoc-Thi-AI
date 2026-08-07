@@ -343,9 +343,11 @@ func (r *CandidateRepository) ListByJobID(ctx context.Context, companyID, jobID 
 	}
 
 	listQ := fmt.Sprintf(`
-		SELECT * FROM job_candidates
-		WHERE job_id = $1::uuid AND company_id = $2::uuid
-		ORDER BY %s %s
+		SELECT jc.*, c.full_name AS candidate_name, c.email AS candidate_email 
+		FROM job_candidates jc
+		LEFT JOIN candidates c ON jc.candidate_id = c.id
+		WHERE jc.job_id = $1::uuid AND jc.company_id = $2::uuid
+		ORDER BY jc.%s %s
 		LIMIT $3 OFFSET $4`,
 		sortBy, sortDir,
 	)

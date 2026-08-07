@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, unref } from 'vue'
 import { useWebSocket } from './useWebSocket'
 
 export function useRoom(roomId, interviewId) {
@@ -54,7 +54,7 @@ export function useRoom(roomId, interviewId) {
     sendMessage('room:join', {
       client_version: '1.0.0',
       capabilities: ['audio', 'video', 'chat']
-    }, roomId, interviewId)
+    }, unref(roomId), unref(interviewId))
   }
 
   onMounted(() => {

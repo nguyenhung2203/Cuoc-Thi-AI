@@ -15,14 +15,11 @@ export const roomService = {
 
   /**
    * Xin cấp Room Access Token cho Recruiter (LiveKit JWT)
-   * API_SPEC §7.2 — POST /companies/:company_id/interviews/:interview_id/room/token
-   * ⚠️ Đây phải là POST, không phải GET
    * @param {String} companyId
    * @param {String} interviewId
-   * @param {Object} data { participant_type: 'recruiter' }
    */
-  getRoomToken: (companyId, interviewId, data = { participant_type: 'recruiter' }) => {
-    return apiService.post(`/companies/${companyId}/interviews/${interviewId}/room/token`, data);
+  getRoomToken: (companyId, interviewId) => {
+    return apiService.get(`/companies/${companyId}/interviews/${interviewId}/room/access-token`);
   },
 
   /**

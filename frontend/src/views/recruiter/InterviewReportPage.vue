@@ -50,6 +50,26 @@ const loadReport = async () => {
 
 onMounted(async () => {
   try {
+
+    const companyId = authStore.user?.companies?.[0]?.id
+    const interviewId = route.params.id
+    const resData = await reportService.getReport(companyId, interviewId)
+    const reportData = resData.report || resData // Handle both cases just in case
+    report.value = reportData
+    // Map backend JSON to frontend structure
+    if (reportData && reportData.report_json) {
+      const parsed = typeof reportData.report_json === 'string' ? JSON.parse(reportData.report_json) : reportData.report_json
+      report.value.overall_score = parsed.final_score || reportData.final_score
+      report.value.ai_recommendation = parsed.recommendation
+      report.value.core_feedback = parsed.summary
+      report.value.strengths = parsed.strengths || []
+      report.value.weaknesses = parsed.weaknesses || []
+      report.value.transcript_highlights = parsed.evidence_json || []
+      report.value.ai_reasoning_summary = parsed.ai_reasoning_summary
+      // Use real rubric scores from parsed report if available
+      // If the AI has not generated rubric scores yet, show empty state
+      report.value.rubric_scores = parsed.scores || []
+
     const data = await loadReport()
     if (data?.status === 'generating' || data?.status === 'pending') {
       reportPollTimer = setInterval(async () => {

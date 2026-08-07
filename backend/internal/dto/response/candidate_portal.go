@@ -75,3 +75,12 @@ type CandidatePortalCVReview struct {
 	MissingSections []string `json:"missing_sections"`
 	Strengths       []string `json:"strengths"`
 }
+
+type CandidateApplication struct {
+	JobID          string    `json:"job_id" db:"job_id"`
+	JobTitle       string    `json:"job_title" db:"job_title"`
+	CompanyID      string    `json:"company_id" db:"company_id"`
+	CompanyName    string    `json:"company_name" db:"company_name"`
+	PipelineStatus string    `json:"pipeline_status" db:"pipeline_status"`
+	AppliedAt      time.Time `json:"applied_at" db:"applied_at"`
+}

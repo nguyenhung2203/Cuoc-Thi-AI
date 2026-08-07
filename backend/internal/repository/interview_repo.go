@@ -212,6 +212,51 @@ func (r *InterviewRepository) GetByInviteTokenHash(ctx context.Context, hash str
 	return &i, nil
 }
 
+type CandidateJoinInfo struct {
+	InterviewID              string    `db:"interview_id" json:"interview_id"`
+	RoomID                   string    `db:"room_id" json:"room_id"`
+	CandidateName            string    `db:"candidate_name" json:"candidate_name"`
+	CandidateID              string    `db:"candidate_id" json:"candidate_id"`
+	JobTitle                 string    `db:"job_title" json:"job_title"`
+	ScheduledAt              time.Time `db:"scheduled_at" json:"scheduled_at"`
+	RequiresConsentAI        bool      `db:"consent_ai" json:"requires_consent_ai"`
+	RequiresConsentRecording bool      `db:"consent_recording" json:"requires_consent_recording"`
+	RoomCode                 string    `db:"room_code" json:"room_code"`
+	Status                   string    `db:"status" json:"status"`
+
+	RoomAccessToken          string    `json:"room_access_token"`
+	RoomAccessTokenExpiresAt string    `json:"room_access_token_expires_at"`
+}
+
+func (r *InterviewRepository) GetCandidateJoinInfo(ctx context.Context, hash string) (*CandidateJoinInfo, error) {
+	q := `
+		SELECT 
+			i.id as interview_id,
+			ir.id as room_id,
+			coalesce(c.full_name, '') as candidate_name,
+			c.id as candidate_id,
+			coalesce(j.title, '') as job_title,
+			i.scheduled_at,
+			i.consent_ai,
+			i.consent_recording,
+			ir.room_code,
+			ir.status
+		FROM interviews i
+		LEFT JOIN interview_rooms ir ON ir.interview_id = i.id
+		LEFT JOIN candidates c ON c.id = i.candidate_id
+		LEFT JOIN jobs j ON j.id = i.job_id
+		WHERE i.invite_token_hash = $1 
+		  AND i.status != 'cancelled' 
+		  AND i.status != 'completed'
+	`
+	var info CandidateJoinInfo
+	err := r.db.GetContext(ctx, &info, q, hash)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
 func (r *InterviewRepository) UpdateReportStatus(ctx context.Context, id, status string) error {
 	q := `UPDATE interviews SET report_status = $1, report_error = NULL,
 	      report_updated_at = NOW(), updated_at = NOW() WHERE id = $2`

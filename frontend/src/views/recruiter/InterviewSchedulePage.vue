@@ -60,7 +60,10 @@ watch(() => interview.value.jobId, async (jobId) => {
 onMounted(async () => {
   try {
     const companyId = authStore.user?.companies?.[0]?.id
-    if (!companyId) throw new Error('Không tìm thấy company ID')
+    if (!companyId) {
+      loadingData.value = false
+      return
+    }
     
     const jobsData = await jobService.getJobs(companyId)
     jobs.value = Array.isArray(jobsData) ? jobsData : []
