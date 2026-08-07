@@ -224,7 +224,7 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 			continue
 		}
 
-		fb, ferr := s.scoreAnswer(ctx, question, msg.Content, m.TargetRole)
+		fb, ferr := s.scoreAnswer(ctx, question, msg.Content, m.TargetRole, m.TargetLevel.String)
 		if ferr != nil {
 			logger.Error("mock: failed to score answer", "id", m.ID, "error", ferr)
 			continue
@@ -299,11 +299,12 @@ func (s *MockService) scoreSession(ctx context.Context, m *models.MockInterview)
 }
 
 // scoreAnswer scores a single Q&A pair via the mock_feedback prompt template.
-func (s *MockService) scoreAnswer(ctx context.Context, question, answer, targetRole string) (*mockFeedbackResult, error) {
+func (s *MockService) scoreAnswer(ctx context.Context, question, answer, targetRole, targetLevel string) (*mockFeedbackResult, error) {
 	variables := map[string]string{
-		"question":    question,
-		"answer":      answer,
-		"target_role": targetRole,
+		"question":     question,
+		"answer":       answer,
+		"target_role":  targetRole,
+		"target_level": targetLevel,
 	}
 	data, err := s.orchestrator.CallAI(ctx, "mock_feedback", "", variables)
 	if err != nil {
