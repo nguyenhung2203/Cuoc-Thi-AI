@@ -3,6 +3,7 @@ package queue
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -56,7 +57,15 @@ func (d *Dispatcher) enqueue(taskType string, payload interface{}, opts ...asynq
 	return err
 }
 
-// EnqueueGenerateReport schedules async report generation.
+// EnqueueSendOTPEmail schedules OTP delivery outside the request path.
+func (d *Dispatcher) EnqueueSendOTPEmail(payload SendOTPEmailPayload) error {
+	err := d.enqueue(TypeSendOTPEmail, payload, asynq.MaxRetry(3), asynq.Timeout(30*time.Second), asynq.Retention(10*time.Minute))
+	if err == nil {
+		log.Printf("[Enqueue Success] type=%s email=%s purpose=%s generation=%s", TypeSendOTPEmail, payload.To, payload.Purpose, payload.GenerationID)
+	}
+	return err
+}
+
 func (d *Dispatcher) EnqueueGenerateReport(companyID, interviewID, jobID, generatedBy, recruiterID string) error {
 	return d.enqueue(TypeGenerateReport, GenerateReportPayload{
 		CompanyID:   companyID,

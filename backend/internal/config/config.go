@@ -45,6 +45,7 @@ type Config struct {
 	JWTSecret     string
 	JWTAccessTTL  string
 	JWTRefreshTTL string
+	CookieSecure  bool
 
 	// AI Service
 	AIServiceURL string
@@ -96,6 +97,7 @@ func Load() (*Config, error) {
 		JWTSecret:     getEnv("JWT_SECRET", ""),
 		JWTAccessTTL:  getEnv("JWT_ACCESS_TTL", "15m"),
 		JWTRefreshTTL: getEnv("JWT_REFRESH_TTL", "168h"), // 7 days
+		CookieSecure:  getEnvBool("COOKIE_SECURE", false),
 
 		AIServiceURL: getEnv("AI_SERVICE_URL", "http://localhost:8000"),
 
@@ -124,7 +126,18 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// parseUploadMB converts MAX_UPLOAD_MB to bytes, clamped to [1, 100] MB with a
+func getEnvBool(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
 // fallback of 10 MB on malformed input.
 func parseUploadMB(s string) int64 {
 	mb, err := strconv.Atoi(s)

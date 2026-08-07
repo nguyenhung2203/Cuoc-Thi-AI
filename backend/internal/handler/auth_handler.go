@@ -21,10 +21,11 @@ type AuthHandler struct {
 	authService *service.AuthService
 	jwtSecret   string
 	auditSvc    *service.AuditService
+	cookieSecure bool
 }
 
-func NewAuthHandler(authService *service.AuthService, jwtSecret string, auditSvc *service.AuditService) *AuthHandler {
-	return &AuthHandler{authService: authService, jwtSecret: jwtSecret, auditSvc: auditSvc}
+func NewAuthHandler(authService *service.AuthService, jwtSecret string, auditSvc *service.AuditService, cookieSecure bool) *AuthHandler {
+	return &AuthHandler{authService: authService, jwtSecret: jwtSecret, auditSvc: auditSvc, cookieSecure: cookieSecure}
 }
 
 func (h *AuthHandler) Routes(r chi.Router) {
@@ -49,24 +50,21 @@ func (h *AuthHandler) Routes(r chi.Router) {
 	limited.With(middleware.AuthMiddleware(h.jwtSecret)).Delete("/me", h.DeleteAccount)
 }
 
-func setRefreshTokenCookie(w http.ResponseWriter, token string) {
+func setRefreshTokenCookie(w http.ResponseWriter, token string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/api/v1/auth",
-		MaxAge:   604800, // 7 days
+		Secure:   secure,
 	})
 }
 
-func clearRefreshTokenCookie(w http.ResponseWriter) {
+func clearRefreshTokenCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/api/v1/auth",
 		MaxAge:   -1,
@@ -110,7 +108,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, refreshToken)
+	setRefreshTokenCookie(w, refreshToken, h.cookieSecure)
 	pkgresponse.JSON(w, http.StatusCreated, authResp, nil, "")
 }
 
@@ -131,7 +129,7 @@ func (h *AuthHandler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_queued", "message": "Đã tiếp nhận yêu cầu gửi mã xác nhận"}, nil, "")
 }
 
 // ForgotPassword emails a password-reset OTP. Always returns 200 to avoid account enumeration.
@@ -151,7 +149,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_sent"}, nil, "")
+	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "otp_queued", "message": "Đã tiếp nhận yêu cầu gửi mã xác nhận"}, nil, "")
 }
 
 // VerifyResetOTP validates a password-reset code without consuming it.
@@ -217,7 +215,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, refreshToken)
+	setRefreshTokenCookie(w, refreshToken, h.cookieSecure)
 
 	// Audit log login
 	if authResp != nil {
@@ -255,7 +253,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, refreshToken)
+	setRefreshTokenCookie(w, refreshToken, h.cookieSecure)
 
 	if authResp != nil {
 		h.auditSvc.LogAction(r.Context(), service.AuditLogInput{
@@ -284,7 +282,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	tokens, newRefreshToken, err := h.authService.RefreshToken(r.Context(), cookie.Value, ipAddress, userAgent)
 	if err != nil {
-		clearRefreshTokenCookie(w)
+		clearRefreshTokenCookie(w, h.cookieSecure)
 		if appErr, ok := errors.IsAppError(err); ok {
 			pkgresponse.Error(w, appErr, "")
 		} else {
@@ -293,7 +291,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshTokenCookie(w, newRefreshToken)
+	setRefreshTokenCookie(w, newRefreshToken, h.cookieSecure)
 	pkgresponse.JSON(w, http.StatusOK, tokens, nil, "")
 }
 
@@ -468,7 +466,7 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	clearRefreshTokenCookie(w)
+	clearRefreshTokenCookie(w, h.cookieSecure)
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"status": "account_deleted"}, nil, "")
 }
 
@@ -494,7 +492,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	clearRefreshTokenCookie(w)
+	clearRefreshTokenCookie(w, h.cookieSecure)
 	pkgresponse.JSON(w, http.StatusOK, map[string]string{"message": "logged out successfully"}, nil, "")
 }
 
@@ -520,7 +518,7 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 		AfterData:    map[string]int{"revoked_sessions": revokedCount},
 	})
 
-	clearRefreshTokenCookie(w)
+	clearRefreshTokenCookie(w, h.cookieSecure)
 	pkgresponse.JSON(w, http.StatusOK, response.LogoutAllResponse{
 		Message:         "All sessions revoked. Please login again.",
 		RevokedSessions: revokedCount,
