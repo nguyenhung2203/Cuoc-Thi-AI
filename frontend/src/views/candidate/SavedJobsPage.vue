@@ -2,12 +2,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { candidatePortalService } from '../../services/candidate-portal.service'
+import { saveSavedJobs } from '../../utils/savedJobs'
 import Card from '../../components/common/AppCard.vue'
 import Badge from '../../components/common/AppBadge.vue'
 import Button from '../../components/common/AppButton.vue'
 import Input from '../../components/common/AppInput.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { Briefcase, MapPin, Building2, Banknote, Bookmark, Trash2, Heart, Search, Filter, ExternalLink, ArrowRight } from 'lucide-vue-next'
+import { formatSalaryTrieu, formatExperience } from '../../utils/formatters'
 
 const router = useRouter()
 const savedJobs = ref([])
@@ -21,6 +23,7 @@ onMounted(async () => {
     savedJobs.value = await candidatePortalService.getSavedJobs()
   } catch (err) {
     console.error('Lỗi tải danh sách việc làm đã lưu:', err)
+    savedJobs.value = []
   } finally {
     loading.value = false
   }
@@ -28,16 +31,24 @@ onMounted(async () => {
 
 const removeJob = (id, title) => {
   savedJobs.value = savedJobs.value.filter(job => job.id !== id)
-  localStorage.setItem('candidate_saved_jobs', JSON.stringify(savedJobs.value))
+  saveSavedJobs(savedJobs.value)
   toast.value = { type: 'success', message: `Đã bỏ lưu việc làm "${title || 'chọn'}" khỏi danh sách.` }
 }
 
 const clearAllSaved = () => {
   if (confirm('Bạn có chắc chắn muốn xóa toàn bộ danh sách việc làm đã lưu?')) {
     savedJobs.value = []
-    localStorage.setItem('candidate_saved_jobs', JSON.stringify([]))
+    saveSavedJobs([])
     toast.value = { type: 'info', message: 'Đã làm trống danh sách việc làm đã lưu.' }
   }
+}
+
+const openSavedJob = (job) => {
+  if (!job?.company_id || !job?.id) {
+    toast.value = { type: 'warning', message: 'Tin đã lưu thiếu thông tin hoặc có thể đã bị xóa. Hãy tìm lại trên bảng việc làm.' }
+    return
+  }
+  router.push(`/careers/${job.company_id}/jobs/${job.id}`)
 }
 
 const filteredJobs = computed(() => {
@@ -54,13 +65,14 @@ const filteredJobs = computed(() => {
 })
 
 const getSalaryDisplay = (job) => {
-  const min = job.salary_min?.Valid ? job.salary_min.Int64 : null
-  const max = job.salary_max?.Valid ? job.salary_max.Int64 : null
-  const curr = job.currency?.Valid ? job.currency.String : 'VND'
-  if (!min && !max) return 'Thỏa thuận'
-  if (min && !max) return `Từ ${min.toLocaleString()} ${curr}`
-  if (!min && max) return `Đến ${max.toLocaleString()} ${curr}`
-  return `${min.toLocaleString()} - ${max.toLocaleString()} ${curr}`
+  const min = job.salary_min?.Valid ? job.salary_min.Int64 : (job.salary_min || null)
+  const max = job.salary_max?.Valid ? job.salary_max.Int64 : (job.salary_max || null)
+  return formatSalaryTrieu(min, max)
+}
+
+const getExperienceDisplay = (job) => {
+  const level = job.level?.Valid ? job.level.String : (job.level || '')
+  return formatExperience(level)
 }
 
 const formatDate = (dateString) => {
@@ -78,7 +90,7 @@ const formatDate = (dateString) => {
     <div class="header-box animate-rise flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-sm gap-4">
       <div>
         <h1 class="text-h1">Việc làm đã lưu</h1>
-        <p class="text-secondary mt-1">Danh sách các cơ hội nghề nghiệp bạn quan tâm để chuẩn bị ứng tuyển.</p>
+        <p class="text-secondary mt-1">Danh sách việc bạn quan tâm — chỉ lưu trên thiết bị/trình duyệt này (chưa đồng bộ tài khoản).</p>
       </div>
       <div class="flex items-center gap-3 shrink-0">
         <Badge class="badge-primary px-3.5 py-1.5 text-sm font-bold">{{ savedJobs.length }} việc làm</Badge>
@@ -149,7 +161,7 @@ const formatDate = (dateString) => {
         v-for="job in filteredJobs" 
         :key="job.id" 
         class="flex flex-col justify-between p-6 rounded-2xl border border-[var(--border)] hover:border-[var(--primary)] transition-all duration-300 shadow-sm animate-rise cursor-pointer group"
-        @click="router.push(`/careers/${job.company_id}/jobs/${job.id}`)"
+        @click="openSavedJob(job)"
       >
         <div class="space-y-4">
           <!-- Top row -->
@@ -180,6 +192,9 @@ const formatDate = (dateString) => {
             <Badge class="badge-success px-3 py-1 text-xs font-semibold flex items-center gap-1.5">
               <Banknote :size="13" /> {{ getSalaryDisplay(job) }}
             </Badge>
+            <Badge class="badge-info px-3 py-1 text-xs font-semibold flex items-center gap-1.5">
+              <Briefcase :size="13" /> {{ getExperienceDisplay(job) }}
+            </Badge>
           </div>
         </div>
 
@@ -191,7 +206,7 @@ const formatDate = (dateString) => {
           <Button 
             variant="primary" 
             size="sm" 
-            @click.stop="router.push(`/careers/${job.company_id}/jobs/${job.id}`)"
+            @click.stop="openSavedJob(job)"
             class="text-xs flex items-center gap-1.5 shadow-sm"
           >
             Ứng tuyển <ArrowRight :size="14" />

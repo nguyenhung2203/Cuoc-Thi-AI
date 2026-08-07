@@ -101,7 +101,7 @@ func (r *JobRepository) ListAllOpen(ctx context.Context, keyword string, p pagin
 	}
 
 	listQuery := fmt.Sprintf(
-		`SELECT j.*, c.name as company_name FROM jobs j 
+		`SELECT j.*, c.name as company_name, c.logo_url as company_logo_url FROM jobs j 
 		 LEFT JOIN companies c ON c.id = j.company_id 
 		 %s ORDER BY j.created_at DESC LIMIT $%d OFFSET $%d`,
 		whereClause, argIdx, argIdx+1,

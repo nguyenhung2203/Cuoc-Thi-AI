@@ -5,12 +5,15 @@ import { apiService } from '../../services/api.service'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Badge from '../../components/common/AppBadge.vue'
-import { Briefcase, MapPin, Clock, Building2, Search, ChevronLeft, ChevronRight, Sparkles, Heart, Banknote, Filter, ChevronDown, Info } from 'lucide-vue-next'
+import { Briefcase, MapPin, Clock, Building2, Search, ChevronLeft, ChevronRight, Sparkles, Heart, Banknote, Filter, ChevronDown, Info, AlertCircle } from 'lucide-vue-next'
 import { langStore } from '../../stores/lang.store'
+import { loadSavedJobIds, toggleSavedJob } from '../../utils/savedJobs'
+import { formatSalaryTrieu, formatExperience, experienceFilterOptions } from '../../utils/formatters'
 
 const router = useRouter()
 const jobs = ref([])
 const loading = ref(true)
+const loadError = ref('')
 const keyword = ref('')
 
 const currentPage = ref(1)
@@ -42,14 +45,7 @@ const departmentStats = computed(() => {
   return Object.keys(counts).map(name => ({ name, count: counts[name] })).sort((a, b) => b.count - a.count)
 })
 
-const experiences = computed(() => {
-  const set = new Set()
-  jobs.value.forEach(job => {
-    const level = unwrap(job.level)
-    if (level) set.add(level)
-  })
-  return Array.from(set).sort()
-})
+const experiences = experienceFilterOptions()
 
 const workTypes = computed(() => {
   const set = new Set()
@@ -60,16 +56,8 @@ const workTypes = computed(() => {
   return Array.from(set).sort()
 })
 
-const getSalaryDisplay = (job) => {
-  const min = unwrap(job.salary_min)
-  const max = unwrap(job.salary_max)
-  const curr = unwrap(job.currency) || 'VND'
-  if (!min && !max) return 'Thỏa thuận'
-  const formatNum = (n) => typeof n === 'number' ? n.toLocaleString('vi-VN') : n
-  if (min && !max) return `Từ ${formatNum(min)} ${curr}`
-  if (!min && max) return `Đến ${formatNum(max)} ${curr}`
-  return `${formatNum(min)} - ${formatNum(max)} ${curr}`
-}
+const getSalaryDisplay = (job) => formatSalaryTrieu(job.salary_min, job.salary_max)
+const getExperienceDisplay = (job) => formatExperience(job.level)
 
 const unwrap = (val) => {
   if (!val && val !== 0) return ''
@@ -85,6 +73,7 @@ const unwrap = (val) => {
 
 const fetchJobs = async (page = 1) => {
   loading.value = true
+  loadError.value = ''
   currentPage.value = page
   try {
     const params = new URLSearchParams()
@@ -98,6 +87,7 @@ const fetchJobs = async (page = 1) => {
     jobs.value = (res.data || []).map(j => ({
       ...j,
       company_name: unwrap(j.company_name),
+      company_logo_url: unwrap(j.company_logo_url),
       location: unwrap(j.location),
       employment_type: unwrap(j.employment_type),
       department: unwrap(j.department),
@@ -113,58 +103,25 @@ const fetchJobs = async (page = 1) => {
   } catch (error) {
     console.error('Failed to load jobs', error)
     jobs.value = []
+    loadError.value = error?.message || 'Không tải được danh sách việc làm. Vui lòng thử lại.'
   } finally {
     loading.value = false
   }
 }
 
 const savedJobIds = ref([])
-const loadSavedJobIds = () => {
-  const list = localStorage.getItem('candidate_saved_jobs')
-  if (list) {
-    try {
-      const parsed = JSON.parse(list)
-      savedJobIds.value = parsed.map(j => j.id)
-    } catch (e) {
-      savedJobIds.value = []
-    }
-  } else {
-    savedJobIds.value = []
-  }
+const refreshSavedIds = () => {
+  savedJobIds.value = loadSavedJobIds()
 }
 
-const toggleSaveJob = (job) => {
-  const listStr = localStorage.getItem('candidate_saved_jobs')
-  let list = []
-  if (listStr) {
-    try { list = JSON.parse(listStr) } catch (e) { list = [] }
-  }
-  
-  const isSaved = list.some(item => item.id === job.id)
-  if (isSaved) {
-    list = list.filter(item => item.id !== job.id)
-    savedJobIds.value = savedJobIds.value.filter(id => id !== job.id)
-  } else {
-    const newItem = {
-      id: job.id,
-      company_id: job.company_id,
-      title: job.title,
-      company_name: job.company_name,
-      location: job.location,
-      salary_min: { Valid: job.salary_min != null, Int64: job.salary_min || 0 },
-      salary_max: { Valid: job.salary_max != null, Int64: job.salary_max || 0 },
-      currency: { Valid: true, String: job.currency || 'VND' },
-      saved_at: new Date().toISOString()
-    }
-    list.push(newItem)
-    savedJobIds.value.push(job.id)
-  }
-  localStorage.setItem('candidate_saved_jobs', JSON.stringify(list))
+const handleToggleSaveJob = (job) => {
+  const { list } = toggleSavedJob(job)
+  savedJobIds.value = list.map((j) => j.id)
 }
 
 onMounted(() => {
   fetchJobs(1)
-  loadSavedJobIds()
+  refreshSavedIds()
 })
 
 const handleSearch = () => {
@@ -239,7 +196,7 @@ const viewJob = (job) => {
         <div class="jb-select-wrap">
           <select v-model="selectedExperience" class="jb-select">
             <option value="">Kinh nghiệm</option>
-            <option v-for="exp in experiences" :key="exp" :value="exp">{{ exp }}</option>
+            <option v-for="exp in experiences" :key="exp.value" :value="exp.value">{{ exp.label }}</option>
           </select>
           <ChevronDown :size="16" class="jb-select-icon" />
         </div>
@@ -281,6 +238,13 @@ const viewJob = (job) => {
     </div>
 
     <!-- Empty State -->
+    <div v-else-if="loadError" class="jb-empty">
+      <div class="jb-empty-icon"><AlertCircle :size="42" /></div>
+      <h3 class="jb-empty-title">Không tải được việc làm</h3>
+      <p class="jb-empty-desc">{{ loadError }}</p>
+      <Button variant="primary" class="mt-4" @click="fetchJobs(currentPage)">Thử lại</Button>
+    </div>
+
     <div v-else-if="jobs.length === 0" class="jb-empty">
       <div class="jb-empty-icon"><Briefcase :size="42" /></div>
       <h3 class="jb-empty-title">{{ langStore.t('jobs', 'emptyTitle') }}</h3>
@@ -305,13 +269,13 @@ const viewJob = (job) => {
           class="job-card-new">
           
           <!-- Save Job Button -->
-          <button class="jb-save-btn" @click.stop="toggleSaveJob(job)" :class="{ 'is-saved': savedJobIds.includes(job.id) }">
+          <button class="jb-save-btn" @click.stop="handleToggleSaveJob(job)" :class="{ 'is-saved': savedJobIds.includes(job.id) }">
             <Heart :size="20" :fill="savedJobIds.includes(job.id) ? 'currentColor' : 'none'" />
           </button>
 
           <!-- Company Logo -->
           <div class="jb-logo">
-            <img src="/images/logo.png" alt="Company Logo" />
+            <img :src="job.company_logo_url || '/images/logo.png'" :alt="job.company_name || 'Company'" @error="(e) => { e.target.src = '/images/logo.png' }" />
           </div>
 
           <!-- Job Info -->
@@ -324,11 +288,14 @@ const viewJob = (job) => {
             </div>
             
             <div class="jb-tags">
-              <span class="jb-tag">
+              <span class="jb-tag jb-tag-salary">
                 <Banknote :size="12" /> {{ getSalaryDisplay(job) }}
               </span>
               <span class="jb-tag">
                 <MapPin :size="12" /> {{ unwrap(job.location) || 'Không xác định' }}
+              </span>
+              <span class="jb-tag">
+                <Briefcase :size="12" /> {{ getExperienceDisplay(job) }}
               </span>
             </div>
           </div>
@@ -439,6 +406,7 @@ const viewJob = (job) => {
 
 .jb-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; margin-top: auto; }
 .jb-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-soft); color: var(--text-secondary); font-size: 12px; font-weight: 500; padding: 4px 8px; border-radius: 4px; }
+.jb-tag-salary { color: #e11d48; background: #fff1f2; font-weight: 600; }
 .jb-tag.ai-tag { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(6,182,212,0.25); font-weight: 700; font-size: 11px; }
 .jb-ai-badge { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 </style>

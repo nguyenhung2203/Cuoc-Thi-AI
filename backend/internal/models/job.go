@@ -36,4 +36,5 @@ type Job struct {
 	UpdatedAt      time.Time       `db:"updated_at"        json:"updated_at"`
 	DeletedAt      sql.NullTime    `db:"deleted_at"        json:"-"`
 	CompanyName    sql.NullString  `db:"company_name"      json:"company_name,omitempty"`
+	CompanyLogoURL sql.NullString  `db:"company_logo_url"  json:"company_logo_url,omitempty"`
 }

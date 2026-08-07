@@ -168,9 +168,23 @@ const handleFileUpload = async (e) => {
           const res = await candidatePortalService.uploadCv(file)
           const targetCv = uploadedCvs.value.find(cv => cv.id === cvId)
           if (targetCv) {
-            targetCv.status = 'done'
+            if (res?.cv_file_id) targetCv.id = res.cv_file_id
             if (res?.cv_url) targetCv.url = res.cv_url
             if (res?.parsed_data) targetCv.parsedData = res.parsed_data
+            const parseStatus = res?.parse_status || (res?.parsed_data ? 'ready' : 'failed')
+            if (parseStatus === 'ready' && res?.parsed_data) {
+              targetCv.status = 'done'
+              toast.value = { type: 'success', message: `Đã tải và phân tích CV "${file.name}".` }
+            } else if (parseStatus === 'failed') {
+              targetCv.status = 'uploaded'
+              toast.value = { type: 'warning', message: `Đã lưu CV "${file.name}" nhưng AI chưa phân tích được. Bạn vẫn có thể ứng tuyển.` }
+            } else {
+              targetCv.status = 'analyzing'
+            }
+            if (res?.cv_file_id && String(defaultCvId.value) === cvId) {
+              defaultCvId.value = String(res.cv_file_id)
+              localStorage.setItem('candidate_default_cv_id', String(res.cv_file_id))
+            }
           }
         } catch (error) {
           console.error("Upload failed", error)
@@ -187,19 +201,61 @@ const handleFileUpload = async (e) => {
   }
 }
 
-const deleteCv = (id) => {
-  const strId = String(id)
-  uploadedCvs.value = uploadedCvs.value.filter(cv => String(cv.id) !== strId)
-  if (String(defaultCvId.value) === strId) {
-    if (uploadedCvs.value.length > 0) {
-      defaultCvId.value = String(uploadedCvs.value[0].id)
-      localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
-    } else {
-      defaultCvId.value = null
-      localStorage.removeItem('candidate_default_cv_id')
+const isPersistedCvId = (id) => {
+  const strId = String(id || '')
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strId)
+}
+
+const deletingCvId = ref(null)
+const showDeleteCvModal = ref(false)
+const cvPendingDelete = ref(null)
+
+const askDeleteCv = (cvOrId) => {
+  const cv = typeof cvOrId === 'object' && cvOrId
+    ? cvOrId
+    : uploadedCvs.value.find((item) => String(item.id) === String(cvOrId))
+  if (!cv) return
+  cvPendingDelete.value = cv
+  showDeleteCvModal.value = true
+}
+
+const confirmDeleteCv = async () => {
+  const cv = cvPendingDelete.value
+  if (!cv) return
+  const strId = String(cv.id)
+
+  deletingCvId.value = strId
+  try {
+    if (isPersistedCvId(strId)) {
+      await candidatePortalService.deleteCv(strId)
     }
+    uploadedCvs.value = uploadedCvs.value.filter((item) => String(item.id) !== strId)
+    if (String(defaultCvId.value) === strId) {
+      if (uploadedCvs.value.length > 0) {
+        defaultCvId.value = String(uploadedCvs.value[0].id)
+        localStorage.setItem('candidate_default_cv_id', String(uploadedCvs.value[0].id))
+      } else {
+        defaultCvId.value = null
+        localStorage.removeItem('candidate_default_cv_id')
+      }
+    }
+    if (selectedCv.value && String(selectedCv.value.id) === strId) {
+      closeCvModal()
+    }
+    if (fileInput.value) fileInput.value.value = ''
+    showDeleteCvModal.value = false
+    cvPendingDelete.value = null
+    toast.value = { type: 'success', message: 'Đã xóa CV khỏi hệ thống.' }
+  } catch (error) {
+    console.error('Delete CV failed', error)
+    toast.value = { type: 'error', message: error?.message || 'Không xóa được CV. Vui lòng thử lại.' }
+  } finally {
+    deletingCvId.value = null
   }
-  if (fileInput.value) fileInput.value.value = ''
+}
+
+const deleteCv = (id) => {
+  askDeleteCv(id)
 }
 
 const viewCv = (cv) => {
@@ -258,6 +314,35 @@ watch(selectedCv, async (newCv) => {
 // State for Security, Notifications, Privacy Tabs
 const saving = ref(false)
 const toast = ref(null)
+const reviewingCv = ref(false)
+const cvReview = ref(null)
+
+const cvStatusLabel = (cv) => {
+  if (cv.status === 'done') return (cv.date || 'Hôm nay') + ' • ' + (cv.size || 'N/A') + ' • Đã phân tích AI'
+  if (cv.status === 'analyzing') return 'Đang phân tích AI...'
+  if (cv.status === 'uploaded') return 'Đã tải lên • Chưa phân tích AI'
+  if (cv.status === 'failed') return 'Tải lên thất bại'
+  return 'Đang xử lý...'
+}
+
+const handleReviewCv = async () => {
+  if (reviewingCv.value) return
+  if (!uploadedCvs.value.length) {
+    toast.value = { type: 'warning', message: 'Vui lòng tải CV lên trước khi yêu cầu góp ý.' }
+    return
+  }
+  reviewingCv.value = true
+  cvReview.value = null
+  try {
+    const res = await candidatePortalService.reviewCv()
+    cvReview.value = res?.data || res
+    toast.value = { type: 'success', message: 'AI đã phân tích và góp ý sửa CV.' }
+  } catch (error) {
+    toast.value = { type: 'error', message: error?.message || 'Không thể phân tích CV lúc này. Thử lại sau.' }
+  } finally {
+    reviewingCv.value = false
+  }
+}
 const changingPassword = ref(false)
 const showDeleteModal = ref(false)
 const passwordForm = ref({ current: '', next: '', confirm: '' })
@@ -356,19 +441,27 @@ onMounted(async () => {
       if (res.full_name) profile.value.name = res.full_name
       if (res.email) profile.value.email = res.email
       if (res.cv_url && res.cv_name) {
-        const hasCv = uploadedCvs.value.find(cv => cv.name === res.cv_name)
+        const parseStatus = res.cv_parse_status || (res.parsed_data ? 'ready' : 'pending')
+        const uiStatus = res.parsed_data || parseStatus === 'ready'
+          ? 'done'
+          : parseStatus === 'failed'
+            ? 'uploaded'
+            : parseStatus === 'processing'
+              ? 'analyzing'
+              : 'uploaded'
+        const hasCv = uploadedCvs.value.find(cv => cv.name === res.cv_name || (res.cv_file_id && String(cv.id) === String(res.cv_file_id)))
         if (hasCv) {
-          // Cập nhật URL đã ký mới nhất thay vì giữ URL cũ đã hết hạn
           hasCv.url = res.cv_url
-          hasCv.status = 'done'
+          hasCv.status = uiStatus
+          if (res.cv_file_id) hasCv.id = res.cv_file_id
           if (res.parsed_data) hasCv.parsedData = res.parsed_data
         } else {
           uploadedCvs.value.push({
-            id: 'db-' + Date.now(),
+            id: res.cv_file_id || ('db-' + Date.now()),
             name: res.cv_name,
             size: 'N/A',
             date: 'Từ hệ thống',
-            status: 'done',
+            status: uiStatus,
             url: res.cv_url,
             parsedData: res.parsed_data || null
           })
@@ -445,11 +538,17 @@ const handleSaveProfile = async (e) => {
     localStorage.setItem('candidate_profile', JSON.stringify(profile.value))
     await candidatePortalService.updateProfile({
       full_name: profile.value.name,
-      avatar_url: profile.value.avatar_url || ''
+      avatar_url: profile.value.avatar_url?.startsWith('blob:') ? '' : (profile.value.avatar_url || '')
     })
-    toast.value = { type: 'success', message: 'Hồ sơ cá nhân & kỹ năng đã được lưu thành công! Dữ liệu đã đồng bộ với AI.' }
+    toast.value = {
+      type: 'success',
+      message: 'Đã lưu họ tên trên máy chủ. Số điện thoại, kỹ năng và thông tin bổ sung chỉ lưu trên thiết bị này.'
+    }
   } catch (error) {
-    toast.value = { type: 'success', message: 'Hồ sơ cá nhân & kỹ năng đã được lưu cục bộ thành công!' }
+    toast.value = {
+      type: 'error',
+      message: error?.message || 'Không lưu được hồ sơ lên máy chủ. Thông tin bổ sung vẫn được giữ trên thiết bị này.'
+    }
   } finally {
     saving.value = false
   }
@@ -461,9 +560,9 @@ const handleSaveSettings = async (e) => {
   try {
     localStorage.setItem('candidate_settings', JSON.stringify(settings.value))
     await authService.saveSettings(settings.value)
-    toast.value = { type: 'success', message: 'Cấu hình hệ thống & tùy chọn đã được lưu thành công!' }
+    toast.value = { type: 'success', message: 'Đã lưu tùy chọn thành công.' }
   } catch (error) {
-    toast.value = { type: 'success', message: 'Cấu hình hệ thống & tùy chọn đã được lưu cục bộ thành công!' }
+    toast.value = { type: 'error', message: error?.message || 'Không lưu được tùy chọn lên máy chủ.' }
   } finally {
     saving.value = false
   }
@@ -730,8 +829,9 @@ const confirmDeleteAccount = async () => {
                         </div>
                         <div class="pf-cv-meta flex items-center gap-1.5 text-xs text-[var(--text-secondary)] mt-0.5" :class="cv.status === 'done' ? 'is-ok' : 'is-wait'">
                           <CheckCircle v-if="cv.status === 'done'" :size="12" class="text-[var(--success)]" />
+                          <AlertCircle v-else-if="cv.status === 'uploaded' || cv.status === 'failed'" :size="12" class="text-[var(--warning)]" />
                           <Loader2 v-else class="pf-spin text-[var(--primary)]" :size="12" />
-                          {{ cv.status === 'done' ? (cv.date || 'Hôm nay') + ' • ' + (cv.size || 'N/A') : 'Đang phân tích...' }}
+                          {{ cvStatusLabel(cv) }}
                         </div>
                       </div>
                     </div>
@@ -746,7 +846,10 @@ const confirmDeleteAccount = async () => {
                         <Star :size="13" /> Chọn mặc định
                       </button>
                       <button type="button" @click.stop="viewCv(cv)" class="pf-icon-btn" title="Xem chi tiết"><Eye :size="16"/></button>
-                      <button type="button" @click.stop="deleteCv(cv.id)" class="pf-icon-btn is-danger" title="Xóa"><Trash2 :size="16"/></button>
+                      <button type="button" @click.stop="askDeleteCv(cv)" class="pf-icon-btn is-danger" title="Xóa" :disabled="deletingCvId === String(cv.id)">
+                        <Loader2 v-if="deletingCvId === String(cv.id)" class="pf-spin" :size="16"/>
+                        <Trash2 v-else :size="16"/>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -754,8 +857,50 @@ const confirmDeleteAccount = async () => {
                 <div class="ai-block p-3.5 mt-4 flex items-start gap-3">
                   <Bot :size="18" class="text-[var(--accent)] shrink-0 mt-0.5" />
                   <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
-                    Hệ thống AI tự động phân tích và bóc tách thông tin từ CV của bạn để đối chiếu với yêu cầu công việc.
+                    Hệ thống AI tự động phân tích và bóc tách thông tin từ CV của bạn để đối chiếu với yêu cầu công việc. Upload vẫn thành công kể cả khi phân tích lỗi.
                   </p>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    class="w-full"
+                    :disabled="reviewingCv || uploadedCvs.length === 0"
+                    @click="handleReviewCv"
+                  >
+                    <Loader2 v-if="reviewingCv" class="pf-spin mr-2" :size="16" />
+                    <Bot v-else class="mr-2" :size="16" />
+                    {{ reviewingCv ? 'Đang góp ý sửa CV...' : 'AI góp ý sửa lỗi CV' }}
+                  </Button>
+
+                  <div v-if="cvReview" class="rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-4 space-y-3 text-sm">
+                    <p class="font-semibold text-[var(--text-main)]">{{ cvReview.summary || 'Đã có góp ý từ AI.' }}</p>
+                    <div v-if="cvReview.issues?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--danger)] mb-1.5">Vấn đề cần sửa</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.issues" :key="'issue-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.suggestions?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--primary)] mb-1.5">Gợi ý cải thiện</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.suggestions" :key="'sug-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.missing_sections?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--warning)] mb-1.5">Thiếu / yếu</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.missing_sections" :key="'miss-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                    <div v-if="cvReview.strengths?.length">
+                      <p class="text-xs font-bold uppercase tracking-wide text-[var(--success)] mb-1.5">Điểm mạnh</p>
+                      <ul class="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+                        <li v-for="(item, idx) in cvReview.strengths" :key="'str-' + idx">{{ item }}</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -785,7 +930,7 @@ const confirmDeleteAccount = async () => {
                     />
                   </div>
                 </div>
-                <p class="text-xs text-[var(--text-secondary)] mt-3 flex items-center gap-1.5"><Bot :size="14" class="text-[var(--accent)]"/> AI sẽ đối chiếu các kỹ năng này với JD khi phỏng vấn</p>
+                <p class="text-xs text-[var(--text-secondary)] mt-3 flex items-center gap-1.5"><Info :size="14" class="text-[var(--accent)]"/> Kỹ năng và thông tin bổ sung hiện chỉ lưu trên trình duyệt này (chưa đồng bộ máy chủ).</p>
               </div>
             </Card>
           </div>
@@ -1107,23 +1252,32 @@ const confirmDeleteAccount = async () => {
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Vị trí phù hợp:</span>
                   <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || selectedCv.parsedData?.work_experience?.[0]?.role || 'Chưa có dữ liệu' }}
+                    {{ selectedCv.parsedData?.role || selectedCv.parsedData?.target_role || selectedCv.parsedData?.experience || selectedCv.parsedData?.work_experience?.[0]?.role || 'Chưa có dữ liệu' }}
                   </span>
                 </div>
                 <div class="flex flex-col gap-0.5 border-b border-[var(--border)] pb-2.5">
                   <span class="text-xs text-[var(--text-secondary)]">Cấp độ kinh nghiệm:</span>
                   <span class="font-bold text-[var(--text-main)]">
-                    {{ selectedCv.parsedData?.level || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Chưa có dữ liệu') }}
+                    {{ selectedCv.parsedData?.level || selectedCv.parsedData?.experience || (selectedCv.parsedData?.experience_years_estimate != null ? `${selectedCv.parsedData.experience_years_estimate} năm kinh nghiệm` : 'Chưa có dữ liệu') }}
                   </span>
                 </div>
                 <div class="flex items-center justify-between pt-1">
                   <span class="text-xs text-[var(--text-secondary)]">Trạng thái AI:</span>
                   <span class="font-bold text-[var(--success)] flex items-center gap-1">
-                    <CheckCircle :size="14" /> Đã phân tích từ Backend
+                    <CheckCircle :size="14" /> Đã phân tích
                   </span>
                 </div>
               </div>
-              <p v-else class="text-sm text-[var(--text-secondary)]">Thông tin trích xuất hiện không khả dụng.</p>
+              <div v-else class="space-y-2 text-sm">
+                <p class="text-[var(--text-secondary)]">
+                  {{ selectedCv.status === 'analyzing' ? 'AI đang phân tích CV...' : 'CV đã lưu nhưng chưa có dữ liệu phân tích AI.' }}
+                </p>
+                <span class="font-bold flex items-center gap-1" :class="selectedCv.status === 'analyzing' ? 'text-[var(--primary)]' : 'text-[var(--warning)]'">
+                  <Loader2 v-if="selectedCv.status === 'analyzing'" class="pf-spin" :size="14" />
+                  <AlertCircle v-else :size="14" />
+                  {{ selectedCv.status === 'analyzing' ? 'Đang phân tích' : 'Chưa phân tích' }}
+                </span>
+              </div>
             </div>
 
             <div v-if="selectedCv.parsedData?.skills?.length">
@@ -1145,8 +1299,26 @@ const confirmDeleteAccount = async () => {
         </div>
 
         <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
-          <Button variant="ghost" style="color: var(--danger)" @click="deleteCv(selectedCv.id); closeCvModal()">Xóa CV này</Button>
+          <Button variant="ghost" style="color: var(--danger)" @click="askDeleteCv(selectedCv)">Xóa CV này</Button>
           <Button variant="primary" @click="closeCvModal">Đóng</Button>
+        </div>
+      </div>
+    </Modal>
+
+    <!-- Delete CV Confirmation Modal -->
+    <Modal :isOpen="showDeleteCvModal" @close="showDeleteCvModal = false" title="Xác nhận xóa CV" size="md">
+      <div class="space-y-4">
+        <p class="text-sm text-[var(--text-main)] leading-relaxed">
+          Bạn có chắc muốn xóa CV
+          <strong>{{ cvPendingDelete?.name || '' }}</strong>?
+          File sẽ bị xóa khỏi hệ thống và không thể hoàn tác.
+        </p>
+        <div class="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+          <Button variant="secondary" :disabled="!!deletingCvId" @click="showDeleteCvModal = false">Huỷ</Button>
+          <Button variant="danger" :disabled="!!deletingCvId" @click="confirmDeleteCv">
+            <Loader2 v-if="deletingCvId" class="pf-spin" :size="16" />
+            {{ deletingCvId ? 'Đang xóa...' : 'Xác nhận xóa' }}
+          </Button>
         </div>
       </div>
     </Modal>

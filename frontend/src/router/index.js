@@ -99,7 +99,8 @@ const router = createRouter({
 router.beforeEach((to, from) => {
   const token = localStorage.getItem('access_token')
   const userRole = localStorage.getItem('user_role') || authStore.user?.role
-  const publicPages = ['/', '/home', '/job-board', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired', '/admin/login', '/403']
+  // Guest may browse job board / careers / landing. Candidate home & portal tools require login.
+  const publicPages = ['/', '/job-board', '/login', '/register', '/forgot-password', '/interview-consent', '/interview-expired', '/admin/login', '/403']
   const isPublicPage = publicPages.includes(to.path) || to.path.startsWith('/careers') || to.path.startsWith('/interview-consent')
   const authRequired = !isPublicPage
 
@@ -107,10 +108,15 @@ router.beforeEach((to, from) => {
     if (to.path.startsWith('/admin')) {
       return { path: '/admin/login', state: { message: 'Vui lòng đăng nhập Quản trị viên (Admin) để truy cập trang này!', type: 'warning' } }
     }
-    return { path: '/login', state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } }
+    return { path: '/login', query: { redirect: to.fullPath }, state: { message: 'Vui lòng đăng nhập để sử dụng tính năng này!', type: 'warning' } }
   }
 
-  // Prevent non-admins from accessing ANY /admin route (including /admin/login when already logged in as non-admin)
+  // Admin chỉ được vào khu vực /admin
+  if (token && userRole === 'admin' && !to.path.startsWith('/admin') && !isPublicPage) {
+    return { path: '/admin/dashboard' }
+  }
+
+  // Prevent non-admins from accessing ANY /admin route
   if (token && to.path.startsWith('/admin') && userRole && userRole !== 'admin') {
     return { path: '/403', query: { reason: 'admin_required', attempted: to.path } }
   }

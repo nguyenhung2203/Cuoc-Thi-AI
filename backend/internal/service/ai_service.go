@@ -264,3 +264,76 @@ Resume Text:
 
 	return nil
 }
+
+// CVReviewResult is structured feedback for improving a candidate's CV.
+type CVReviewResult struct {
+	Summary         string   `json:"summary"`
+	Issues          []string `json:"issues"`
+	Suggestions     []string `json:"suggestions"`
+	MissingSections []string `json:"missing_sections"`
+	Strengths       []string `json:"strengths"`
+}
+
+// ReviewCV reads a CV PDF and returns concrete improvement suggestions (not interview scoring).
+func (s *AIService) ReviewCV(ctx context.Context, storageKey string) (*CVReviewResult, error) {
+	start := time.Now()
+	filePath := filepath.Join(s.uploadDir, storageKey)
+	text, err := ExtractTextFromPDF(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDF: %w", err)
+	}
+	if len(strings.TrimSpace(text)) < 40 {
+		return nil, fmt.Errorf("CV text too short to review")
+	}
+	// Cap prompt size for safety.
+	if len(text) > 12000 {
+		text = text[:12000]
+	}
+
+	prompt := fmt.Sprintf(`You are a career coach helping a job seeker improve their CV/resume.
+Review the resume text below and return ONLY valid JSON with these fields:
+- "summary": short overall assessment in Vietnamese (2-3 sentences)
+- "issues": array of concrete problems found (Vietnamese strings)
+- "suggestions": array of specific actionable fixes (Vietnamese strings)
+- "missing_sections": array of important sections that are missing or weak (Vietnamese strings)
+- "strengths": array of strong points already present (Vietnamese strings)
+
+Do NOT score an interview. Focus only on CV quality, clarity, evidence, and structure.
+
+Resume Text:
+%s`, text)
+
+	cleanJSON, tokensIn, tokensOut, err := s.generateGeminiJSON(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	if s.logSvc != nil {
+		latency := time.Since(start).Milliseconds()
+		cost := float64(tokensIn)*0.30/1_000_000 + float64(tokensOut)*1.25/1_000_000
+		s.logSvc.LogAsync(&models.AIRequestLog{
+			CompanyID: "", Provider: "gemini", Model: sql.NullString{String: DefaultTextModel, Valid: true},
+			Operation: sql.NullString{String: "cv_review", Valid: true}, InputJSON: models.JSONB(`{"template":"cv_review"}`), OutputJSON: models.JSONB(cleanJSON),
+			LatencyMs: sql.NullInt32{Int32: int32(latency), Valid: true}, TokensIn: sql.NullInt32{Int32: tokensIn, Valid: true},
+			TokensOut: sql.NullInt32{Int32: tokensOut, Valid: true}, TotalTokens: sql.NullInt32{Int32: tokensIn + tokensOut, Valid: true},
+			Cost: sql.NullFloat64{Float64: cost, Valid: cost > 0}, Status: "success", CreatedAt: time.Now(),
+		})
+	}
+
+	var result CVReviewResult
+	if err := json.Unmarshal([]byte(cleanJSON), &result); err != nil {
+		return nil, fmt.Errorf("invalid json from gemini: %w", err)
+	}
+	if result.Issues == nil {
+		result.Issues = []string{}
+	}
+	if result.Suggestions == nil {
+		result.Suggestions = []string{}
+	}
+	if result.MissingSections == nil {
+		result.MissingSections = []string{}
+	}
+	if result.Strengths == nil {
+		result.Strengths = []string{}
+	}
+	return &result, nil
+}

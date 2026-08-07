@@ -1,83 +1,99 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Card from '../../components/common/AppCard.vue'
 import Button from '../../components/common/AppButton.vue'
 import Toast from '../../components/common/AppToast.vue'
 import { 
-  Play, FileText, Settings2, Bot, Info, CheckCircle2, Sparkles, 
+  Play, Bot, Info, CheckCircle2, 
   Code, Server, Layers, Cpu, Cloud, Briefcase, Smartphone, ShieldCheck, 
-  PlusCircle, Clock, Globe, Zap, Award, Target, MessageSquare, AlertCircle, ChevronRight
+  PlusCircle, Clock, Globe, Zap, Award, Target, ChevronRight,
+  Upload, Loader2, Calculator, TrendingUp, Landmark, Handshake, ShoppingBag,
+  Megaphone, FileText, Headset, Settings, UserPlus, Building2, Scale, Truck,
+  ShoppingCart, Package, HardHat, DraftingCompass, Home, GraduationCap,
+  HeartPulse, Palette, Hotel, Plane, Factory, Newspaper, Leaf, ClipboardCheck, Users,
+  Search,
 } from 'lucide-vue-next'
 import { mockService } from '../../services/mock.service'
 import { candidatePortalService } from '../../services/candidate-portal.service'
 import { langStore } from '../../stores/lang.store'
 import { isOneOf, maxLength, minLength, normalizeText, requiredTrim, validateForm } from '../../utils/validators.js'
+import { getRoleCatalog } from '../../utils/mockRoleSuggestions.js'
 
 const router = useRouter()
 const loading = ref(false)
+const profileLoading = ref(true)
 const toast = ref(null)
 const cvFileId = ref('')
+const cvName = ref('')
+const roleQuery = ref('')
 const errors = ref({})
 
-// Interactive setup options
 const setup = ref({
-  jobRole: 'frontend',
+  jobRole: '',
   customRoleName: '',
   customJd: '',
   showCustomInput: false,
-  level: 'middle',
-  type: 'tech',
+  level: 'fresher',
+  type: 'behavior',
   language: 'vi',
   duration: 'standard',
   style: 'professional',
-  useCurrentCv: true
+  useCurrentCv: true,
 })
 
-// Quick-select preset job roles with rich icons
-const presetRoles = [
-  { id: 'frontend', name: 'Frontend Developer', desc: 'React, Vue, Architecture', icon: Code },
-  { id: 'backend', name: 'Backend Developer', desc: 'Go, Java, Node, API', icon: Server },
-  { id: 'fullstack', name: 'Fullstack Engineer', desc: 'End-to-End System', icon: Layers },
-  { id: 'ai_ml', name: 'AI / ML Engineer', desc: 'LLM, RAG, PyTorch', icon: Cpu },
-  { id: 'devops', name: 'DevOps & Cloud', desc: 'AWS, K8s, CI/CD', icon: Cloud },
-  { id: 'pm', name: 'Product Manager', desc: 'Product Strategy', icon: Briefcase },
-  { id: 'mobile', name: 'Mobile Developer', desc: 'iOS, Android, React Native', icon: Smartphone },
-  { id: 'qa', name: 'QA & Automation', desc: 'Test Automation', icon: ShieldCheck }
-]
+const iconMap = {
+  Code, Server, Layers, Cpu, Cloud, Briefcase, Smartphone, ShieldCheck,
+  Calculator, TrendingUp, Landmark, Handshake, ShoppingBag, Megaphone,
+  FileText, Award, Headset, Settings, UserPlus, Building2, Scale, Truck,
+  ShoppingCart, Package, HardHat, DraftingCompass, Home, GraduationCap,
+  HeartPulse, Palette, Hotel, Plane, Factory, Newspaper, Leaf, ClipboardCheck,
+  Users, Globe,
+}
 
-// Seniority levels
+const catalogRoles = computed(() => getRoleCatalog().map((role) => ({
+  ...role,
+  icon: iconMap[role.icon] || Briefcase,
+})))
+
+const filteredRoles = computed(() => {
+  const q = roleQuery.value.trim().toLowerCase()
+  if (!q) return catalogRoles.value
+  return catalogRoles.value.filter((role) =>
+    role.name.toLowerCase().includes(q) || (role.desc || '').toLowerCase().includes(q)
+  )
+})
+
+const hasCv = computed(() => !!cvFileId.value)
+const canUseStudio = computed(() => !profileLoading.value)
+
 const levels = [
-  { id: 'fresher', name: 'Fresher / Intern', badge: 'Entry Level', desc: 'Kiến thức nền tảng CS, tư duy thuật toán & cơ bản' },
-  { id: 'junior', name: 'Junior Engineer', badge: '1 - 2 Năm', desc: 'Thực hành coding, bug fixing & làm việc nhóm' },
-  { id: 'middle', name: 'Middle Engineer', badge: '3 - 5 Năm', desc: 'Độc lập giải quyết vấn đề, trade-off & clean code' },
-  { id: 'senior', name: 'Senior Engineer', badge: '5+ Năm', desc: 'Kiến trúc hệ thống, scale, tối ưu & leadership' },
-  { id: 'lead', name: 'Tech Lead / Principal', badge: 'Expert / Lead', desc: 'Định hướng công nghệ, quản lý đội ngũ & high-concurrency' }
+  { id: 'fresher', name: 'Fresher / Intern', badge: 'Entry Level', desc: 'Mới bắt đầu / thực tập — kiến thức nền tảng' },
+  { id: 'junior', name: 'Junior', badge: '1 - 2 Năm', desc: 'Làm được việc cơ bản, cần hướng dẫn' },
+  { id: 'middle', name: 'Middle', badge: '3 - 5 Năm', desc: 'Tự chủ công việc, xử lý tình huống thực tế' },
+  { id: 'senior', name: 'Senior', badge: '5+ Năm', desc: 'Chuyên sâu nghiệp vụ, mentoring đồng nghiệp' },
+  { id: 'lead', name: 'Lead / Manager', badge: 'Lead', desc: 'Điều phối nhóm, định hướng công việc' }
 ]
 
-// Interview focus types
 const interviewTypes = [
-  { id: 'tech', name: 'Phỏng vấn Kỹ thuật (Technical & Core)', desc: 'Chuyên sâu ngôn ngữ, framework, best practices & kiến thức nền tảng' },
-  { id: 'system', name: 'Thiết kế Hệ thống (System Design)', desc: 'Vẽ kiến trúc, microservices, cacher, load balancing & scalability' },
-  { id: 'algo', name: 'Thuật toán & Problem Solving', desc: 'Cấu trúc dữ liệu, tối ưu độ phức tạp Big-O & tư duy giải thuật' },
-  { id: 'behavior', name: 'Phỏng vấn Hành vi (STAR Behavioral)', desc: 'Khử xung đột, làm việc nhóm, quản lý áp lực & xử lý tình huống thực tế' },
-  { id: 'hr', name: 'Phỏng vấn Nhân sự (HR & Culture Fit)', desc: 'Định hướng sự nghiệp, lương thưởng, độ phù hợp văn hóa doanh nghiệp' }
+  { id: 'tech', name: 'Phỏng vấn Chuyên môn', desc: 'Kiến thức nghiệp vụ, kỹ năng cứng theo vị trí ứng tuyển' },
+  { id: 'behavior', name: 'Phỏng vấn Hành vi (STAR)', desc: 'Tình huống thực tế, làm việc nhóm, xử lý áp lực' },
+  { id: 'hr', name: 'Phỏng vấn Nhân sự (HR)', desc: 'Định hướng nghề nghiệp, văn hóa, lương thưởng' },
+  { id: 'system', name: 'Case / Tình huống nghiệp vụ', desc: 'Phân tích case, đưa phương án giải quyết' },
+  { id: 'algo', name: 'Tư duy & Giải quyết vấn đề', desc: 'Logic, ưu tiên, lập kế hoạch (phù hợp nhiều ngành)' }
 ]
 
-// Languages
 const languages = [
   { id: 'vi', name: 'Tiếng Việt', desc: 'Phỏng vấn chuẩn mực bằng Tiếng Việt' },
-  { id: 'en', name: 'Tiếng Anh', desc: 'Luyện phản xạ Tiếng Anh chuyên ngành IT' }
+  { id: 'en', name: 'Tiếng Anh', desc: 'Luyện phản xạ Tiếng Anh chuyên ngành' }
 ]
 
-// Durations
 const durations = [
   { id: 'quick', name: 'Phỏng vấn Nhanh', badge: '3 câu hỏi · ~15 phút', desc: 'Kiểm tra phản xạ & ôn luyện nhanh' },
   { id: 'standard', name: 'Phỏng vấn Tiêu chuẩn', badge: '5 câu hỏi · ~30 phút', desc: 'Mô phỏng phỏng vấn thực tế' },
   { id: 'deep', name: 'Phỏng vấn Chuyên sâu', badge: '8 câu hỏi · ~45 phút', desc: 'Đào sâu kiến trúc & thử thách áp lực' }
 ]
 
-// AI Personas
 const styles = [
   { id: 'friendly', name: 'Thân thiện & Gợi mở', desc: 'Tạo tâm lý thoải mái, gợi ý nhẹ nhàng' },
   { id: 'professional', name: 'Chuyên nghiệp & Chuẩn mực', desc: 'Bám sát tiêu chuẩn đánh giá' },
@@ -85,25 +101,37 @@ const styles = [
 ]
 
 onMounted(async () => {
+  profileLoading.value = true
   try {
     const res = await candidatePortalService.getProfile()
     const profile = res?.data || res || {}
     cvFileId.value = profile.cv_file_id || ''
-    if (!cvFileId.value) {
-      setup.value.useCurrentCv = false
-    }
+    cvName.value = profile.cv_name || ''
+    setup.value.useCurrentCv = !!cvFileId.value
   } catch (err) {
     cvFileId.value = ''
     setup.value.useCurrentCv = false
+  } finally {
+    profileLoading.value = false
   }
 })
+
+const goUploadCv = () => {
+  router.push({ path: '/profile', query: { tab: 'profile' } })
+}
 
 const selectRole = (roleId) => {
   setup.value.jobRole = roleId
   setup.value.showCustomInput = false
+  setup.value.customRoleName = ''
 }
 
 const selectCustomRole = () => {
+  setup.value.showCustomInput = true
+  setup.value.jobRole = 'custom'
+}
+
+const onCustomRoleInput = () => {
   setup.value.showCustomInput = true
   setup.value.jobRole = 'custom'
 }
@@ -112,13 +140,13 @@ const getSelectedRoleName = () => {
   if (setup.value.showCustomInput && setup.value.customRoleName.trim()) {
     return setup.value.customRoleName.trim()
   }
-  const r = presetRoles.find(item => item.id === setup.value.jobRole)
-  return r ? r.name : 'Senior Software Engineer'
+  const r = catalogRoles.value.find(item => item.id === setup.value.jobRole)
+  return r ? r.name : ''
 }
 
 const getSelectedLevelName = () => {
   const l = levels.find(item => item.id === setup.value.level)
-  return l ? l.name : 'Middle Engineer'
+  return l ? l.name : 'Middle'
 }
 
 const getSelectedDurationBadge = () => {
@@ -129,6 +157,7 @@ const getSelectedDurationBadge = () => {
 const handleStart = async (e) => {
   e.preventDefault()
   if (loading.value) return
+
   const values = { ...setup.value, customRoleName: normalizeText(setup.value.customRoleName), customJd: normalizeText(setup.value.customJd) }
   const validation = validateForm(values, {
     jobRole: [(value) => requiredTrim(value, 'Vui lòng chọn vị trí phỏng vấn.')],
@@ -149,30 +178,21 @@ const handleStart = async (e) => {
     toast.value = { type: 'error', message: Object.values(validation.errors)[0] }
     return
   }
-  if (setup.value.useCurrentCv && !cvFileId.value) {
-    toast.value = { type: 'warning', message: 'Bạn chưa có CV trong hồ sơ. Vui lòng tải CV lên trước hoặc bỏ chọn tùy chọn sử dụng CV.' }
-    return
-  }
-  if (setup.value.showCustomInput && !setup.value.customRoleName.trim()) {
-    toast.value = { type: 'warning', message: 'Vui lòng nhập tên vị trí hoặc chức danh bạn muốn phỏng vấn.' }
-    return
-  }
 
   loading.value = true
   try {
     const finalRole = getSelectedRoleName()
-    
-    // Bước 1: Tạo session mới trong Backend Go
-    const session = await mockService.createMockInterview({
+    const payload = {
       target_role: finalRole,
       target_level: setup.value.level,
-      cv_file_id: setup.value.useCurrentCv ? cvFileId.value : undefined
-    })
+    }
+    if (cvFileId.value && setup.value.useCurrentCv) {
+      payload.cv_file_id = cvFileId.value
+    }
+    const session = await mockService.createMockInterview(payload)
 
-    // Bước 2: Khởi động session
     await mockService.startMockInterview(session.id)
 
-    // Bước 3: Chuyển vào phòng phỏng vấn mock
     router.push({
       path: '/mock-room',
       query: {
@@ -188,7 +208,10 @@ const handleStart = async (e) => {
     })
   } catch (error) {
     console.error(error)
-    toast.value = { type: 'error', message: 'Không thể khởi động phỏng vấn. Vui lòng kiểm tra kết nối máy chủ.' }
+    toast.value = {
+      type: 'error',
+      message: error?.message || 'Không thể khởi động phỏng vấn. Vui lòng kiểm tra kết nối máy chủ hoặc thử lại sau.'
+    }
   } finally {
     loading.value = false
   }
@@ -207,15 +230,25 @@ const handleStart = async (e) => {
       </div>
 
       <div class="header-cta">
-        <Button variant="primary" class="btn-nowrap" :disabled="loading" @click="handleStart">
+        <Button variant="primary" class="btn-nowrap" :disabled="loading || !canUseStudio" @click="handleStart">
           <Play :size="16" class="shrink-0" />
           <span>{{ loading ? langStore.t('setup', 'starting') : langStore.t('setup', 'startNow') }}</span>
         </Button>
       </div>
     </div>
 
+    <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
+
+    <!-- Loading -->
+    <Card v-if="profileLoading" class="cv-gate-card animate-rise">
+      <div class="cv-gate-inner">
+        <Loader2 class="pf-spin text-primary" :size="28" />
+        <p class="cv-gate-desc">Đang tải hồ sơ...</p>
+      </div>
+    </Card>
+
     <!-- Main 2-Column Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
       <!-- Left / Main Form Column (2 Cols) -->
       <div class="lg:col-span-2 space-y-6">
         <!-- Section 1: Job Role Selection -->
@@ -226,68 +259,71 @@ const handleStart = async (e) => {
             </div>
             <div>
               <h2 class="section-title">{{ langStore.t('setup', 'step1Title') }}</h2>
-              <p class="section-subtitle">{{ langStore.t('setup', 'step1Desc') }}</p>
+              <p class="section-subtitle">
+                Chọn vị trí bạn muốn luyện — đa ngành (Kinh tế, Kinh doanh, Marketing, IT…).
+              </p>
             </div>
           </div>
 
-          <div class="role-grid">
-            <button 
-              v-for="role in presetRoles" 
-              :key="role.id"
-              type="button"
-              @click="selectRole(role.id)"
-              class="role-card"
-              :class="{ active: !setup.showCustomInput && setup.jobRole === role.id }"
-            >
-              <div class="role-icon">
-                <component :is="role.icon" :size="20" />
-              </div>
-              <div class="role-content">
-                <div class="role-name">{{ role.name }}</div>
-                <div class="role-desc">{{ role.desc }}</div>
-              </div>
-              <div class="radio-indicator"></div>
-            </button>
+          <div class="role-search">
+            <Search :size="16" class="role-search-icon" />
+            <input
+              v-model="roleQuery"
+              type="search"
+              class="role-search-input"
+              placeholder="Tìm vị trí (ví dụ: kế toán, marketing, sales…)"
+            />
+          </div>
 
-            <!-- Custom Role / JD Button -->
-            <button 
-              type="button"
-              @click="selectCustomRole"
-              class="role-card custom-role-card"
-              :class="{ active: setup.showCustomInput }"
-            >
-              <div class="role-icon custom-icon">
-                <PlusCircle :size="20" />
-              </div>
-              <div class="role-content">
-                <div class="role-name">Nhập Vị trí khác / Dán JD tùy chỉnh</div>
-                <div class="role-desc">Tùy chỉnh 100% câu hỏi theo mô tả công việc cụ thể bạn đang ứng tuyển</div>
-              </div>
-              <div class="radio-indicator"></div>
-            </button>
+          <div class="role-grid-wrap">
+            <div class="role-grid">
+              <button 
+                v-for="role in filteredRoles" 
+                :key="role.id"
+                type="button"
+                @click="selectRole(role.id)"
+                class="role-card"
+                :class="{ active: !setup.showCustomInput && setup.jobRole === role.id }"
+              >
+                <div class="role-icon">
+                  <component :is="role.icon" :size="20" />
+                </div>
+                <div class="role-content">
+                  <div class="role-name">{{ role.name }}</div>
+                  <div class="role-desc">{{ role.desc }}</div>
+                </div>
+                <div class="radio-indicator"></div>
+              </button>
+            </div>
+            <p v-if="!filteredRoles.length" class="role-empty">Không tìm thấy vị trí phù hợp. Hãy nhập vị trí tùy chỉnh bên dưới.</p>
+          </div>
+
+          <!-- Fixed custom job form (always below 3-row grid, like search) -->
+          <div class="custom-job-bar" :class="{ active: setup.showCustomInput }">
+            <div class="custom-job-bar-icon">
+              <PlusCircle :size="18" />
+            </div>
+            <input
+              v-model="setup.customRoleName"
+              type="text"
+              class="custom-job-input"
+              placeholder="Nhập vị trí / chức danh tùy chỉnh (ví dụ: Chuyên viên Kinh tế…"
+              @focus="selectCustomRole"
+              @input="onCustomRoleInput"
+            />
           </div>
 
           <!-- Custom Role & JD Expandable Box -->
           <div v-if="setup.showCustomInput" class="custom-jd-box animate-fadeIn">
             <div class="field">
-              <label class="field-label font-bold text-main">Tên Chức danh / Vị trí cụ thể <span class="text-rose-500">*</span></label>
-              <input 
-                v-model="setup.customRoleName" 
-                type="text" 
-                placeholder="Ví dụ: Senior Data Engineer, Cloud Solution Architect, Golang Backend Developer..." 
-                class="app-input"
-              />
-            </div>
-
-            <div class="field mt-4">
               <div class="flex items-center justify-between">
-                <label class="field-label font-bold text-main">Mô tả công việc / Yêu cầu kỹ thuật (Job Description - JD)</label>
-                <span class="text-xs text-primary font-semibold">⚡ AI sẽ xoáy sâu vào các skill trong JD này</span>
+                <label class="field-label font-bold text-main">Mô tả công việc / Yêu cầu (JD) — tùy chọn</label>
+                <span class="text-xs text-primary font-semibold">⚡ AI xoáy sâu skill trong JD</span>
               </div>
               <textarea 
                 v-model="setup.customJd" 
                 rows="4" 
-                placeholder="Dán nội dung JD từ TopCV, LinkedIn hoặc ghi chú nhanh các công nghệ bắt buộc (ví dụ: yêu cầu thành thạo Kafka, Redis clustering, kinh nghiệm làm việc với hệ thống 1 triệu CCU...)" 
+                placeholder="Dán JD từ TopCV, LinkedIn hoặc ghi nhanh yêu cầu công việc..." 
                 class="app-textarea"
               ></textarea>
             </div>
@@ -440,23 +476,39 @@ const handleStart = async (e) => {
             </button>
           </div>
 
-          <!-- CV Toggle Bar -->
-          <div class="cv-integrate-bar" :class="{ active: setup.useCurrentCv }">
-            <label class="cv-toggle-label">
-              <input type="checkbox" v-model="setup.useCurrentCv" :disabled="!cvFileId" class="cv-checkbox" />
-              <FileText :size="20" class="text-primary shrink-0" />
+          <!-- CV optional nudge -->
+          <div class="cv-integrate-bar" :class="{ active: hasCv && setup.useCurrentCv }">
+            <label v-if="hasCv" class="cv-toggle-label">
+              <input
+                v-model="setup.useCurrentCv"
+                type="checkbox"
+                class="cv-checkbox"
+              />
               <div>
                 <div class="font-bold text-main text-sm">
-                  Đồng bộ & hỏi dựa theo CV thực tế trong hồ sơ ứng viên
-                  <span v-if="!cvFileId" class="text-xs text-rose-500 font-normal ml-1">(Hồ sơ chưa tải CV lên)</span>
-                  <span v-else class="text-xs text-[var(--success)] font-semibold ml-1">✓ Đã sẵn sàng</span>
+                  Dùng CV trong hồ sơ
+                  <span class="text-xs text-[var(--success)] font-semibold ml-1">Khuyến nghị</span>
                 </div>
-                <p class="cv-desc">AI sẽ đọc kinh nghiệm, dự án (Projects) và công nghệ ghi trong CV của bạn để đặt câu hỏi xác thực</p>
+                <p class="cv-desc">
+                  {{ cvName || 'CV đã tải lên' }} — AI hỏi sát kinh nghiệm/kỹ năng trong CV hơn.
+                </p>
               </div>
             </label>
+            <div v-else class="cv-toggle-label">
+              <Upload :size="20" class="text-[var(--primary)] shrink-0" />
+              <div>
+                <div class="font-bold text-main text-sm">
+                  Chưa có CV — vẫn luyện được
+                  <span class="text-xs text-secondary font-semibold ml-1">Không bắt buộc</span>
+                </div>
+                <p class="cv-desc">
+                  Câu hỏi sẽ theo vị trí bạn chọn. Tải CV trên Hồ sơ để AI cá nhân hóa tốt hơn.
+                  <button type="button" class="cv-upload-link" @click="goUploadCv">Tải CV ngay</button>
+                </p>
+              </div>
+            </div>
           </div>
 
-          <!-- Start Action Button -->
           <!-- Start Action Button -->
           <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-[var(--border)]">
             <div class="flex items-center gap-2 text-xs text-secondary font-medium">
@@ -467,7 +519,7 @@ const handleStart = async (e) => {
             <Button 
               variant="primary" 
               class="w-full sm:w-auto btn-start-studio"
-              :disabled="loading"
+              :disabled="loading || !canUseStudio"
               @click="handleStart"
             >
               <Play :size="18" class="shrink-0" />
@@ -551,8 +603,6 @@ const handleStart = async (e) => {
         </div>
       </div>
     </div>
-
-    <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
   </div>
 </template>
 
@@ -656,6 +706,51 @@ const handleStart = async (e) => {
 }
 
 /* Role Grid */
+.role-search {
+  position: relative;
+  margin-bottom: 12px;
+}
+.role-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary, #64748B);
+  pointer-events: none;
+}
+.role-search-input {
+  width: 100%;
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: 10px;
+  padding: 10px 12px 10px 36px;
+  font-size: 14px;
+  background: var(--surface, #fff);
+  color: var(--text-main, #0f172a);
+}
+.role-search-input:focus {
+  outline: none;
+  border-color: var(--primary, #2563EB);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.role-grid-wrap {
+  /* Viewport cố định ~3 hàng; danh sách cuộn bên trong */
+  max-height: calc(3 * 86px + 2 * 12px + 20px);
+  overflow-y: auto;
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--surface-soft, #F8FAFC);
+}
+@media (max-width: 639px) {
+  .role-grid-wrap {
+    max-height: calc(3 * 86px + 2 * 12px + 20px);
+  }
+}
+.role-empty {
+  margin: 12px 4px 4px;
+  font-size: 13px;
+  color: var(--text-secondary, #64748B);
+}
 .role-grid {
   display: grid;
   grid-template-columns: repeat(1, 1fr);
@@ -664,11 +759,51 @@ const handleStart = async (e) => {
 @media (min-width: 640px) {
   .role-grid { grid-template-columns: repeat(2, 1fr); }
 }
+.custom-job-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px dashed #CBD5E1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--surface, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.custom-job-bar.active {
+  border-style: solid;
+  border-color: var(--accent, #10B981);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+}
+.custom-job-bar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent, #10B981);
+  background: rgba(16, 185, 129, 0.08);
+  flex-shrink: 0;
+}
+.custom-job-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-main, #0f172a);
+  min-width: 0;
+}
+.custom-job-input::placeholder {
+  color: var(--text-secondary, #94A3B8);
+}
 .role-card {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 16px;
+  padding: 14px 16px;
+  min-height: 86px;
   border-radius: 12px;
   border: 1px solid var(--border, #E2E8F0);
   background: var(--surface-soft, #F8FAFC);
@@ -965,10 +1100,21 @@ const handleStart = async (e) => {
   color: var(--text-secondary, #64748B);
   margin-top: 4px;
   line-height: 1.45;
-  display: none;
 }
-.cv-integrate-bar.active .cv-desc, .cv-integrate-bar:hover .cv-desc {
-  display: block;
+.cv-upload-link {
+  display: inline;
+  margin-left: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--primary, #2563EB);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cv-upload-link:hover {
+  color: var(--primary-hover, #1D4ED8);
 }
 
 /* Start Button */
@@ -1134,4 +1280,73 @@ const handleStart = async (e) => {
   color: var(--text-secondary, #475569);
   line-height: 1.5;
 }
+
+.cv-gate-card {
+  padding: 40px 24px;
+  text-align: center;
+}
+.cv-gate-inner {
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.cv-gate-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light, #dbeafe);
+  color: var(--primary, #2563eb);
+}
+.cv-gate-title {
+  font-size: 20px;
+  font-weight: 750;
+  color: var(--text-main);
+  margin: 0;
+}
+.cv-gate-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0 0 8px;
+}
+.skill-hint-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: var(--radius, 10px);
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--primary, #2563eb);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.skill-hint-bar.is-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+.role-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+.role-badge.is-related {
+  background: rgba(100, 116, 139, 0.14);
+  color: #475569;
+}
+.pf-spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

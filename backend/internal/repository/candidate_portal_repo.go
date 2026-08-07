@@ -66,38 +66,118 @@ func (r *CandidatePortalRepository) GetUserLatestCV(ctx context.Context, userID 
 	`
 	var fileID, origName, storageKey string
 	err := r.db.QueryRowContext(ctx, q, userID).Scan(&fileID, &origName, &storageKey)
+	if err == nil && fileID != "" {
+		return fileID, origName, storageKey, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return "", "", "", err
+	}
+
+	// Fallback: CV uploaded on portal before the user has any candidate/application row.
+	qFile := `
+		SELECT id, coalesce(original_name, ''), coalesce(storage_key, '')
+		FROM files
+		WHERE owner_user_id = $1::uuid AND file_type = 'cv'
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	err = r.db.QueryRowContext(ctx, qFile, userID).Scan(&fileID, &origName, &storageKey)
 	if err == sql.ErrNoRows {
 		return "", "", "", nil
 	}
 	return fileID, origName, storageKey, err
 }
 
-// SaveParsedCV stores AI output only while the candidate rows still point to
-// the file that was parsed. This prevents a slower, older upload from
-// overwriting the result of a newer upload.
+// GetUserCVParseStatus returns the latest parse status for the user's portal CV.
+// Prefers the owned files row (works without a candidates application), then
+// falls back to candidates.cv_ai_status.
+func (r *CandidatePortalRepository) GetUserCVParseStatus(ctx context.Context, userID string) (string, error) {
+	qFile := `
+		SELECT coalesce(parse_status, '')
+		FROM files
+		WHERE owner_user_id = $1::uuid AND file_type = 'cv'
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var status string
+	err := r.db.QueryRowContext(ctx, qFile, userID).Scan(&status)
+	if err == nil && status != "" {
+		return status, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+
+	q := `
+		SELECT coalesce(cv_ai_status, '')
+		FROM candidates
+		WHERE user_id = $1 AND cv_file_id IS NOT NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`
+	err = r.db.QueryRowContext(ctx, q, userID).Scan(&status)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return status, err
+}
+
+// SaveParsedCV stores AI output on the CV file row (always) and mirrors it to
+// any candidate rows that still point at the same file.
 func (r *CandidatePortalRepository) SaveParsedCV(ctx context.Context, userID, cvFileID, parsedJSON, summary string) (bool, error) {
-	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, cv_ai_status = 'ready',
-	              cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
-	      WHERE user_id = $3 AND cv_file_id = $4::uuid`
-	result, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID, cvFileID)
+	qFile := `
+		UPDATE files
+		SET parsed_json = $1::jsonb,
+		    ai_summary = $2,
+		    parse_status = 'ready',
+		    parse_error = NULL,
+		    parsed_at = NOW()
+		WHERE id = $3::uuid
+		  AND owner_user_id = $4::uuid
+		  AND file_type = 'cv'`
+	fileRes, err := r.db.ExecContext(ctx, qFile, parsedJSON, summary, cvFileID, userID)
 	if err != nil {
 		return false, err
 	}
-	rows, err := result.RowsAffected()
-	return rows > 0, err
+	fileRows, _ := fileRes.RowsAffected()
+
+	q := `UPDATE candidates SET parsed_cv_json = $1, ai_cv_summary = $2, cv_ai_status = 'ready',
+	              cv_ai_error = NULL, cv_ai_updated_at = NOW(), updated_at = NOW()
+	      WHERE user_id = $3 AND cv_file_id = $4::uuid`
+	candRes, err := r.db.ExecContext(ctx, q, parsedJSON, summary, userID, cvFileID)
+	if err != nil {
+		return fileRows > 0, err
+	}
+	candRows, _ := candRes.RowsAffected()
+	return fileRows > 0 || candRows > 0, nil
 }
 
-// UpdateCVAIStatus records a retryable CV parsing transition for every candidate
-// row owned by the portal user. Starting a retry clears the previous error.
+// UpdateCVAIStatus records a retryable CV parsing transition for the user's
+// latest owned CV file and any candidate rows owned by the portal user.
 func (r *CandidatePortalRepository) UpdateCVAIStatus(ctx context.Context, userID, status string, parseErr error) error {
-	var errorText any
+	var errorText sql.NullString
 	if parseErr != nil {
-		errorText = parseErr.Error()
+		errorText = sql.NullString{String: parseErr.Error(), Valid: true}
 	}
+	qFile := `
+		UPDATE files
+		SET parse_status = $1::text,
+		    parse_error = $2,
+		    parsed_at = CASE WHEN $1::text IN ('ready', 'failed') THEN NOW() ELSE parsed_at END
+		WHERE id = (
+			SELECT id FROM files
+			WHERE owner_user_id = $3::uuid AND file_type = 'cv'
+			ORDER BY created_at DESC
+			LIMIT 1
+		)`
+	if _, err := r.db.ExecContext(ctx, qFile, status, errorText, userID); err != nil {
+		return err
+	}
+
 	q := `UPDATE candidates
-	      SET cv_ai_status = $1,
+	      SET cv_ai_status = $1::text,
 	          cv_ai_error = $2,
-	          cv_ai_attempts = cv_ai_attempts + CASE WHEN $1 = 'processing' THEN 1 ELSE 0 END,
+	          cv_ai_attempts = cv_ai_attempts + CASE WHEN $1::text = 'processing' THEN 1 ELSE 0 END,
 	          cv_ai_updated_at = NOW(), updated_at = NOW()
 	      WHERE user_id = $3`
 	_, err := r.db.ExecContext(ctx, q, status, errorText, userID)
@@ -105,12 +185,29 @@ func (r *CandidatePortalRepository) UpdateCVAIStatus(ctx context.Context, userID
 }
 
 // GetParsedCV returns the latest AI-extracted CV JSON for this user (empty string if none).
+// Prefers owned CV files so portal uploads without applications still work.
 func (r *CandidatePortalRepository) GetParsedCV(ctx context.Context, userID string) (string, error) {
+	qFile := `
+		SELECT coalesce(parsed_json::text, '')
+		FROM files
+		WHERE owner_user_id = $1::uuid
+		  AND file_type = 'cv'
+		  AND parsed_json IS NOT NULL
+		ORDER BY created_at DESC
+		LIMIT 1`
+	var parsed string
+	err := r.db.QueryRowContext(ctx, qFile, userID).Scan(&parsed)
+	if err == nil && parsed != "" && parsed != "null" {
+		return parsed, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+
 	q := `SELECT coalesce(parsed_cv_json::text, '') FROM candidates
 	      WHERE user_id = $1 AND parsed_cv_json IS NOT NULL
 	      ORDER BY updated_at DESC LIMIT 1`
-	var parsed string
-	err := r.db.QueryRowContext(ctx, q, userID).Scan(&parsed)
+	err = r.db.QueryRowContext(ctx, q, userID).Scan(&parsed)
 	if err == sql.ErrNoRows {
 		return "", nil
 	}
@@ -121,6 +218,19 @@ func (r *CandidatePortalRepository) GetParsedCV(ctx context.Context, userID stri
 // applications owned by this user. The file row itself is created by
 // FileService.ProcessUpload, so no duplicate/dummy metadata is inserted here.
 func (r *CandidatePortalRepository) UpdateUserCV(ctx context.Context, userID string, cvFileID string, cvOriginalName string) error {
+	// Mark the new file as waiting for AI parse.
+	qMark := `
+		UPDATE files
+		SET parse_status = 'pending',
+		    parse_error = NULL,
+		    parsed_json = NULL,
+		    ai_summary = NULL,
+		    parsed_at = NULL
+		WHERE id = $1::uuid AND owner_user_id = $2::uuid AND file_type = 'cv'`
+	if _, err := r.db.ExecContext(ctx, qMark, cvFileID, userID); err != nil {
+		return err
+	}
+
 	// The file metadata is created by FileService.ProcessUpload. Keep the
 	// candidate pointing at that record instead of creating a second dummy row
 	// whose storage_key would incorrectly contain the file ID.
@@ -134,6 +244,36 @@ func (r *CandidatePortalRepository) UpdateUserCV(ctx context.Context, userID str
 	return err
 }
 
+// ClearAllUserCVs detaches every CV from the user's candidate/mock rows.
+func (r *CandidatePortalRepository) ClearAllUserCVs(ctx context.Context, userID string) error {
+	qCand := `
+		UPDATE candidates
+		SET cv_file_id = NULL,
+		    parsed_cv_json = NULL,
+		    ai_cv_summary = NULL,
+		    cv_ai_status = 'pending',
+		    cv_ai_error = NULL,
+		    cv_ai_updated_at = NOW(),
+		    updated_at = NOW()
+		WHERE user_id = $1 AND cv_file_id IS NOT NULL`
+	if _, err := r.db.ExecContext(ctx, qCand, userID); err != nil {
+		return err
+	}
+	qMock := `
+		UPDATE mock_interviews
+		SET cv_file_id = NULL, updated_at = NOW()
+		WHERE user_id = $1::uuid AND cv_file_id IS NOT NULL`
+	_, err := r.db.ExecContext(ctx, qMock, userID)
+	return err
+}
+
+type duplicateApplicationError struct{}
+
+func (e *duplicateApplicationError) Error() string { return "duplicate application" }
+
+// DuplicateApplication is returned by ApplyForJob when the (job, candidate) pair already exists.
+var DuplicateApplication error = &duplicateApplicationError{}
+
 func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, companyID, userID, fullName, email, phone, cvFileID, cvOriginalName, jobID string) error {
 	qFind := `SELECT id FROM candidates WHERE user_id = $1 AND company_id = $2 AND deleted_at IS NULL LIMIT 1`
 	var existingCID string
@@ -142,17 +282,27 @@ func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, compan
 	candidateID := cID
 	if err == nil && existingCID != "" {
 		candidateID = existingCID
-		qUpd := `UPDATE candidates SET phone = COALESCE(NULLIF($1, ''), phone), updated_at = NOW() WHERE id = $2`
-		_, err = r.db.ExecContext(ctx, qUpd, phone, candidateID)
+		if cvFileID != "" {
+			qUpd := `UPDATE candidates SET phone = COALESCE(NULLIF($1, ''), phone),
+				cv_file_id = $2::uuid, updated_at = NOW() WHERE id = $3`
+			_, err = r.db.ExecContext(ctx, qUpd, phone, cvFileID, candidateID)
+		} else {
+			qUpd := `UPDATE candidates SET phone = COALESCE(NULLIF($1, ''), phone), updated_at = NOW() WHERE id = $2`
+			_, err = r.db.ExecContext(ctx, qUpd, phone, candidateID)
+		}
 		if err != nil {
 			return err
 		}
 	} else {
+		var cvParam interface{}
+		if cvFileID != "" {
+			cvParam = cvFileID
+		}
 		qIns := `
-			INSERT INTO candidates (id, company_id, user_id, full_name, email, phone, source, status)
-			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), 'manual', 'new')
+			INSERT INTO candidates (id, company_id, user_id, full_name, email, phone, source, status, cv_file_id)
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), 'manual', 'new', $7)
 		`
-		_, err = r.db.ExecContext(ctx, qIns, candidateID, companyID, userID, fullName, email, phone)
+		_, err = r.db.ExecContext(ctx, qIns, candidateID, companyID, userID, fullName, email, phone, cvParam)
 		if err != nil {
 			return err
 		}
@@ -163,8 +313,18 @@ func (r *CandidatePortalRepository) ApplyForJob(ctx context.Context, cID, compan
 		VALUES ($1, $2, $3, 'new', NOW())
 		ON CONFLICT (job_id, candidate_id) DO NOTHING
 	`
-	_, err = r.db.ExecContext(ctx, qJc, companyID, candidateID, jobID)
-	return err
+	result, err := r.db.ExecContext(ctx, qJc, companyID, candidateID, jobID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return DuplicateApplication
+	}
+	return nil
 }
 
 // GetCandidateIDByUserCompany resolves the candidate row id for a user in a company.
@@ -219,7 +379,8 @@ func (r *CandidatePortalRepository) GetApplicationsByUserID(ctx context.Context,
 			coalesce(comp.name, '') as company_name,
 			jc.pipeline_status as status,
 			jc.applied_at,
-			coalesce(f.original_name, '') as cv_name
+			coalesce(f.original_name, '') as cv_name,
+			coalesce(f.storage_key, '') as cv_storage_key
 		FROM job_candidates jc
 		JOIN candidates c ON jc.candidate_id = c.id
 		JOIN jobs j ON jc.job_id = j.id
