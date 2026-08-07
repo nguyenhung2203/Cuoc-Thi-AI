@@ -1,7 +1,11 @@
 name: Test VPS SSH
 
 on:
+  push:
+    branches:
+      - khoi
   workflow_dispatch:
+
 
 permissions:
   contents: read
