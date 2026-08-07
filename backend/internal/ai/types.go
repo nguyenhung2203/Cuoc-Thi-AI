@@ -2,14 +2,14 @@ package ai
 
 // JDAnalysisResult matches the output JSON of analyze_jd template
 type JDAnalysisResult struct {
-	Summary              string              `json:"summary"`
-	RequiredSkills       []string            `json:"required_skills"`
-	NiceToHaveSkills     []string            `json:"nice_to_have_skills"`
-	SeniorityAssessment  string              `json:"seniority_assessment"`
-	MissingInformation   []string            `json:"missing_information"`
-	InterviewFocusAreas  []string            `json:"interview_focus_areas"`
-	SuggestedRubric      []SuggestedRubric   `json:"suggested_rubric"`
-	SuggestedQuestions   []SuggestedQuestion `json:"suggested_questions"`
+	Summary             string              `json:"summary"`
+	RequiredSkills      []string            `json:"required_skills"`
+	NiceToHaveSkills    []string            `json:"nice_to_have_skills"`
+	SeniorityAssessment string              `json:"seniority_assessment"`
+	MissingInformation  []string            `json:"missing_information"`
+	InterviewFocusAreas []string            `json:"interview_focus_areas"`
+	SuggestedRubric     []SuggestedRubric   `json:"suggested_rubric"`
+	SuggestedQuestions  []SuggestedQuestion `json:"suggested_questions"`
 }
 
 type SuggestedRubric struct {
@@ -19,13 +19,19 @@ type SuggestedRubric struct {
 }
 
 type SuggestedQuestion struct {
-	QuestionText    string   `json:"question_text"`
-	QuestionType    string   `json:"question_type"`
-	TargetSkill     string   `json:"target_skill"`
-	Difficulty      string   `json:"difficulty"`
-	ExpectedSignals []string `json:"expected_signals"`
-	WhyAsk          string   `json:"why_ask,omitempty"`
-	RedFlags        []string `json:"red_flags,omitempty"`
+	ID               string   `json:"id,omitempty"`
+	QuestionText     string   `json:"question_text"`
+	QuestionType     string   `json:"question_type,omitempty"`
+	Category         string   `json:"category,omitempty"`
+	TargetSkill      string   `json:"target_skill,omitempty"`
+	SkillTags        []string `json:"skill_tags,omitempty"`
+	Difficulty       string   `json:"difficulty"`
+	ExpectedSignals  []string `json:"expected_signals"`
+	FollowUpPrompts  []string `json:"follow_up_prompts,omitempty"`
+	TimeboxMinutes   int      `json:"timebox_minutes,omitempty"`
+	EvidenceRequired bool     `json:"evidence_required,omitempty"`
+	WhyAsk           string   `json:"why_ask,omitempty"`
+	RedFlags         []string `json:"red_flags,omitempty"`
 }
 
 // CVAnalysisResult matches the output JSON of analyze_cv template
@@ -62,7 +68,16 @@ type CVProject struct {
 }
 
 type QuestionGenerationResult struct {
-	Questions []SuggestedQuestion `json:"questions"`
+	Status         string              `json:"status,omitempty"`
+	Mode           string              `json:"mode,omitempty"`
+	Level          string              `json:"level,omitempty"`
+	Questions      []SuggestedQuestion `json:"questions"`
+	Coverage       []string            `json:"coverage,omitempty"`
+	Warnings       []string            `json:"warnings,omitempty"`
+	Confidence     float64             `json:"confidence,omitempty"`
+	PromptVersion  string              `json:"prompt_version,omitempty"`
+	RequestedCount int                 `json:"requested_count,omitempty"`
+	ActualCount    int                 `json:"actual_count,omitempty"`
 }
 
 // ReportGenerationResult matches the output JSON of generate_report template

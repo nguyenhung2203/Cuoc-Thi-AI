@@ -193,22 +193,33 @@ export const apiService = {
   
   getWithMeta: async (endpoint, options = {}) => {
     const url = `${API_BASE_URL}${endpoint}`;
+    const { skipAuthRefresh = false, ...requestOptions } = options;
     const token = localStorage.getItem('access_token');
-    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    const headers = { 'Content-Type': 'application/json', ...requestOptions.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
-    
-    const response = await fetch(url, { method: 'GET', headers, credentials: 'include', ...options });
+    const fetchOptions = {
+      method: 'GET',
+      ...requestOptions,
+      credentials: 'include',
+      headers,
+    };
+
+    const response = await fetch(url, fetchOptions);
     const data = await response.json();
-    if (response.status === 401 && !options.skipAuthRefresh && !isAuthEndpoint(endpoint)) {
-      const newToken = await refreshAccessToken();
-      headers.Authorization = `Bearer ${newToken}`;
-      const retryResponse = await fetch(url, { method: 'GET', headers, credentials: 'include', ...options });
-      const retryData = await retryResponse.json();
-      if (!retryResponse.ok || retryData.success === false) {
+    if (response.status === 401 && !skipAuthRefresh && !isAuthEndpoint(endpoint)) {
+      try {
+        const newToken = await refreshAccessToken();
+        const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+        const retryResponse = await fetch(url, { ...fetchOptions, headers: retryHeaders, credentials: 'include' });
+        const retryData = await retryResponse.json();
+        if (!retryResponse.ok || retryData.success === false) {
+          throw retryData.error || { message: 'Phiên đăng nhập đã hết hạn.' };
+        }
+        return retryData;
+      } catch (refreshError) {
         clearSessionAndRedirect();
-        throw retryData.error || { message: 'Phiên đăng nhập đã hết hạn.' };
+        throw refreshError;
       }
-      return retryData;
     }
     if (!response.ok || data.success === false) throw data.error || { message: 'Lỗi' };
     return data; // Returns { success, data, meta }
