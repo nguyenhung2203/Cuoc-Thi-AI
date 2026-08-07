@@ -90,6 +90,11 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 		return nil, apierrors.NewValidation("criterion_ids", []string{"none of the provided criterion_ids were found"})
 	}
 
+	var candidateLevel = "junior"
+	if level, levelErr := s.interviewRepo.GetCandidateLevel(ctx, interviewID); levelErr == nil && level != "" {
+		candidateLevel = NormalizeCandidateLevel(level)
+	}
+
 	var scores []models.InterviewScore
 
 	// 3. Score each criterion
@@ -109,7 +114,7 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 			criterionDesc = criterion.Name
 		}
 
-		result, err := s.orchestrator.ScoreAnswer(
+		result, err := s.orchestrator.ScoreAnswerForLevel(
 			ctx,
 			companyID,
 			transcriptText,
@@ -118,6 +123,7 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 			criterion.MinScore,
 			criterion.MaxScore,
 			scoringGuideStr,
+			candidateLevel,
 		)
 
 		status := "scored"

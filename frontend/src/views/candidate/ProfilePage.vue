@@ -63,6 +63,7 @@ const profile = ref({
   avatar_url: '',
   bio: '',
   interviewScore: null,
+})
 
 const newSkill = ref('')
 const addSkill = () => {

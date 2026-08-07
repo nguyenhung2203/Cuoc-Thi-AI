@@ -84,6 +84,17 @@ func (r *InterviewRepository) ListByCompany(ctx context.Context, companyID strin
 	return items, nil
 }
 
+// GetCandidateLevel returns the candidate's declared or CV-inferred level for an interview.
+func (r *InterviewRepository) GetCandidateLevel(ctx context.Context, interviewID string) (string, error) {
+	q := `SELECT COALESCE(NULLIF(c.tags->>'level',''), NULLIF(c.parsed_cv_json->>'level',''), '')
+		FROM interviews i JOIN candidates c ON c.id = i.candidate_id WHERE i.id = $1`
+	var level string
+	if err := r.db.GetContext(ctx, &level, q, interviewID); err != nil {
+		return "", err
+	}
+	return level, nil
+}
+
 func (r *InterviewRepository) GetRoomByInterviewID(ctx context.Context, interviewID string) (*models.InterviewRoom, error) {
 	q := `SELECT * FROM interview_rooms WHERE interview_id = $1`
 	var room models.InterviewRoom

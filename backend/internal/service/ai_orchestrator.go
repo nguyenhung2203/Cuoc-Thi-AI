@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -323,15 +324,33 @@ type ScoreResult struct {
 	ImprovementAdvice []string
 }
 
-// ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
+func NormalizeCandidateLevel(level string) string {
+	level = strings.ToLower(strings.TrimSpace(level))
+	switch level {
+	case "intern", "fresher", "entry", "entry-level":
+		return "fresher"
+	case "junior", "jr":
+		return "junior"
+	case "mid", "middle", "mid-level", "medior":
+		return "mid"
+	default:
+		return "junior"
+	}
+}
+
 func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide string) (*ScoreResult, error) {
+	return s.ScoreAnswerForLevel(ctx, companyID, transcriptText, criterionName, criterionDesc, minScore, maxScore, scoringGuide, "junior")
+}
+
+func (s *AIOrchestratorService) ScoreAnswerForLevel(ctx context.Context, companyID string, transcriptText string, criterionName, criterionDesc string, minScore, maxScore int, scoringGuide, candidateLevel string) (*ScoreResult, error) {
 	variables := map[string]string{
-		"transcript":     transcriptText,
-		"criterion_name": criterionName,
-		"criterion_desc": criterionDesc,
-		"min_score":      fmt.Sprintf("%d", minScore),
-		"max_score":      fmt.Sprintf("%d", maxScore),
-		"scoring_guide":  scoringGuide,
+		"transcript":      transcriptText,
+		"criterion_name":  criterionName,
+		"criterion_desc":  criterionDesc,
+		"min_score":       fmt.Sprintf("%d", minScore),
+		"max_score":       fmt.Sprintf("%d", maxScore),
+		"candidate_level": NormalizeCandidateLevel(candidateLevel),
+		"scoring_guide":   scoringGuide,
 	}
 
 	fullResp, err := s.CallAIWithFullResponse(ctx, "score_answer", companyID, variables)
