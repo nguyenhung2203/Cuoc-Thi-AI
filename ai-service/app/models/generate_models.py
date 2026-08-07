@@ -3,10 +3,7 @@ from pydantic import BaseModel, Field
 
 
 class GenerateRequest(BaseModel):
-    """Payload sent by the Go backend to POST /api/v1/generate.
-
-    Mirrors backend AIPayload{model, prompt, temperature, max_tokens}.
-    """
+    """Payload sent by the Go backend to POST /api/v1/generate."""
     prompt: str = Field(..., min_length=1)
     model: str = ""
     temperature: float = 0.2
@@ -14,16 +11,11 @@ class GenerateRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    """Standard envelope the Go backend expects back.
-
-    Mirrors backend StandardAIResponse{data, evidence, confidence,
-    insufficient_data}. `data` is an arbitrary JSON value.
-    """
+    """Standard envelope returned to the Go backend."""
     data: Any = None
     evidence: str = ""
     confidence: float = 0.0
     insufficient_data: bool = False
-    # Optional metadata (ignored by Go's struct, useful for logs/tests).
     model: Optional[str] = None
     tokens_in: Optional[int] = None
     tokens_out: Optional[int] = None

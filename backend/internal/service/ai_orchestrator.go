@@ -223,6 +223,73 @@ func (s *AIOrchestratorService) CallAIWithFullResponse(ctx context.Context, temp
 	return &aiResp, nil
 }
 
+// GenerateStructuredQuestions calls the typed question-generation endpoint.
+func (s *AIOrchestratorService) GenerateStructuredQuestions(ctx context.Context, companyID string, request ai.StructuredQuestionRequest) (*ai.QuestionGenerationResult, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return nil, aiServiceError(err, "failed to encode question request")
+	}
+	url := s.aiServiceURL + "/api/v1/questions/generate"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, aiServiceError(err, "failed to create question request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, aiServiceError(err, "AI question request failed")
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, aiServiceError(err, "failed to read question response")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, apierrors.NewAIServiceError(fmt.Sprintf("AI question endpoint returned %d: %s", resp.StatusCode, string(body)))
+	}
+	var result ai.QuestionGenerationResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, aiServiceError(err, "AI question response was invalid")
+	}
+	if len(result.Questions) == 0 {
+		return nil, apierrors.NewAIServiceError("AI question response contained no questions")
+	}
+	return &result, nil
+}
+
+// GenerateFollowUp calls the typed adaptive follow-up endpoint.
+func (s *AIOrchestratorService) GenerateFollowUp(ctx context.Context, companyID string, request ai.StructuredQuestionRequest) (*ai.QuestionGenerationResult, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return nil, aiServiceError(err, "failed to encode follow-up request")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiServiceURL+"/api/v1/questions/follow-up", bytes.NewReader(payload))
+	if err != nil {
+		return nil, aiServiceError(err, "failed to create follow-up request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, aiServiceError(err, "AI follow-up request failed")
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, aiServiceError(err, "failed to read follow-up response")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, apierrors.NewAIServiceError(fmt.Sprintf("AI follow-up endpoint returned %d: %s", resp.StatusCode, string(body)))
+	}
+	var result ai.QuestionGenerationResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, aiServiceError(err, "AI follow-up response was invalid")
+	}
+	if len(result.Questions) != 1 {
+		return nil, apierrors.NewAIServiceError("AI follow-up response must contain one question")
+	}
+	return &result, nil
+}
+
 // CallAI orchestrates rendering the prompt, calling the Python service with retry + circuit breaker, and returning only Data.
 func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, companyID string, variables map[string]string) ([]byte, error) {
 	resp, err := s.CallAIWithFullResponse(ctx, templateName, companyID, variables)
@@ -233,15 +300,27 @@ func (s *AIOrchestratorService) CallAI(ctx context.Context, templateName, compan
 }
 
 type AIScoreData struct {
-	Score     float64 `json:"score"`
-	AIComment string  `json:"ai_comment"`
+	Score             float64  `json:"score"`
+	AIComment         string   `json:"ai_comment"`
+	Communication     float64  `json:"communication"`
+	Tone              float64  `json:"tone"`
+	Personality       float64  `json:"personality"`
+	Strengths         []string `json:"strengths"`
+	Weaknesses        []string `json:"weaknesses"`
+	ImprovementAdvice []string `json:"improvement_advice"`
 }
 
 type ScoreResult struct {
-	Score      float64
-	Evidence   string
-	AIComment  string
-	Confidence float64
+	Score             float64
+	Evidence          string
+	AIComment         string
+	Confidence        float64
+	Communication     float64
+	Tone              float64
+	Personality       float64
+	Strengths         []string
+	Weaknesses        []string
+	ImprovementAdvice []string
 }
 
 // ScoreAnswer calls AI to score a candidate's answer based on a rubric criterion
@@ -267,10 +346,16 @@ func (s *AIOrchestratorService) ScoreAnswer(ctx context.Context, companyID strin
 	}
 
 	return &ScoreResult{
-		Score:      scoreData.Score,
-		AIComment:  scoreData.AIComment,
-		Evidence:   fullResp.Evidence,
-		Confidence: fullResp.Confidence,
+		Score:             scoreData.Score,
+		AIComment:         scoreData.AIComment,
+		Evidence:          fullResp.Evidence,
+		Confidence:        fullResp.Confidence,
+		Communication:     scoreData.Communication,
+		Tone:              scoreData.Tone,
+		Personality:       scoreData.Personality,
+		Strengths:         scoreData.Strengths,
+		Weaknesses:        scoreData.Weaknesses,
+		ImprovementAdvice: scoreData.ImprovementAdvice,
 	}, nil
 }
 

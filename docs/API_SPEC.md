@@ -998,11 +998,14 @@ Request:
 
 ```json
 {
-  "question_types": ["technical", "behavioral", "experience"],
+  "question_types": ["technical", "behavioral"],
   "level": "middle",
+  "mode": "real",
   "count": 10
 }
 ```
+
+`mode` is `real` for recruiter assistance or `mock` for candidate practice. The response may be `complete` or `degraded`; degraded responses include warnings and actual/requested counts.
 
 Response:
 
@@ -1010,13 +1013,20 @@ Response:
 {
   "success": true,
   "data": {
+    "status": "complete",
+    "requested_count": 10,
+    "actual_count": 10,
+    "confidence": 0.9,
+    "warnings": [],
     "questions": [
       {
         "question_text": "Bạn hãy mô tả một lần bạn tối ưu performance frontend?",
-        "question_type": "experience",
-        "target_skill": "Frontend Performance",
-        "difficulty": "middle",
-        "expected_signals": ["biết đo metric", "có ví dụ thực tế"]
+        "category": "technical",
+        "skill_tags": ["Frontend Performance"],
+        "difficulty": "intermediate",
+        "expected_signals": ["biết đo metric", "có ví dụ thực tế"],
+        "follow_up_prompts": [],
+        "evidence_required": true
       }
     ]
   }
@@ -1025,7 +1035,19 @@ Response:
 
 ---
 
-## 9.2. Suggest follow-up question
+## 9.2. Adaptive follow-up question
+
+Internal AI service contract:
+
+```http
+POST /api/v1/questions/follow-up
+```
+
+The request reuses the question-generation schema and must include `recent_answer`; the service forces `question_count` to `1`, avoids previous questions, and returns the same `complete`/`degraded` response contract. Job descriptions and answers are treated as untrusted data.
+
+---
+
+## 9.3. Suggest follow-up question
 
 ```http
 POST /companies/:company_id/interviews/:interview_id/ai/suggest-follow-up

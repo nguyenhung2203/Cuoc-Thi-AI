@@ -33,12 +33,15 @@ const columns = [
 const showCreateModal = ref(false)
 const showDeleteModal = ref(false)
 const showFilterModal = ref(false)
+const showGenerateModal = ref(false)
 const deletingId = ref(null)
 const editingId = ref(null)
 const saving = ref(false)
 const toast = ref(null)
 const formErrors = ref({})
 const generateCount = ref(10)
+const generateLevel = ref('middle')
+const generateMode = ref('real')
 const newQuestion = ref({
   text: '',
   role: 'All',
@@ -82,7 +85,7 @@ onMounted(async () => {
   await loadQuestions()
   if (!companyId) return
   try {
-    const data = await jobService.getJobs(companyId, { status: 'active', page_size: 100 })
+    const data = await jobService.getJobs(companyId, { status: 'open', page_size: 100 })
     jobs.value = Array.isArray(data) ? data : (data?.items || data?.data || [])
     selectedJobId.value = jobs.value[0]?.id || ''
   } catch (error) {
@@ -109,6 +112,13 @@ const openCreate = () => {
   editingId.value = null
   newQuestion.value = { text: '', role: 'All', level: 'Fresher', type: 'Technical', expected_signals: '' }
   showCreateModal.value = true
+}
+
+const openGenerate = () => {
+  generateCount.value = 5
+  generateLevel.value = filterLevel.value || 'middle'
+  generateMode.value = 'real'
+  showGenerateModal.value = true
 }
 
 const handleCreate = async () => {
@@ -186,8 +196,13 @@ const handleGenerateAI = async () => {
   }
   aiGenerating.value = true
   try {
-    await questionBankService.generateWithAI(companyId, selectedJobId.value, { count, level: filterLevel.value || 'middle' })
+    await questionBankService.generateWithAI(companyId, selectedJobId.value, {
+      count,
+      level: generateLevel.value,
+      mode: generateMode.value,
+    })
     toast.value = { type: 'success', message: 'AI đã tạo thêm câu hỏi vào kho!' }
+    showGenerateModal.value = false
     await loadQuestions()
   } catch (err) {
     toast.value = { type: 'error', message: 'Tạo câu hỏi bằng AI thất bại. Vui lòng thử lại.' }
@@ -204,7 +219,10 @@ const handleGenerateAI = async () => {
         <h1 class="text-h1">Kho câu hỏi</h1>
         <p class="text-helper" style="margin-top: 4px">Quản lý ngân hàng câu hỏi dùng chung cho các buổi phỏng vấn.</p>
       </div>
-      <Button @click="openCreate"><Plus size="16" /> Thêm câu hỏi</Button>
+      <div style="display: flex; gap: 12px">
+        <Button variant="secondary" @click="openGenerate"><Sparkles size="16" /> Sinh câu hỏi bằng AI</Button>
+        <Button @click="openCreate"><Plus size="16" /> Thêm câu hỏi</Button>
+      </div>
     </div>
 
     <Toast v-if="toast" :type="toast.type" :message="toast.message" @close="toast = null" />
@@ -268,6 +286,44 @@ const handleGenerateAI = async () => {
         <p class="text-helper" style="color: var(--text-secondary)">Trong lúc phỏng vấn, AI sẽ tự động tìm kiếm các câu hỏi liên quan trong Kho câu hỏi này dựa trên ngữ cảnh để gợi ý cho bạn.</p>
       </div>
     </div>
+
+    <Modal :isOpen="showGenerateModal" @close="showGenerateModal = false" title="Sinh câu hỏi bằng AI">
+      <p class="text-helper" style="margin-bottom: 20px">AI hỗ trợ nhà tuyển dụng tạo câu hỏi dựa trên JD của công việc đã chọn.</p>
+      <div class="input-group" style="margin-bottom: 16px">
+        <label class="input-label">Công việc / JD</label>
+        <select class="input-field" v-model="selectedJobId">
+          <option value="">Chọn công việc</option>
+          <option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.title || job.name }}</option>
+        </select>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px">
+        <div class="input-group">
+          <label class="input-label">Cấp độ</label>
+          <select class="input-field" v-model="generateLevel">
+            <option value="fresher">Fresher</option>
+            <option value="junior">Junior</option>
+            <option value="middle">Middle</option>
+            <option value="senior">Senior</option>
+            <option value="lead">Lead</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Số lượng câu hỏi</label>
+          <input class="input-field" type="number" min="1" max="20" v-model.number="generateCount" />
+        </div>
+      </div>
+      <div class="input-group" style="margin-bottom: 24px">
+        <label class="input-label">Chế độ</label>
+        <select class="input-field" v-model="generateMode">
+          <option value="real">Real — hỗ trợ HR</option>
+          <option value="mock">Mock — luyện tập với AI</option>
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 12px">
+        <Button variant="ghost" @click="showGenerateModal = false">Hủy</Button>
+        <Button variant="primary" :disabled="aiGenerating" @click="handleGenerateAI">{{ aiGenerating ? 'Đang sinh...' : 'Sinh câu hỏi' }}</Button>
+      </div>
+    </Modal>
 
     <Modal :isOpen="showCreateModal" @close="showCreateModal = false" :title="editingId ? 'Chỉnh sửa câu hỏi' : 'Thêm câu hỏi mới'">
       <Input label="Nội dung câu hỏi" v-model="newQuestion.text" placeholder="Nhập câu hỏi..." style="margin-bottom: 16px" />

@@ -20,5 +20,6 @@ type UpdateQuestionBankRequest struct {
 type GenerateQuestionsRequest struct {
 	QuestionTypes []string `json:"question_types"`
 	Level         string   `json:"level"`
+	Mode          string   `json:"mode"`
 	Count         int      `json:"count"`
 }

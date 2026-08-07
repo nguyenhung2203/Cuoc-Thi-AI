@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -139,6 +140,13 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 			weightedScoreVal = sql.NullFloat64{Float64: weightedScore, Valid: true}
 		}
 
+		// Preserve richer coaching data in the evidence JSON field for report synthesis.
+		feedbackJSON, _ := json.Marshal(map[string]interface{}{
+			"evidence": result.Evidence, "communication": result.Communication,
+			"tone": result.Tone, "personality": result.Personality,
+			"strengths": result.Strengths, "weaknesses": result.Weaknesses,
+			"improvement_advice": result.ImprovementAdvice,
+		})
 		scoreRecord := models.InterviewScore{
 			InterviewID:       interviewID,
 			RubricCriterionID: sql.NullString{String: criterion.ID, Valid: true},
@@ -147,7 +155,7 @@ func (s *ScoreService) ScoreAnswer(ctx context.Context, companyID, interviewID s
 			MaxScore:          float64(criterion.MaxScore),
 			Weight:            criterion.Weight,
 			WeightedScore:     weightedScoreVal,
-			Evidence:          sql.NullString{String: result.Evidence, Valid: true},
+			Evidence:          sql.NullString{String: string(feedbackJSON), Valid: true},
 			AIComment:         sql.NullString{String: result.AIComment, Valid: true},
 			Confidence:        sql.NullFloat64{Float64: result.Confidence, Valid: true},
 			Status:            status,

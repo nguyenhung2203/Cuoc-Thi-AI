@@ -24,16 +24,25 @@ type CandidatePortalInterview struct {
 }
 
 type CandidatePortalProfile struct {
-	UserID        string      `json:"user_id"`
-	FullName      string      `json:"full_name"`
-	Email         string      `json:"email"`
-	Phone         string      `json:"phone"`
-	AvatarURL     string      `json:"avatar_url"`
-	CVFileID      string      `json:"cv_file_id"`
-	CVUrl         string      `json:"cv_url"`
-	CVName        string      `json:"cv_name"`
-	CVParseStatus string      `json:"cv_parse_status,omitempty"`
-	ParsedData    interface{} `json:"parsed_data,omitempty"`
+	UserID         string                   `json:"user_id"`
+	FullName       string                   `json:"full_name"`
+	Email          string                   `json:"email"`
+	Phone          string                   `json:"phone"`
+	AvatarURL      string                   `json:"avatar_url"`
+	CVFileID       string                   `json:"cv_file_id"`
+	CVUrl          string                   `json:"cv_url"`
+	CVName         string                   `json:"cv_name"`
+	CVParseStatus  string                   `json:"cv_parse_status,omitempty"`
+	ParsedData     interface{}              `json:"parsed_data,omitempty"`
+	InterviewScore *CandidateInterviewScore `json:"interview_score,omitempty"`
+}
+
+type CandidateInterviewScore struct {
+	FinalScore float64  `json:"final_score"`
+	Summary    string   `json:"summary"`
+	Strengths  []string `json:"strengths,omitempty"`
+	Weaknesses []string `json:"weaknesses,omitempty"`
+	Advice     []string `json:"advice,omitempty"`
 }
 
 type CandidatePortalCVUpload struct {
@@ -46,23 +55,23 @@ type CandidatePortalCVUpload struct {
 }
 
 type CandidatePortalApplication struct {
-	ID          string     `json:"id" db:"id"`
-	JobID       string     `json:"job_id" db:"job_id"`
-	JobTitle    string     `json:"job_title" db:"job_title"`
-	CompanyID   string     `json:"company_id" db:"company_id"`
-	CompanyName string     `json:"company_name" db:"company_name"`
-	Status      string     `json:"status" db:"status"`
-	AppliedAt   *time.Time `json:"applied_at" db:"applied_at"`
-	CVName      string     `json:"cv_name" db:"cv_name"`
-	CVStorageKey string    `json:"-" db:"cv_storage_key"`
-	CVUrl       string     `json:"cv_url,omitempty" db:"-"`
+	ID           string     `json:"id" db:"id"`
+	JobID        string     `json:"job_id" db:"job_id"`
+	JobTitle     string     `json:"job_title" db:"job_title"`
+	CompanyID    string     `json:"company_id" db:"company_id"`
+	CompanyName  string     `json:"company_name" db:"company_name"`
+	Status       string     `json:"status" db:"status"`
+	AppliedAt    *time.Time `json:"applied_at" db:"applied_at"`
+	CVName       string     `json:"cv_name" db:"cv_name"`
+	CVStorageKey string     `json:"-" db:"cv_storage_key"`
+	CVUrl        string     `json:"cv_url,omitempty" db:"-"`
 }
 
 // CandidatePortalCVReview is AI feedback for improving a candidate CV (portal tool).
 type CandidatePortalCVReview struct {
-	Summary          string   `json:"summary"`
-	Issues           []string `json:"issues"`
-	Suggestions      []string `json:"suggestions"`
-	MissingSections  []string `json:"missing_sections"`
-	Strengths        []string `json:"strengths"`
+	Summary         string   `json:"summary"`
+	Issues          []string `json:"issues"`
+	Suggestions     []string `json:"suggestions"`
+	MissingSections []string `json:"missing_sections"`
+	Strengths       []string `json:"strengths"`
 }

@@ -64,7 +64,7 @@ func (r *questionRepository) List(ctx context.Context, companyID string, jobID, 
 	}
 
 	listQ := fmt.Sprintf(
-		"SELECT * FROM question_bank %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		"SELECT id, company_id, job_id, created_by, question_text, question_type, skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata FROM question_bank %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
 		whereClause, argIdx, argIdx+1,
 	)
 	args = append(args, p.PageSize, p.Offset())
@@ -82,7 +82,8 @@ func (r *questionRepository) List(ctx context.Context, companyID string, jobID, 
 			&q.ID, &q.CompanyID, &q.JobID, &q.CreatedBy,
 			&q.QuestionText, &q.QuestionType, &q.SkillTags,
 			&q.Level, &q.ExpectedSignals, &q.IsAIGenerated,
-			&q.CreatedAt, &q.UpdatedAt,
+			&q.CreatedAt, &q.UpdatedAt, &q.FollowUpPrompts, &q.TimeboxMinutes,
+			&q.EvidenceRequired, &q.GenerationMode, &q.PromptVersion, &q.AIMetadata,
 		); err != nil {
 			return nil, 0, fmt.Errorf("question scan: %w", err)
 		}
@@ -98,13 +99,15 @@ func (r *questionRepository) List(ctx context.Context, companyID string, jobID, 
 }
 
 func (r *questionRepository) GetByID(ctx context.Context, companyID, questionID string) (*models.QuestionBank, error) {
-	const q = `SELECT * FROM question_bank WHERE id = $1::uuid AND company_id = $2::uuid`
+	const q = `SELECT id, company_id, job_id, created_by, question_text, question_type, skill_tags, level, expected_signals, is_ai_generated, created_at, updated_at, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata FROM question_bank WHERE id = $1::uuid AND company_id = $2::uuid`
 	var qb models.QuestionBank
 	if err := r.db.QueryRowContext(ctx, q, questionID, companyID).Scan(
 		&qb.ID, &qb.CompanyID, &qb.JobID, &qb.CreatedBy,
 		&qb.QuestionText, &qb.QuestionType, &qb.SkillTags,
 		&qb.Level, &qb.ExpectedSignals, &qb.IsAIGenerated,
 		&qb.CreatedAt, &qb.UpdatedAt,
+		&qb.FollowUpPrompts, &qb.TimeboxMinutes, &qb.EvidenceRequired,
+		&qb.GenerationMode, &qb.PromptVersion, &qb.AIMetadata,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -121,12 +124,13 @@ func (r *questionRepository) Create(ctx context.Context, q *models.QuestionBank)
 	const query = `
 		INSERT INTO question_bank (
 			id, company_id, job_id, created_by, question_text, question_type,
-			skill_tags, level, expected_signals, is_ai_generated
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			skill_tags, level, expected_signals, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata, is_ai_generated
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		q.ID, q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
-		q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated,
+		q.SkillTags, q.Level, q.ExpectedSignals, q.FollowUpPrompts, q.TimeboxMinutes,
+		q.EvidenceRequired, q.GenerationMode, q.PromptVersion, q.AIMetadata, q.IsAIGenerated,
 	)
 	if err != nil {
 		return fmt.Errorf("question create: %w", err)
@@ -140,7 +144,8 @@ func (r *questionRepository) Update(ctx context.Context, companyID, questionID s
 	}
 	allowedCols := map[string]bool{
 		"question_text": true, "question_type": true, "skill_tags": true,
-		"level": true, "expected_signals": true,
+		"level": true, "expected_signals": true, "follow_up_prompts": true, "timebox_minutes": true,
+		"evidence_required": true, "generation_mode": true, "prompt_version": true, "ai_metadata": true,
 	}
 	setClauses := make([]string, 0, len(patch)+1)
 	args := make([]any, 0, len(patch)+2)
@@ -192,8 +197,8 @@ func (r *questionRepository) CreateQuestions(ctx context.Context, questions []mo
 	query := `
 		INSERT INTO question_bank (
 			company_id, job_id, created_by, question_text, question_type,
-			skill_tags, level, expected_signals, is_ai_generated
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			skill_tags, level, expected_signals, follow_up_prompts, timebox_minutes, evidence_required, generation_mode, prompt_version, ai_metadata, is_ai_generated
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 
 	stmt, err := tx.PrepareContext(ctx, query)
@@ -205,7 +210,8 @@ func (r *questionRepository) CreateQuestions(ctx context.Context, questions []mo
 	for _, q := range questions {
 		_, err := stmt.ExecContext(ctx,
 			q.CompanyID, q.JobID, q.CreatedBy, q.QuestionText, q.QuestionType,
-			q.SkillTags, q.Level, q.ExpectedSignals, q.IsAIGenerated,
+			q.SkillTags, q.Level, q.ExpectedSignals, q.FollowUpPrompts, q.TimeboxMinutes,
+			q.EvidenceRequired, q.GenerationMode, q.PromptVersion, q.AIMetadata, q.IsAIGenerated,
 		)
 		if err != nil {
 			return fmt.Errorf("execute statement: %w", err)

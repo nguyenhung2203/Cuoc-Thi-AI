@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"backend/internal/ai"
 	"backend/internal/models"
 	apierrors "backend/internal/pkg/errors"
 	"backend/internal/pkg/logger"
@@ -418,41 +419,31 @@ func (s *MockService) GetReport(ctx context.Context, id, userID string) (*models
 }
 
 func (s *MockService) generateNextQuestion(ctx context.Context, mockID, targetRole, targetLevel, cvFileID string, prevMessages []models.MockInterviewMessage) (string, error) {
-	variables := map[string]string{
-		"target_role":       targetRole,
-		"target_level":      targetLevel,
-		"candidate_profile": "",
-	}
-
-	// Build conversation history
-	var history []string
+	previousQuestions := make([]string, 0, len(prevMessages))
+	recentAnswer := ""
 	for _, msg := range prevMessages {
-		history = append(history, fmt.Sprintf("%s: %s", msg.SenderType, msg.Content))
+		if msg.SenderType == "ai" {
+			previousQuestions = append(previousQuestions, utils.TruncateText(msg.Content, 1000))
+		} else if msg.SenderType == "candidate" {
+			recentAnswer = utils.TruncateText(msg.Content, 5000)
+		}
 	}
-	if len(history) > 0 {
-		variables["history"] = strings.Join(history, "\n")
-	} else {
-		variables["history"] = "Chưa có hội thoại. Hãy bắt đầu phỏng vấn."
+	level := strings.ToLower(strings.TrimSpace(targetLevel))
+	if level == "mid" {
+		level = "middle"
 	}
-
-	// Use empty string as companyID — mock is user-scoped, not company-scoped.
-	// CallAI falls back to system-wide prompt templates when companyID is empty.
-	data, err := s.orchestrator.CallAI(ctx, "mock_question", "", variables)
+	if level == "" {
+		level = "unknown"
+	}
+	result, err := s.orchestrator.GenerateStructuredQuestions(ctx, "", ai.StructuredQuestionRequest{
+		JobTitle: targetRole, Level: level, Mode: "mock", Language: "vi",
+		QuestionCount: 1, PreviousQuestions: previousQuestions, RecentAnswer: recentAnswer,
+	})
 	if err != nil {
 		return "", err
 	}
-	result := string(data)
-	cleanJSON := utils.CleanJSON(result)
-
-	// Unmarshal to extract question_text
-	var parsed struct {
-		QuestionText string `json:"question_text"`
-	}
-	if err := json.Unmarshal([]byte(cleanJSON), &parsed); err != nil {
-		return "", fmt.Errorf("failed to parse AI question: %w", err)
-	}
-	if strings.TrimSpace(parsed.QuestionText) == "" {
+	if result == nil || len(result.Questions) == 0 || strings.TrimSpace(result.Questions[0].QuestionText) == "" {
 		return "", fmt.Errorf("AI question response is missing question_text")
 	}
-	return parsed.QuestionText, nil
+	return result.Questions[0].QuestionText, nil
 }
