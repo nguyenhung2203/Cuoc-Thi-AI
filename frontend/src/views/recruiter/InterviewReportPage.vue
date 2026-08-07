@@ -66,9 +66,8 @@ onMounted(async () => {
       report.value.weaknesses = parsed.weaknesses || []
       report.value.transcript_highlights = parsed.evidence_json || []
       report.value.ai_reasoning_summary = parsed.ai_reasoning_summary
-      // Use real rubric scores from parsed report if available
-      // If the AI has not generated rubric scores yet, show empty state
       report.value.rubric_scores = parsed.scores || []
+    }
 
     const data = await loadReport()
     if (data?.status === 'generating' || data?.status === 'pending') {
