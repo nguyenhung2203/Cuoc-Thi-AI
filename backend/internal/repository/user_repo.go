@@ -208,7 +208,7 @@ func (r *UserRepository) GetDashboardStats(ctx context.Context) (map[string]int,
 	stats["total_companies"] = totalCompanies
 
 	var totalInterviews int
-	if err := r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews WHERE deleted_at IS NULL"); err != nil {
+	if err := r.db.GetContext(ctx, &totalInterviews, "SELECT COUNT(*) FROM interviews"); err != nil {
 		return nil, err
 	}
 	stats["total_interviews"] = totalInterviews
@@ -268,7 +268,7 @@ func (r *UserRepository) GetReportsData(ctx context.Context) (totalUsers, totalC
 		{&totalCandidates, "SELECT COUNT(*) FROM users WHERE role = 'candidate' AND deleted_at IS NULL"},
 		{&totalRecruiters, "SELECT COUNT(*) FROM users WHERE role = 'recruiter' AND deleted_at IS NULL"},
 		{&totalCompanies, "SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL"},
-		{&totalInterviews, "SELECT COUNT(*) FROM interviews WHERE deleted_at IS NULL"},
+		{&totalInterviews, "SELECT COUNT(*) FROM interviews"},
 		{&tokensIn, "SELECT COALESCE(SUM(tokens_in), 0) FROM ai_request_logs WHERE status = 'success'"},
 		{&tokensOut, "SELECT COALESCE(SUM(tokens_out), 0) FROM ai_request_logs WHERE status = 'success'"},
 	}

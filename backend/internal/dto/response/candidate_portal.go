@@ -24,23 +24,25 @@ type CandidatePortalInterview struct {
 }
 
 type CandidatePortalProfile struct {
-	UserID     string      `json:"user_id"`
-	FullName   string      `json:"full_name"`
-	Email      string      `json:"email"`
-	Phone      string      `json:"phone"`
-	AvatarURL  string      `json:"avatar_url"`
-	CVFileID   string      `json:"cv_file_id"`
-	CVUrl      string      `json:"cv_url"`
-	CVName     string      `json:"cv_name"`
-	ParsedData interface{} `json:"parsed_data,omitempty"`
+	UserID        string      `json:"user_id"`
+	FullName      string      `json:"full_name"`
+	Email         string      `json:"email"`
+	Phone         string      `json:"phone"`
+	AvatarURL     string      `json:"avatar_url"`
+	CVFileID      string      `json:"cv_file_id"`
+	CVUrl         string      `json:"cv_url"`
+	CVName        string      `json:"cv_name"`
+	CVParseStatus string      `json:"cv_parse_status,omitempty"`
+	ParsedData    interface{} `json:"parsed_data,omitempty"`
 }
 
 type CandidatePortalCVUpload struct {
-	Message    string      `json:"message"`
-	FileName   string      `json:"file_name"`
-	CVUrl      string      `json:"cv_url"`
-	CVFileID   string      `json:"cv_file_id"`
-	ParsedData interface{} `json:"parsed_data"`
+	Message     string      `json:"message"`
+	FileName    string      `json:"file_name"`
+	CVUrl       string      `json:"cv_url"`
+	CVFileID    string      `json:"cv_file_id"`
+	ParseStatus string      `json:"parse_status"`
+	ParsedData  interface{} `json:"parsed_data,omitempty"`
 }
 
 type CandidatePortalApplication struct {
@@ -52,4 +54,15 @@ type CandidatePortalApplication struct {
 	Status      string     `json:"status" db:"status"`
 	AppliedAt   *time.Time `json:"applied_at" db:"applied_at"`
 	CVName      string     `json:"cv_name" db:"cv_name"`
+	CVStorageKey string    `json:"-" db:"cv_storage_key"`
+	CVUrl       string     `json:"cv_url,omitempty" db:"-"`
+}
+
+// CandidatePortalCVReview is AI feedback for improving a candidate CV (portal tool).
+type CandidatePortalCVReview struct {
+	Summary          string   `json:"summary"`
+	Issues           []string `json:"issues"`
+	Suggestions      []string `json:"suggestions"`
+	MissingSections  []string `json:"missing_sections"`
+	Strengths        []string `json:"strengths"`
 }

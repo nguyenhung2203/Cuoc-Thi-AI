@@ -192,8 +192,10 @@ const fetchPromptTemplates = async () => {
   loadingPrompts.value = true
   try {
     const res = await apiService.get('/admin/ai-prompts')
-    promptTemplates.value = Array.isArray(res) ? res : (res.data || [])
+    const data = res && typeof res === 'object' ? (res.data ?? res) : []
+    promptTemplates.value = Array.isArray(data) ? data : []
   } catch (err) {
+    promptTemplates.value = []
     console.error('Failed to load AI prompts:', err)
   } finally {
     loadingPrompts.value = false

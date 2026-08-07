@@ -1,29 +1,48 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import Card from '../../components/common/AppCard.vue'
+import Modal from '../../components/common/AppModal.vue'
 import { apiService } from '../../services/api.service'
 import { Building, Search, Globe, Users, Briefcase, RefreshCw, ExternalLink, ShieldCheck } from 'lucide-vue-next'
 
 const companies = ref([])
 const loading = ref(false)
+const fieldValue = (value) => value && typeof value === 'object' && 'String' in value
+  ? (value.Valid ? String(value.String || '') : '')
+  : (value == null ? '' : String(value))
+
+const normalizeCompany = (company) => ({
+  ...company,
+  name: fieldValue(company?.name),
+  industry: fieldValue(company?.industry),
+  size: fieldValue(company?.size),
+  website: fieldValue(company?.website)
+})
+
 const searchQuery = ref('')
+const selectedCompany = ref(null)
+const showCompanyModal = ref(false)
+const openCompanyProfile = (company) => {
+  selectedCompany.value = company
+  showCompanyModal.value = true
+}
+const closeCompanyProfile = () => {
+  showCompanyModal.value = false
+  selectedCompany.value = null
+}
 
 const displayedCompanies = computed(() => {
   if (!companies.value || !Array.isArray(companies.value)) return []
   if (!searchQuery.value) return companies.value
   const q = searchQuery.value.toLowerCase()
-  return companies.value.filter(c => 
-    (c.name && c.name.toLowerCase().includes(q)) ||
-    (c.industry && c.industry.toLowerCase().includes(q)) ||
-    (c.website && c.website.toLowerCase().includes(q))
-  )
+  return q ? companies.value.filter(c => [c.name, c.industry, c.website].some(v => String(v || '').toLowerCase().includes(q))) : companies.value
 })
 
 const fetchCompanies = async () => {
   loading.value = true
   try {
     const res = await apiService.get('/admin/companies')
-    companies.value = Array.isArray(res) ? res : (res.data || [])
+    companies.value = (Array.isArray(res) ? res : (res?.data || [])).map(normalizeCompany)
   } catch (error) {
     console.error('Failed to fetch companies', error)
   } finally {
@@ -127,7 +146,7 @@ onMounted(() => {
         <div class="pt-4 mt-4 border-t border-[var(--border)] flex items-center justify-between gap-2">
           <a 
             v-if="company.website" 
-            :href="company.website.startsWith('http') ? company.website : `https://${company.website}`" 
+            :href="/^https?:\/\//i.test(company.website) ? company.website : `https://${company.website}`" 
             target="_blank" 
             class="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]"
           >
@@ -137,15 +156,47 @@ onMounted(() => {
           </a>
           <span v-else class="text-xs text-[var(--text-secondary)] italic">Chưa có website</span>
 
-          <button class="px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-soft)] rounded-lg transition-colors shrink-0">
-            Xem hồ sơ
+          <button @click="openCompanyProfile(company)" class="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <Building size="14" /> Xem hồ sơ
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Empty State -->
-    <Card v-else class="rounded-2xl p-16 text-center border border-[var(--border)] shadow-sm">
+    <Modal :isOpen="showCompanyModal" title="Hồ sơ công ty" size="lg" @close="closeCompanyProfile">
+      <div v-if="selectedCompany" class="-m-1 overflow-hidden rounded-2xl bg-white">
+        <div class="relative overflow-hidden bg-slate-950 px-7 py-7 text-white">
+          <div class="absolute -right-10 -top-16 h-48 w-48 rounded-full bg-blue-500/30 blur-2xl"></div>
+          <div class="absolute -bottom-24 left-1/2 h-48 w-48 rounded-full bg-cyan-400/20 blur-3xl"></div>
+          <div class="relative flex items-center gap-5">
+            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white text-3xl font-extrabold text-blue-700 shadow-xl">
+              {{ selectedCompany.name?.charAt(0)?.toUpperCase() || 'C' }}
+            </div>
+            <div class="min-w-0">
+              <span class="mb-2 inline-flex items-center rounded-full bg-emerald-400/15 px-3 py-1 text-[11px] font-bold text-emerald-300">✓ Đã xác minh</span>
+              <h3 class="truncate text-2xl font-extrabold tracking-tight">{{ selectedCompany.name || 'Công ty chưa đặt tên' }}</h3>
+              <p class="mt-1 text-sm text-slate-300">Thông tin doanh nghiệp trên nền tảng ViệcLàmAI</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid gap-6 p-7 md:grid-cols-[1fr_210px]">
+          <div>
+            <h4 class="mb-4 text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Thông tin doanh nghiệp</h4>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-2xl border border-slate-200 p-4"><p class="text-xs text-slate-400">Ngành nghề</p><p class="mt-1 font-bold text-slate-800">{{ selectedCompany.industry || 'Chưa cập nhật' }}</p></div>
+              <div class="rounded-2xl border border-slate-200 p-4"><p class="text-xs text-slate-400">Quy mô nhân sự</p><p class="mt-1 font-bold text-slate-800">{{ selectedCompany.size || 'Chưa cập nhật' }}</p></div>
+              <div class="rounded-2xl border border-slate-200 p-4 sm:col-span-2"><p class="text-xs text-slate-400">Website</p><a v-if="selectedCompany.website" :href="/^https?:\/\//i.test(selectedCompany.website) ? selectedCompany.website : `https://${selectedCompany.website}`" target="_blank" class="mt-1 inline-flex max-w-full items-center gap-1 truncate font-bold text-blue-600 hover:underline">{{ selectedCompany.website }} <ExternalLink size="13" /></a><p v-else class="mt-1 font-bold text-slate-800">Chưa cập nhật</p></div>
+            </div>
+          </div>
+          <div class="rounded-2xl bg-blue-50 p-5">
+            <h4 class="mb-4 text-xs font-extrabold uppercase tracking-wider text-blue-900">Tổng quan</h4>
+            <div class="space-y-4 text-sm"><div><p class="text-xs text-blue-500">Trạng thái</p><span class="mt-1 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">Đang hoạt động</span></div><div><p class="text-xs text-blue-500">Mã định danh</p><p class="mt-1 truncate font-bold text-slate-700" :title="selectedCompany.slug">{{ selectedCompany.slug || 'Chưa cập nhật' }}</p></div></div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+
+    <Card v-if="!loading && displayedCompanies.length === 0" class="rounded-2xl p-16 text-center border border-[var(--border)] shadow-sm">
       <div class="w-16 h-16 bg-[var(--surface)] rounded-full flex items-center justify-center mx-auto mb-4 text-[var(--text-secondary)]">
         <Building size="32" />
       </div>
