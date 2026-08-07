@@ -27,6 +27,7 @@ onMounted(async () => {
 
     let formattedQuestions = []
     let lastQ = null
+    let communicationTotal = 0, toneTotal = 0, personalityTotal = 0, dimensionCount = 0
     if (Array.isArray(messages)) {
       for (let m of messages) {
         if (m.sender_type === 'ai') {
@@ -41,6 +42,10 @@ onMounted(async () => {
              feedback = nextAi.content
              if (Array.isArray(sj.good_points)) goodPoints = sj.good_points
              if (Array.isArray(sj.improve_points)) improvePoints = sj.improve_points
+             if (sj.communication_score != null) communicationTotal += Number(sj.communication_score) || 0
+             if (sj.tone_score != null) toneTotal += Number(sj.tone_score) || 0
+             if (sj.personality_score != null) personalityTotal += Number(sj.personality_score) || 0
+             dimensionCount++
           }
           if (lastQ) {
             formattedQuestions.push({
@@ -79,6 +84,9 @@ onMounted(async () => {
       summaryFeedback: typeof feedbackSummary === 'string' ? feedbackSummary : '',
       strengths: [...new Set(allFeedback.strengths)],
       improvements: [...new Set(allFeedback.improvements)],
+      communicationScore: dimensionCount ? communicationTotal / dimensionCount : null,
+      toneScore: dimensionCount ? toneTotal / dimensionCount : null,
+      personalityScore: dimensionCount ? personalityTotal / dimensionCount : null,
       questions: formattedQuestions
     }
   } catch (err) {
@@ -135,6 +143,11 @@ onMounted(async () => {
           <div class="score-note">
             <h3 class="score-note-title"><Sparkles :size="18" /> Nhận xét chung</h3>
             <p class="score-note-text">{{ sessionData.summaryFeedback || 'Chưa có nhận xét tổng hợp cho bài luyện tập này.' }}</p>
+          </div>
+          <div v-if="sessionData.communicationScore != null" class="grid grid-cols-3 gap-2 text-center text-xs mt-5">
+            <div class="rounded-lg bg-[var(--surface-soft)] p-2">Giao tiếp<br><b>{{ sessionData.communicationScore.toFixed(1) }}/10</b></div>
+            <div class="rounded-lg bg-[var(--surface-soft)] p-2">Tone<br><b>{{ sessionData.toneScore.toFixed(1) }}/10</b></div>
+            <div class="rounded-lg bg-[var(--surface-soft)] p-2">Chuyên nghiệp<br><b>{{ sessionData.personalityScore.toFixed(1) }}/10</b></div>
           </div>
           <div v-if="sessionData.strengths?.length || sessionData.improvements?.length" class="mt-5 space-y-4 text-left">
             <div v-if="sessionData.strengths?.length">

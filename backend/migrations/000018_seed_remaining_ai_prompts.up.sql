@@ -174,6 +174,9 @@ OUTPUT JSON:
   "max_score": 5,
   "strengths": ["string"],
   "improvements": ["string"],
+  "communication_score": 0,
+  "tone_score": 0,
+  "personality_score": 0,
   "sample_better_answer": "string",
   "coach_comment": "string",
   "confidence": 0.0
