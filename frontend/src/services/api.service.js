@@ -94,8 +94,17 @@ const request = async (endpoint, options = {}) => {
         ALREADY_APPLIED: 'Bạn đã ứng tuyển công việc này.',
         JOB_CLOSED: 'Công việc này đã đóng và không còn nhận hồ sơ.',
         INTERVIEW_CONFLICT: 'Thời gian phỏng vấn bị trùng với một lịch đã có.',
+        CONFLICT: 'Yêu cầu xung đột với dữ liệu hiện có.',
       };
       if (errorMessages[errorCode]) errorPayload.message = errorMessages[errorCode];
+      if (/already applied/i.test(errorPayload.message || '')) {
+        errorPayload.message = errorMessages.ALREADY_APPLIED;
+        errorPayload.code = 'ALREADY_APPLIED';
+      }
+      if (/not open for applications/i.test(errorPayload.message || '')) {
+        errorPayload.message = errorMessages.JOB_CLOSED;
+        errorPayload.code = 'JOB_CLOSED';
+      }
       if (/current password is incorrect/i.test(errorPayload.message || '')) {
         errorPayload.message = errorMessages.INVALID_CURRENT_PASSWORD;
       }

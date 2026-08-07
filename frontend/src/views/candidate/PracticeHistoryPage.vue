@@ -11,6 +11,7 @@ import { langStore } from '../../stores/lang.store'
 const router = useRouter()
 const history = ref([])
 const loading = ref(true)
+const loadError = ref('')
 const activeTab = ref('overview') // 'overview' | 'history' | 'insights'
 
 const searchQuery = ref('')
@@ -54,7 +55,8 @@ const filteredHistory = computed(() => {
   // 3. Filter by score / badge
   if (filterBadge.value !== 'ALL') {
     result = result.filter(item => {
-      const score = Number(item.score) || 0
+      if (item.score == null) return false
+      const score = Number(item.score)
       if (filterBadge.value === 'EXCELLENT') return score >= 9.0 || item.badge === 'Xuất sắc'
       if (filterBadge.value === 'GOOD') return (score >= 8.0 && score < 9.0) || item.badge === 'Khá tốt'
       if (filterBadge.value === 'PASS') return score < 8.0 || item.badge === 'Đạt yêu cầu'
@@ -64,9 +66,9 @@ const filteredHistory = computed(() => {
 
   // 4. Sort
   if (sortBy.value === 'SCORE_DESC') {
-    result.sort((a, b) => Number(b.score) - Number(a.score))
+    result.sort((a, b) => (Number(b.score) || -1) - (Number(a.score) || -1))
   } else if (sortBy.value === 'SCORE_ASC') {
-    result.sort((a, b) => Number(a.score) - Number(b.score))
+    result.sort((a, b) => (Number(a.score) || 999) - (Number(b.score) || 999))
   } else if (sortBy.value === 'OLDEST') {
     result.reverse()
   }
@@ -79,39 +81,47 @@ onMounted(async () => {
     const data = await mockService.listMyMockInterviews()
     if (Array.isArray(data) && data.length > 0) {
       history.value = data.map(item => {
-        const scoreVal = item.final_score != null ? Number(item.final_score) : (8.5 + Math.random())
+        const hasScore = item.final_score != null && !Number.isNaN(Number(item.final_score))
+        const scoreVal = hasScore ? Number(item.final_score) : null
         return {
-          id: item.id || 'mock-' + Math.random().toString(36).substring(2, 7),
-          role: item.target_role || 'Senior Software Engineer',
-          level: item.target_level || 'Senior',
-          date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '11/07/2026',
-          score: scoreVal.toFixed(1),
-          duration: item.duration_minutes ? `${item.duration_minutes} phút` : '40 phút',
+          id: item.id,
+          role: item.target_role || 'Phỏng vấn thử',
+          level: item.target_level || '—',
+          date: item.created_at ? new Date(item.created_at).toLocaleDateString('vi-VN') : '—',
+          score: scoreVal != null ? scoreVal.toFixed(1) : null,
+          duration: item.duration_minutes ? `${item.duration_minutes} phút` : '—',
           status: item.status || 'completed',
-          badge: scoreVal >= 9 ? 'Xuất sắc' : scoreVal >= 8 ? 'Khá tốt' : 'Đạt yêu cầu',
-          badgeType: scoreVal >= 9 ? 'success' : scoreVal >= 8 ? 'info' : 'default',
-          highlights: 'Được chấm tự động theo Rubric chuẩn Enterprise của Trí tuệ Nhân tạo.'
+          badge: scoreVal == null ? 'Chưa có điểm' : scoreVal >= 9 ? 'Xuất sắc' : scoreVal >= 8 ? 'Khá tốt' : 'Đạt yêu cầu',
+          badgeType: scoreVal == null ? 'default' : scoreVal >= 9 ? 'success' : scoreVal >= 8 ? 'info' : 'default',
+          highlights: hasScore
+            ? 'Điểm từ phiên luyện tập AI của bạn.'
+            : 'Phiên chưa có điểm tổng hợp (có thể kết thúc sớm hoặc AI chưa chấm xong).'
         }
-      })
+      }).filter(item => item.id)
     } else {
       history.value = []
     }
   } catch (err) {
-    console.warn('Không tải được lịch sử phỏng vấn, hiển thị trạng thái chưa có bài luyện tập.')
+    console.warn('Không tải được lịch sử phỏng vấn:', err)
     history.value = []
+    loadError.value = err?.message || 'Không tải được lịch sử luyện tập.'
   } finally {
     loading.value = false
   }
 })
 
 const averageScore = computed(() => {
-  if (filteredHistory.value.length === 0) return '--'
-  const sum = filteredHistory.value.reduce((acc, curr) => acc + Number(curr.score), 0)
-  return (sum / filteredHistory.value.length).toFixed(1)
+  const scored = filteredHistory.value.filter(item => item.score != null)
+  if (scored.length === 0) return '--'
+  const sum = scored.reduce((acc, curr) => acc + Number(curr.score), 0)
+  return (sum / scored.length).toFixed(1)
 })
 
 const totalPracticeMinutes = computed(() => {
-  return filteredHistory.value.length * 41
+  return filteredHistory.value.reduce((acc, item) => {
+    const mins = Number(String(item.duration || '').replace(/[^\d]/g, ''))
+    return acc + (Number.isFinite(mins) ? mins : 0)
+  }, 0)
 })
 
 const radarSkills = computed(() => {
@@ -415,7 +425,13 @@ const handleActionClick = (id) => {
 
         <div v-if="loading" class="loading-state">
           <div class="ph-spinner"></div>
-          <p class="loading-text">Đang đồng bộ dữ liệu phỏng vấn từ AI Engine...</p>
+          <p class="loading-text">Đang tải lịch sử luyện tập...</p>
+        </div>
+
+        <div v-else-if="loadError" class="empty-state-box">
+          <h3 class="empty-title">Không tải được lịch sử</h3>
+          <p class="empty-desc">{{ loadError }}</p>
+          <Button variant="primary" class="mt-4" @click="router.go(0)">Thử lại</Button>
         </div>
 
         <div v-else class="table-wrapper">
@@ -443,7 +459,7 @@ const handleActionClick = (id) => {
                 <td class="col-dur">{{ item.duration }}</td>
                 <td class="col-score">
                   <Badge :type="item.badgeType" className="score-badge">
-                    {{ item.score }} / 10
+                    {{ item.score != null ? `${item.score} / 10` : 'Chưa có điểm' }}
                   </Badge>
                 </td>
                 <td class="col-desc">

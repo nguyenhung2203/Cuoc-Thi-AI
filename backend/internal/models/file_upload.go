@@ -18,5 +18,10 @@ type File struct {
 	SizeBytes    int64          `db:"size_bytes"    json:"size_bytes"`
 	FileType     string         `db:"file_type"     json:"file_type"` // cv | audio_recording | avatar | attachment
 	Checksum     sql.NullString `db:"checksum"      json:"checksum,omitempty"`
+	ParsedJSON   JSONB          `db:"parsed_json"   json:"parsed_json,omitempty"`
+	AISummary    sql.NullString `db:"ai_summary"    json:"ai_summary,omitempty"`
+	ParseStatus  sql.NullString `db:"parse_status"  json:"parse_status,omitempty"`
+	ParseError   sql.NullString `db:"parse_error"   json:"parse_error,omitempty"`
+	ParsedAt     sql.NullTime   `db:"parsed_at"     json:"parsed_at,omitempty"`
 	CreatedAt    time.Time      `db:"created_at"    json:"created_at"`
 }

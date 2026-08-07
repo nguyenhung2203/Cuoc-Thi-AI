@@ -28,25 +28,33 @@ const pendingUsersList = ref([])
 const fetchDashboardData = async () => {
   loading.value = true
   try {
-    const [statsData, reportsData, logsData] = await Promise.all([
+    const [statsResult, reportsResult, logsResult] = await Promise.allSettled([
       apiService.get('/admin/dashboard-stats'),
       apiService.get('/admin/reports'),
-      apiService.get('/admin/logs').catch(() => [])
+      apiService.get('/admin/logs')
     ])
-    
-    stats.value[0].value = statsData.total_users || 0
-    stats.value[1].value = statsData.total_companies || 0
-    stats.value[2].value = statsData.total_interviews || 0
-    stats.value[3].value = statsData.pending_users || 0
-    pendingUsersCount.value = statsData.pending_users || 0
-    
+
+    const statsData = statsResult.status === 'fulfilled' ? statsResult.value : null
+    const reportsData = reportsResult.status === 'fulfilled' ? reportsResult.value : null
+    const logsData = logsResult.status === 'fulfilled' ? logsResult.value : []
+
+    stats.value[0].value = statsData?.total_users || 0
+    stats.value[1].value = statsData?.total_companies || 0
+    stats.value[2].value = statsData?.total_interviews || 0
+    stats.value[3].value = statsData?.pending_users || 0
+    pendingUsersCount.value = statsData?.pending_users || 0
+
     reports.value = reportsData
     recentLogs.value = Array.isArray(logsData) ? logsData.slice(0, 4) : ((logsData?.data || []).slice(0, 4))
 
     // Fetch up to 5 pending users for quick approval directly from dashboard
-    if (statsData.pending_users > 0) {
-      const pendingRes = await apiService.get('/admin/users/pending')
-      pendingUsersList.value = (pendingRes || []).slice(0, 5)
+    if (pendingUsersCount.value > 0) {
+      try {
+        const pendingRes = await apiService.get('/admin/users/pending')
+        pendingUsersList.value = (pendingRes || []).slice(0, 5)
+      } catch (err) {
+        pendingUsersList.value = []
+      }
     } else {
       pendingUsersList.value = []
     }
@@ -55,7 +63,6 @@ const fetchDashboardData = async () => {
     cpuLoad.value = reportsData?.cpu_usage_percent == null ? null : +reportsData.cpu_usage_percent.toFixed(1)
     ramLoad.value = reportsData?.ram_usage_percent == null ? null : +reportsData.ram_usage_percent.toFixed(1)
 
-    
     const now = new Date()
     lastUpdated.value = now.toLocaleTimeString('vi-VN')
   } catch (error) {
