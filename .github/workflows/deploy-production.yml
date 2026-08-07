@@ -1,0 +1,56 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy through SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          script: |
+            set -eu
+
+            APP_DIR="/home/deploy/CuocThiAI"
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Application source does not exist: $APP_DIR"
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+
+            docker compose --env-file .env.production \
+              -f docker-compose.prod.yml config
+
+            docker compose --env-file .env.production \
+              -f docker-compose.prod.yml up -d --build --remove-orphans
+
+            docker compose --env-file .env.production \
+              -f docker-compose.prod.yml ps
+
+            curl -fsS https://vieclamai.top/health
+
+            docker image prune -f
