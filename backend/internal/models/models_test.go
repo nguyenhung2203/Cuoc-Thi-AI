@@ -135,7 +135,8 @@ func TestAiPromptTemplate_Defaults(t *testing.T) {
 func TestAuditLog_NullHandling(t *testing.T) {
 	log := AuditLog{
 		ID:     "log-1",
-		Action: "test.action",
+		ActorUserID: sql.NullString{},
+		CompanyID:    sql.NullString{},
 	}
 	// String pointers should be nil by default
 	if log.ActorUserID != nil {
