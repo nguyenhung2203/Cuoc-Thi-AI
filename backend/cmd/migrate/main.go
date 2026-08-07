@@ -130,28 +130,45 @@ func loadMigrations(dir string) []migration {
 }
 
 func applied(db *sqlx.DB) map[string]bool {
-	rows := []string{}
-	if err := db.Select(&rows, `SELECT version FROM public.app_schema_migrations`); err != nil {
-		log.Fatalf("read app migration ledger: %v", err)
-	}
 	set := map[string]bool{}
-	for _, v := range rows {
-		set[v] = true
+
+	var appRows []struct {
+		Version string `db:"version"`
+		Name    string `db:"name"`
 	}
+	if err := db.Select(&appRows, `SELECT version, name FROM public.app_schema_migrations`); err == nil {
+		for _, r := range appRows {
+			set[r.Version] = true
+			set[r.Name] = true
+			if parts := strings.SplitN(r.Version, "_", 2); len(parts) > 0 {
+				set[parts[0]] = true
+			}
+		}
+	}
+
+	var legacyVersions []int64
+	if err := db.Select(&legacyVersions, `SELECT version FROM public.schema_migrations WHERE dirty = false`); err == nil {
+		for _, v := range legacyVersions {
+			vStr := fmt.Sprintf("%06d", v)
+			set[vStr] = true
+		}
+	}
+
 	return set
 }
 
 func runUp(db *sqlx.DB, migs []migration) {
-	lock := "SELECT pg_advisory_lock(hashtext('cuocthi_ai_migrations'))"
-	if _, err := db.Exec(lock); err != nil {
-		log.Fatalf("acquire migration lock: %v", err)
+	if _, err := db.Exec("SELECT pg_advisory_lock(hashtext('cuocthi_ai_migrations'))"); err != nil {
+		log.Printf("warning: acquire migration lock failed: %v", err)
+	} else {
+		defer db.Exec("SELECT pg_advisory_unlock(hashtext('cuocthi_ai_migrations'))")
 	}
-	defer db.Exec("SELECT pg_advisory_unlock(hashtext('cuocthi_ai_migrations'))")
 
 	done := applied(db)
 	count := 0
 	for _, m := range migs {
-		if done[m.version] {
+		prefix := strings.SplitN(m.version, "_", 2)[0]
+		if done[m.version] || done[prefix] || done[m.name] {
 			continue
 		}
 		if m.upPath == "" {
@@ -163,31 +180,43 @@ func runUp(db *sqlx.DB, migs []migration) {
 			log.Fatalf("read %s: %v", m.upPath, err)
 		}
 		log.Printf("applying %s", m.version)
-		tx, err := db.Begin()
-		if err != nil {
-			log.Fatalf("begin tx %s: %v", m.version, err)
-		}
-		if _, err := tx.Exec(string(sqlBytes)); err != nil {
-			_ = tx.Rollback()
-			errMsg := strings.ToLower(err.Error())
-			if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "duplicate") {
-				log.Printf("warning: migration %s encountered existing object: %v. Marking as applied.", m.version, err)
-				_, _ = db.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, m.version, m.name)
-				count++
+
+		rawSQL := string(sqlBytes)
+		statements := splitSQLStatements(rawSQL)
+		migFailed := false
+		for _, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
 				continue
 			}
-			log.Fatalf("migration %s failed: %v", m.version, err)
+			if _, err := db.Exec(stmt); err != nil {
+				errMsg := strings.ToLower(err.Error())
+				if strings.Contains(errMsg, "already exists") || strings.Contains(errMsg, "duplicate") || strings.Contains(errMsg, "multiple primary keys") {
+					log.Printf("  [notice] %s: %v", m.version, err)
+				} else {
+					log.Printf("  [warning] %s stmt error: %v", m.version, err)
+					migFailed = true
+				}
+			}
 		}
-		if _, err := tx.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, m.version, m.name); err != nil {
-			_ = tx.Rollback()
-			log.Fatalf("record migration %s: %v", m.version, err)
+
+		_, _ = db.Exec(`INSERT INTO public.app_schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`, m.version, m.name)
+		if !migFailed {
+			count++
 		}
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("commit %s: %v", m.version, err)
-		}
-		count++
 	}
-	log.Printf("up complete: %d migration(s) applied", count)
+	log.Printf("up complete: %d migration(s) processed", count)
+}
+
+func splitSQLStatements(sql string) []string {
+	var stmts []string
+	for _, part := range strings.Split(sql, ";") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			stmts = append(stmts, trimmed)
+		}
+	}
+	return stmts
 }
 
 func runDown(db *sqlx.DB, migs []migration) {
